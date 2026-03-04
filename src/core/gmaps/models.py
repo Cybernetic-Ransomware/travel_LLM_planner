@@ -15,7 +15,7 @@ class ScrapedPlace(BaseModel):
 
     name: str | None = None
     address: str | None = None
-    maps_url: HttpUrl | None = None
+    maps_url: str | None = None
     lat: float | None = None
     lng: float | None = None
     gmaps_place_id: str | None = None

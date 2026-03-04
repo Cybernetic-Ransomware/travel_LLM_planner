@@ -17,12 +17,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "mypy>=1.15.0",
+    "codespell>=2.4.1",
+    "commitizen>=4.13.9",
     "pre-commit>=4.2.0",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.1",
     "ruff>=0.11.6",
+    "ty>=0.0.20",
 ]
 
 [tool.pytest]
@@ -55,11 +57,58 @@ select = ["E", "F", "UP", "B", "SIM", "I"]
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends", "fastapi.Query", "fastapi.params.Query"]
 
-[tool.mypy]
-files = ["src"]
-exclude = ["tests/", "migrations/", "src/db/models.py"]
-ignore_missing_imports = true
+[tool.ty.src]
+exclude = ["tests/*"]
 
-[[tool.mypy.overrides]]
-module = "src.db.models"
-disable_error_code = ["call-arg"]
+[tool.codespell]
+skip = """
+./.git,
+./.github,
+./tests/.*,
+./temp/.*,
+./log/.*,
+./src/content/ui_content.yaml,
+./src/core/agent/prompts/templates.yaml
+"""
+builtin = "clear"
+quiet-level = 3
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+tag_format = "v$version"
+version_files = [
+    "pyproject.toml:version",
+]
+change_type_order = ["feat", "fix", "hotfix", "chore", "docs", "refactor", "test"]
+
+
+schema_pattern = "(build|chore|ci|docs|feature|feat|fix|hotfix|perf|refactor|style|test|config)(\\(.+\\))?!?: .+"
+
+[tool.commitizen.schema_mapping]
+feature = "feat"
+hotfix = "fix"
+config = "chore"
+
+[[tool.commitizen.customize.questions]]
+type = "list"
+name = "type"
+message = "Jaki prefix?"
+choices = [
+    { value = "feat", name = "feature" },
+    { value = "fix", name = "hotfix" },
+    { value = "chore", name = "config" },
+    { value = "refactor", name = "refactor" },
+    { value = "docs", name = "docs" },
+    { value = "test", name = "tests" },
+    { value = "chore", name = "chore/other" },
+]
+
+[tool.commitizen.change_type_map]
+feat = "Features"
+fix = "Bug Fixes"
+hotfix = "Hotfixes"
+chore = "Chores"
+docs = "Documentation"
+refactor = "Refactors"
+test = "Tests"
