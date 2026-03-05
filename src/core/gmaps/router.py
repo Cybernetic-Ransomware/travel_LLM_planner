@@ -4,6 +4,7 @@ from pymongo import UpdateOne
 
 from src.config.conf_logger import setup_logger
 from src.config.config import settings
+from src.core.db.deps import MongoDbDep
 from src.core.gmaps.enricher import fetch_place_details, search_place_id
 from src.core.gmaps.models import EnrichRequest, EnrichResponse, ImportRequest, ImportResponse
 from src.core.gmaps.scraper import scrape_public_list
@@ -14,10 +15,12 @@ logger = setup_logger(__name__, "gmaps_enrich")
 
 
 @router.post("/import", response_model=ImportResponse)
-async def import_public_list(payload: ImportRequest) -> ImportResponse:
+async def import_public_list(payload: ImportRequest, db: MongoDbDep) -> ImportResponse:
     scraped_at = pendulum.now("UTC")
     places, list_name = await scrape_public_list(str(payload.list_url))
-    upserted = upsert_places(places, source_list_url=str(payload.list_url), scraped_at=scraped_at, list_name=list_name)
+    upserted = await upsert_places(
+        db, places, source_list_url=str(payload.list_url), scraped_at=scraped_at, list_name=list_name
+    )
 
     return ImportResponse(
         list_url=payload.list_url,
@@ -29,7 +32,7 @@ async def import_public_list(payload: ImportRequest) -> ImportResponse:
 
 
 @router.post("/enrich", response_model=EnrichResponse)
-async def enrich_places(payload: EnrichRequest) -> EnrichResponse:
+async def enrich_places(payload: EnrichRequest, db: MongoDbDep) -> EnrichResponse:
     api_key = settings.google_places_api_key
     logger.info(
         "Enrich start: key_present=%s key_len=%s key_last4=%s",
@@ -37,7 +40,7 @@ async def enrich_places(payload: EnrichRequest) -> EnrichResponse:
         len(api_key),
         api_key[-4:] if api_key else None,
     )
-    candidates = fetch_places_missing_address(payload.limit)
+    candidates = await fetch_places_missing_address(db, payload.limit)
     updates: list[UpdateOne] = []
     for doc in candidates:
         place_id = doc.get("gmaps_place_id")
@@ -81,7 +84,7 @@ async def enrich_places(payload: EnrichRequest) -> EnrichResponse:
         }
         updates.append(UpdateOne({"_id": doc["_id"]}, {"$set": update_doc}))
 
-    updated = bulk_update_enrichment(updates)
+    updated = await bulk_update_enrichment(db, updates)
     return EnrichResponse(scanned=len(candidates), updated=updated)
 
 

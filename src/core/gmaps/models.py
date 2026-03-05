@@ -1,6 +1,6 @@
+from datetime import datetime
 from typing import Any
 
-import pendulum
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
 
@@ -28,16 +28,9 @@ class ImportResponse(BaseModel):
 
     list_url: HttpUrl
     list_name: str | None = None
-    scraped_at: pendulum.DateTime
+    scraped_at: datetime
     total: int
     upserted: int
-
-    @field_validator("scraped_at", mode="before")
-    @classmethod
-    def coerce_scraped_at(cls, v: Any) -> pendulum.DateTime:
-        if isinstance(v, pendulum.DateTime):
-            return v
-        return pendulum.instance(v)
 
 
 class EnrichRequest(BaseModel):
@@ -100,8 +93,8 @@ class PlaceOut(BaseModel):
     gmaps_place_id: str | None = None
     list_name: str | None = None
     source_list_url: str | None = None
-    scraped_at: pendulum.DateTime | None = None
-    enriched_at: pendulum.DateTime | None = None
+    scraped_at: datetime | None = None
+    enriched_at: datetime | None = None
     # Scheduling preferences — set via panel, consumed by the optimizer
     preferred_hour_from: int | None = None
     preferred_hour_to: int | None = None
@@ -113,12 +106,3 @@ class PlaceOut(BaseModel):
     def coerce_object_id(cls, v: Any) -> str:
         """MongoDB returns _id as bson.ObjectId — coerce to plain string."""
         return str(v)
-
-    @field_validator("scraped_at", "enriched_at", mode="before")
-    @classmethod
-    def coerce_datetime(cls, v: Any) -> pendulum.DateTime | None:
-        if v is None:
-            return None
-        if isinstance(v, pendulum.DateTime):
-            return v
-        return pendulum.instance(v)
