@@ -28,6 +28,7 @@ and the planner computes the most time-efficient visiting order using Google Map
 ## Requirements
 - Python >=3.14
 - [uv](https://github.com/astral-sh/uv) package manager
+- [just](https://github.com/casey/just) task runner (`scoop install just` or `winget install Casey.Just`)
 - Docker Desktop / Docker + Compose
 - Google Maps API key (Places API + Distance Matrix API)
 
@@ -68,49 +69,40 @@ and the planner computes the most time-efficient visiting order using Google Map
 ```powershell
 uv sync --group dev
 uv run pre-commit install
-uv run pre-commit run --all-files
 ```
 
 #### Versioning & Releases
-1. Daily commits — stage your changes and use Commitizen for consistent messages:
+1. Daily commits — stage your changes, then use `just commit` to lint and open Commitizen:
       ```powershell
-      uv sync
-      git add .
-      uv run cz commit
+      git add <files>
+      just commit
       ```
+   Pre-commit runs only on staged files. If a formatter modifies any of them,
+   the commit is aborted — re-stage the fixes and run `just commit` again.
+
 2. Bump the application version on release branches:
       ```powershell
-      uv run cz bump  # auto-tags vX.Y.Z and updates pyproject.toml
+      just bump  # auto-tags vX.Y.Z and updates pyproject.toml
       ```
 
-## Testing
+## Testing & Linting
 
-#### Pytest
+Run tests:
 ```powershell
-uv run pytest
-```
-
-#### Ruff
-```powershell
-uv run ruff check
-```
-or as a standalone tool:
-```powershell
-uvx ruff check
+just test        # uv run pytest
 ```
 
-#### Ty
+Run the full linting suite (format → lint → type check → spell check):
 ```powershell
-uv run ty check
-```
-or as a standalone tool:
-```powershell
-uvx ty check
+just lint
 ```
 
-#### Codespell
+Individual tools:
 ```powershell
-uv run codespell
+uv run ruff check      # lint only
+uvx ruff check         # as standalone (no project install needed)
+uv run ty check        # type checker
+uv run codespell       # spell checker
 ```
 
 ## Useful links and documentation
