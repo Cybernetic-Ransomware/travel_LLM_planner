@@ -163,4 +163,4 @@ cython_debug/
 /log/*.log
 !/log/main.log.template
 
-!/docs/01_ADR-subject.md.template
+!/docs/00_ADR-subject.md.template

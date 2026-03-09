@@ -18,7 +18,7 @@ lint:
     uv run ruff format
     uv run ruff check --fix
     uv run ty check
-    uv run codespell
+    uv run python -m codespell_lib
 
 # Start dev server
 dev:
