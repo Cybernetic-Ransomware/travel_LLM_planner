@@ -4,8 +4,8 @@ import pytest
 from bson import ObjectId
 
 from src.core.db.manager import GMAPS_COLLECTION
-from src.core.gmaps.models import PlacePatch
-from src.core.gmaps.storage import delete_place, fetch_place_by_id, fetch_places, find_and_update_place
+from src.gmaps.models import PlacePatch
+from src.gmaps.storage import delete_place, fetch_place_by_id, fetch_places, find_and_update_place
 
 
 @pytest.fixture(autouse=True)

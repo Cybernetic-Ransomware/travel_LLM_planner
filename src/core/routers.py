@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from src.api.exceptions import EndpointUnimplementedException
 from src.core import gmaps_router
+from src.core.exceptions import EndpointUnimplementedException
 
 router = APIRouter()
 router.include_router(gmaps_router, prefix="/core/gmaps", tags=["core", "gmaps"])

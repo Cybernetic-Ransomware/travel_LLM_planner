@@ -4,7 +4,7 @@ import pytest
 from bson import ObjectId
 from pydantic import ValidationError
 
-from src.core.gmaps.models import PlaceOut, PlacePatch
+from src.gmaps.models import PlaceOut, PlacePatch
 
 
 class TestPlacePatch:

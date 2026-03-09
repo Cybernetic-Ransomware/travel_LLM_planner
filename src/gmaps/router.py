@@ -7,8 +7,8 @@ from pymongo import UpdateOne
 from src.config.conf_logger import setup_logger
 from src.config.config import settings
 from src.core.db.deps import MongoDbDep
-from src.core.gmaps.enricher import fetch_place_details, search_place_id
-from src.core.gmaps.models import (
+from src.gmaps.enricher import fetch_place_details, search_place_id
+from src.gmaps.models import (
     EnrichRequest,
     EnrichResponse,
     ImportRequest,
@@ -16,8 +16,8 @@ from src.core.gmaps.models import (
     PlaceOut,
     PlacePatch,
 )
-from src.core.gmaps.scraper import scrape_public_list
-from src.core.gmaps.storage import (
+from src.gmaps.scraper import scrape_public_list
+from src.gmaps.storage import (
     bulk_update_enrichment,
     delete_place,
     fetch_place_by_id,

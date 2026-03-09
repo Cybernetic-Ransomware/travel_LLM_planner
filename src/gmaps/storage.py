@@ -7,7 +7,7 @@ from pymongo import ReturnDocument, UpdateOne
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.core.db.manager import GMAPS_COLLECTION
-from src.core.gmaps.models import PlacePatch, ScrapedPlace
+from src.gmaps.models import PlacePatch, ScrapedPlace
 
 
 async def upsert_places(

@@ -15,10 +15,10 @@ bump:
 
 # Run the full linting suite manually
 lint:
-    uv run ruff format
-    uv run ruff check --fix
+    uv run ruff format src/
+    uv run ruff check --fix src/
     uv run ty check
-    uv run python -m codespell_lib
+    uv run python -m codespell_lib src/
 
 # Start full Docker stack (app + mongo) with rebuild
 up:
