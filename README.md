@@ -85,12 +85,12 @@ uv run pre-commit run --all-files
 
 ## Testing
 
-#### Pytest
+Run unit and regression tests (no Docker required):
 ```powershell
 uv run pytest
 ```
 
-#### Ruff
+Run integration tests (requires Docker Desktop running):
 ```powershell
 uv run ruff check
 ```
@@ -103,7 +103,8 @@ uvx ruff check
 ```powershell
 uv run ty check
 ```
-or as a standalone tool:
+
+Individual tools:
 ```powershell
 uvx ty check
 ```

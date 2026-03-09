@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, alias="DEBUG")
     mongo_uri: str = Field(default="mongodb://localhost:27017", alias="MONGO_URI")
     mongo_db: str = Field(default="travel_planner", alias="MONGO_DB")
+    mongo_pool_size: int = Field(default=10, alias="MONGO_POOL_SIZE")
     log_dir: str = Field(default="log", alias="LOG_DIR")
     google_places_api_key: str = Field(default="", alias="GOOGLE_PLACES_API_KEY")
     google_places_fields: str = Field(

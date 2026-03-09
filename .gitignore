@@ -156,11 +156,11 @@ cython_debug/
 /temp/
 
 # tests output
-/result/
+/tests/result/
 
 # logs
 /log/*
 /log/*.log
 !/log/main.log.template
 
-!/docs/01_ADR-subject.md.template
+!/docs/00_ADR-subject.md.template

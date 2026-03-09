@@ -27,16 +27,21 @@ dev = [
     "ty>=0.0.20",
 ]
 
-[tool.pytest]
-pythonpath = "./src"
-
 [tool.pytest.ini_options]
-addopts = "--junitxml=./result/pytest_result.xml --cov=src --cov-report html:result/html"
+pythonpath = ["."]
+addopts = "--junitxml=./tests/result/pytest_result.xml --cov=src --cov-report html:tests/result/html -m 'not integration'"
+asyncio_mode = "auto"
+markers = [
+    "unit: tests with no external dependencies",
+    "integration: tests requiring the MongoDB testcontainer",
+    "regression: regression tests for known bugs",
+]
 filterwarnings = [
     "ignore::UserWarning",
     'ignore:function ham\(\) is deprecated:DeprecationWarning',
     "ignore:module 'sre_constants' is deprecated:DeprecationWarning",
     "ignore::SyntaxWarning",
+    "ignore:The wait_for_logs function:DeprecationWarning:testcontainers",
 ]
 
 [tool.ruff]
