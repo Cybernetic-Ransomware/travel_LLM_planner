@@ -13,9 +13,6 @@ dependencies = [
     "pydantic-ai>=1.63.0",
     "pydantic-settings>=2.13.1",
     "pendulum>=3.2.0",
-    "motor>=3.7.1",
-    "streamlit>=1.55.0",
-    "polars>=1.38.1",
 ]
 
 [dependency-groups]
@@ -27,7 +24,6 @@ dev = [
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.1",
     "ruff>=0.11.6",
-    "testcontainers[mongo]>=4.14.1",
     "ty>=0.0.20",
 ]
 
@@ -73,9 +69,9 @@ exclude = ["tests/*"]
 skip = """
 ./.git,
 ./.github,
-./tests,
-./temp,
-./log,
+./tests/.*,
+./temp/.*,
+./log/.*,
 ./src/content/ui_content.yaml,
 ./src/core/agent/prompts/templates.yaml
 """

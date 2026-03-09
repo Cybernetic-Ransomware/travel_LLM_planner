@@ -34,6 +34,6 @@ repos:
 
       - id: codespell
         name: codespell
-        entry: uv run python -m codespell_lib
+        entry: uv run codespell
         language: system
         types_or: [python, markdown, yaml, rst]

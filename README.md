@@ -28,7 +28,6 @@ and the planner computes the most time-efficient visiting order using Google Map
 ## Requirements
 - Python >=3.14
 - [uv](https://github.com/astral-sh/uv) package manager
-- [just](https://github.com/casey/just) task runner (`scoop install just` or `winget install Casey.Just`)
 - Docker Desktop / Docker + Compose
 - Google Maps API key (Places API + Distance Matrix API)
 
@@ -69,45 +68,50 @@ and the planner computes the most time-efficient visiting order using Google Map
 ```powershell
 uv sync --group dev
 uv run pre-commit install
+uv run pre-commit run --all-files
 ```
 
 #### Versioning & Releases
-1. Daily commits — stage your changes, then use `just commit` to lint and open Commitizen:
+1. Daily commits — stage your changes and use Commitizen for consistent messages:
       ```powershell
-      git add <files>
-      just commit
+      uv sync
+      git add .
+      uv run cz commit
       ```
-   Pre-commit runs only on staged files. If a formatter modifies any of them,
-   the commit is aborted — re-stage the fixes and run `just commit` again.
-
 2. Bump the application version on release branches:
       ```powershell
-      just bump  # auto-tags vX.Y.Z and updates pyproject.toml
+      uv run cz bump  # auto-tags vX.Y.Z and updates pyproject.toml
       ```
 
-## Testing & Linting
+## Testing
 
 Run unit and regression tests (no Docker required):
 ```powershell
-just test
+uv run pytest
 ```
 
 Run integration tests (requires Docker Desktop running):
 ```powershell
-just test-integration
+uv run ruff check
+```
+or as a standalone tool:
+```powershell
+uvx ruff check
 ```
 
-Run the full linting suite (format → lint → type check → spell check):
+#### Ty
 ```powershell
-just lint
+uv run ty check
 ```
 
 Individual tools:
 ```powershell
-uv run ruff check      # lint only
-uvx ruff check         # as standalone (no project install needed)
-uv run ty check        # type checker
-uv run codespell       # spell checker
+uvx ty check
+```
+
+#### Codespell
+```powershell
+uv run codespell
 ```
 
 ## Useful links and documentation

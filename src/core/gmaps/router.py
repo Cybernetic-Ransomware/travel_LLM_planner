@@ -1,5 +1,5 @@
 import pendulum
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter
 from pymongo import UpdateOne
 
 from src.config.conf_logger import setup_logger
@@ -30,12 +30,10 @@ logger = setup_logger(__name__, "gmaps_enrich")
 
 
 @router.post("/import", response_model=ImportResponse)
-async def import_public_list(payload: ImportRequest, db: MongoDbDep) -> ImportResponse:
+async def import_public_list(payload: ImportRequest) -> ImportResponse:
     scraped_at = pendulum.now("UTC")
     places, list_name = await scrape_public_list(str(payload.list_url))
-    upserted = await upsert_places(
-        db, places, source_list_url=str(payload.list_url), scraped_at=scraped_at, list_name=list_name
-    )
+    upserted = upsert_places(places, source_list_url=str(payload.list_url), scraped_at=scraped_at, list_name=list_name)
 
     return ImportResponse(
         list_url=payload.list_url,
