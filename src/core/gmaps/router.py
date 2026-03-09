@@ -1,14 +1,29 @@
 import pendulum
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 from pymongo import UpdateOne
 
 from src.config.conf_logger import setup_logger
 from src.config.config import settings
 from src.core.db.deps import MongoDbDep
 from src.core.gmaps.enricher import fetch_place_details, search_place_id
-from src.core.gmaps.models import EnrichRequest, EnrichResponse, ImportRequest, ImportResponse
+from src.core.gmaps.models import (
+    EnrichRequest,
+    EnrichResponse,
+    ImportRequest,
+    ImportResponse,
+    PlaceOut,
+    PlacePatch,
+)
 from src.core.gmaps.scraper import scrape_public_list
-from src.core.gmaps.storage import bulk_update_enrichment, fetch_places_missing_address, upsert_places
+from src.core.gmaps.storage import (
+    bulk_update_enrichment,
+    delete_place,
+    fetch_place_by_id,
+    fetch_places,
+    fetch_places_missing_address,
+    update_place,
+    upsert_places,
+)
 
 router = APIRouter()
 logger = setup_logger(__name__, "gmaps_enrich")
@@ -86,6 +101,44 @@ async def enrich_places(payload: EnrichRequest, db: MongoDbDep) -> EnrichRespons
 
     updated = await bulk_update_enrichment(db, updates)
     return EnrichResponse(scanned=len(candidates), updated=updated)
+
+
+@router.get("/places", response_model=list[PlaceOut])
+async def list_places(
+    db: MongoDbDep,
+    skipped: bool | None = Query(None),
+    list_name: str | None = Query(None),
+) -> list[PlaceOut]:
+    """Return all places, optionally filtered by skipped flag or list name."""
+    docs = await fetch_places(db, skipped=skipped, list_name=list_name)
+    return [PlaceOut.model_validate(doc) for doc in docs]
+
+
+@router.get("/places/{place_id}", response_model=PlaceOut)
+async def get_place(place_id: str, db: MongoDbDep) -> PlaceOut:
+    """Return a single place by its MongoDB ObjectId."""
+    doc = await fetch_place_by_id(db, place_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    return PlaceOut.model_validate(doc)
+
+
+@router.patch("/places/{place_id}", response_model=PlaceOut)
+async def patch_place(place_id: str, payload: PlacePatch, db: MongoDbDep) -> PlaceOut:
+    """Update scheduling preferences for a place."""
+    matched = await update_place(db, place_id, payload)
+    if not matched:
+        raise HTTPException(status_code=404, detail="Place not found")
+    doc = await fetch_place_by_id(db, place_id)
+    return PlaceOut.model_validate(doc)
+
+
+@router.delete("/places/{place_id}", status_code=204)
+async def remove_place(place_id: str, db: MongoDbDep) -> None:
+    """Delete a place by its MongoDB ObjectId."""
+    deleted = await delete_place(db, place_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Place not found")
 
 
 @router.get("/keycheck")
