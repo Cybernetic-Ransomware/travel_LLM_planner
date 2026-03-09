@@ -60,7 +60,7 @@ display_df = df.with_columns(
 
 st.data_editor(
     display_df,
-    use_container_width=True,
+    width="stretch",
     disabled=[c for c in display_df.columns if c not in EDITABLE],
     column_config={
         "skipped": st.column_config.CheckboxColumn("Skipped"),
@@ -89,8 +89,12 @@ with col_apply:
         errors = []
         for row_idx, changes in to_patch.items():
             for col in HOUR_COLS:
-                if col in changes and hasattr(changes[col], "hour"):
-                    changes[col] = changes[col].hour
+                if col in changes:
+                    val = changes[col]
+                    if hasattr(val, "hour"):
+                        changes[col] = val.hour
+                    elif isinstance(val, str) and val:
+                        changes[col] = int(val.split(":")[0])
             try:
                 patch_place(places[row_idx]["id"], changes)
             except Exception as e:

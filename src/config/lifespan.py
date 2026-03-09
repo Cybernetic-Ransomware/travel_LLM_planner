@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
 
     manager = MongoDBManager(settings.mongo_uri, settings.mongo_db, settings.mongo_pool_size)
     app.state.db = await manager.connect()
+    app.state.client = manager.client
     logger.info("MongoDB connected — pool_size=%d db=%s", settings.mongo_pool_size, settings.mongo_db)
 
     yield

@@ -1,12 +1,14 @@
+from typing import Any
+
 import pendulum
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 from pymongo import UpdateOne
 
 from src.config.conf_logger import setup_logger
 from src.config.config import settings
 from src.core.db.deps import MongoDbDep
-from src.core.gmaps.enricher import fetch_place_details, search_place_id
-from src.core.gmaps.models import (
+from src.gmaps.enricher import fetch_place_details, search_place_id
+from src.gmaps.models import (
     EnrichRequest,
     EnrichResponse,
     ImportRequest,
@@ -14,14 +16,14 @@ from src.core.gmaps.models import (
     PlaceOut,
     PlacePatch,
 )
-from src.core.gmaps.scraper import scrape_public_list
-from src.core.gmaps.storage import (
+from src.gmaps.scraper import scrape_public_list
+from src.gmaps.storage import (
     bulk_update_enrichment,
     delete_place,
     fetch_place_by_id,
     fetch_places,
     fetch_places_missing_address,
-    update_place,
+    find_and_update_place,
     upsert_places,
 )
 
@@ -30,10 +32,12 @@ logger = setup_logger(__name__, "gmaps_enrich")
 
 
 @router.post("/import", response_model=ImportResponse)
-async def import_public_list(payload: ImportRequest) -> ImportResponse:
+async def import_public_list(payload: ImportRequest, db: MongoDbDep) -> ImportResponse:
     scraped_at = pendulum.now("UTC")
     places, list_name = await scrape_public_list(str(payload.list_url))
-    upserted = upsert_places(places, source_list_url=str(payload.list_url), scraped_at=scraped_at, list_name=list_name)
+    upserted = await upsert_places(
+        db, places, source_list_url=str(payload.list_url), scraped_at=scraped_at, list_name=list_name
+    )
 
     return ImportResponse(
         list_url=payload.list_url,
@@ -70,7 +74,7 @@ async def enrich_places(payload: EnrichRequest, db: MongoDbDep) -> EnrichRespons
             resolved_id, resolve_status, resolve_error = await search_place_id(
                 doc.get("name"), doc.get("lat"), doc.get("lng")
             )
-            update_doc = {
+            update_doc: dict[str, Any] = {
                 "details_status": resolve_status or status,
                 "details_error": resolve_error or error_message,
                 "resolve_status": resolve_status,
@@ -124,10 +128,9 @@ async def get_place(place_id: str, db: MongoDbDep) -> PlaceOut:
 @router.patch("/places/{place_id}", response_model=PlaceOut)
 async def patch_place(place_id: str, payload: PlacePatch, db: MongoDbDep) -> PlaceOut:
     """Update scheduling preferences for a place."""
-    matched = await update_place(db, place_id, payload)
-    if not matched:
+    doc = await find_and_update_place(db, place_id, payload)
+    if doc is None:
         raise HTTPException(status_code=404, detail="Place not found")
-    doc = await fetch_place_by_id(db, place_id)
     return PlaceOut.model_validate(doc)
 
 

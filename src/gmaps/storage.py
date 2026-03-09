@@ -3,15 +3,15 @@ from collections.abc import Iterable
 import pendulum
 from bson import ObjectId
 from bson.errors import InvalidId
-from motor.motor_asyncio import AsyncIOMotorDatabase
-from pymongo import UpdateOne
+from pymongo import ReturnDocument, UpdateOne
+from pymongo.asynchronous.database import AsyncDatabase
 
 from src.core.db.manager import GMAPS_COLLECTION
-from src.core.gmaps.models import PlacePatch, ScrapedPlace
+from src.gmaps.models import PlacePatch, ScrapedPlace
 
 
 async def upsert_places(
-    db: AsyncIOMotorDatabase,
+    db: AsyncDatabase,
     places: Iterable[ScrapedPlace],
     *,
     source_list_url: str,
@@ -42,7 +42,7 @@ async def upsert_places(
 
 
 async def fetch_places(
-    db: AsyncIOMotorDatabase,
+    db: AsyncDatabase,
     *,
     skipped: bool | None = None,
     list_name: str | None = None,
@@ -57,7 +57,7 @@ async def fetch_places(
     return await collection.find(query).to_list(length=None)
 
 
-async def fetch_place_by_id(db: AsyncIOMotorDatabase, place_id: str) -> dict | None:
+async def fetch_place_by_id(db: AsyncDatabase, place_id: str) -> dict | None:
     """Return a single place by its MongoDB ObjectId string. Returns None if not found."""
     try:
         oid = ObjectId(place_id)
@@ -66,21 +66,24 @@ async def fetch_place_by_id(db: AsyncIOMotorDatabase, place_id: str) -> dict | N
     return await db[GMAPS_COLLECTION].find_one({"_id": oid})
 
 
-async def update_place(db: AsyncIOMotorDatabase, place_id: str, patch: PlacePatch) -> bool:
-    """Apply scheduling preference updates to a place. Returns True if document was matched."""
+async def find_and_update_place(db: AsyncDatabase, place_id: str, patch: PlacePatch) -> dict | None:
+    """Atomically apply patch and return the updated document, or None if not found or invalid id."""
     try:
         oid = ObjectId(place_id)
     except InvalidId:
-        return False
+        return None
     fields = patch.model_dump(exclude_none=True)
     collection = db[GMAPS_COLLECTION]
     if not fields:
-        return await collection.count_documents({"_id": oid}, limit=1) > 0
-    result = await collection.update_one({"_id": oid}, {"$set": fields})
-    return result.matched_count > 0
+        return await collection.find_one({"_id": oid})
+    return await collection.find_one_and_update(
+        {"_id": oid},
+        {"$set": fields},
+        return_document=ReturnDocument.AFTER,
+    )
 
 
-async def delete_place(db: AsyncIOMotorDatabase, place_id: str) -> bool:
+async def delete_place(db: AsyncDatabase, place_id: str) -> bool:
     """Delete a place by its MongoDB ObjectId string. Returns True if a document was deleted."""
     try:
         oid = ObjectId(place_id)
@@ -90,7 +93,7 @@ async def delete_place(db: AsyncIOMotorDatabase, place_id: str) -> bool:
     return result.deleted_count > 0
 
 
-async def fetch_places_missing_address(db: AsyncIOMotorDatabase, limit: int) -> list[dict]:
+async def fetch_places_missing_address(db: AsyncDatabase, limit: int) -> list[dict]:
     """Return places that have a place_id but no address yet — candidates for enrichment."""
     collection = db[GMAPS_COLLECTION]
     cursor = collection.find(
@@ -100,7 +103,7 @@ async def fetch_places_missing_address(db: AsyncIOMotorDatabase, limit: int) -> 
     return await cursor.to_list(length=limit)
 
 
-async def bulk_update_enrichment(db: AsyncIOMotorDatabase, updates: list[UpdateOne]) -> int:
+async def bulk_update_enrichment(db: AsyncDatabase, updates: list[UpdateOne]) -> int:
     """Apply a batch of enrichment updates. Returns the number of modified documents."""
     if not updates:
         return 0
