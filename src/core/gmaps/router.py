@@ -1,5 +1,4 @@
-from datetime import UTC, datetime
-
+import pendulum
 from fastapi import APIRouter
 from pymongo import UpdateOne
 
@@ -16,11 +15,9 @@ logger = setup_logger(__name__, "gmaps_enrich")
 
 @router.post("/import", response_model=ImportResponse)
 async def import_public_list(payload: ImportRequest) -> ImportResponse:
-    scraped_at = datetime.now(UTC)
+    scraped_at = pendulum.now("UTC")
     places, list_name = await scrape_public_list(str(payload.list_url))
-    upserted = upsert_places(
-        places, source_list_url=str(payload.list_url), scraped_at=scraped_at, list_name=list_name
-    )
+    upserted = upsert_places(places, source_list_url=str(payload.list_url), scraped_at=scraped_at, list_name=list_name)
 
     return ImportResponse(
         list_url=payload.list_url,
@@ -62,7 +59,7 @@ async def enrich_places(payload: EnrichRequest) -> EnrichResponse:
                 "details_error": resolve_error or error_message,
                 "resolve_status": resolve_status,
                 "resolve_error": resolve_error,
-                "enriched_at": datetime.now(UTC),
+                "enriched_at": pendulum.now("UTC"),
             }
             if resolved_id:
                 details, status, error_message = await fetch_place_details(resolved_id)
@@ -80,7 +77,7 @@ async def enrich_places(payload: EnrichRequest) -> EnrichResponse:
             "details_error": error_message,
             "details": details,
             "address": details.get("formattedAddress") if details else None,
-            "enriched_at": datetime.now(UTC),
+            "enriched_at": pendulum.now("UTC"),
         }
         updates.append(UpdateOne({"_id": doc["_id"]}, {"$set": update_doc}))
 

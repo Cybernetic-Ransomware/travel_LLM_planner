@@ -30,7 +30,7 @@ def _extract_coords(url: str | None) -> tuple[float | None, float | None]:
     return None, None
 
 
-async def _collect_items(page) -> Iterable[ScrapedPlace]:
+async def _collect_items(page) -> list[ScrapedPlace]:
     items = await page.evaluate(
         """
         () => {
@@ -149,20 +149,15 @@ def _dedupe_places(raw_places: Iterable[ScrapedPlace]) -> list[ScrapedPlace]:
     seen: set[str] = set()
     places: list[ScrapedPlace] = []
     for place in raw_places:
-        key = (
-            place.gmaps_cid
-            or place.gmaps_place_id
-            or place.maps_url
-            or f"{place.name}|{place.address}"
-        )
+        key = place.gmaps_cid or place.gmaps_place_id or place.maps_url or f"{place.name}|{place.address}"
         if key in seen:
             continue
-        seen.add(key)
+        seen.add(str(key))
         places.append(place)
     return places
 
 
-async def _collect_from_entitylist(page) -> list[ScrapedPlace]:
+async def _collect_from_entitylist(page) -> tuple[list[ScrapedPlace], str | None]:
     url = await _find_entitylist_url(page)
     if not url:
         return [], None
