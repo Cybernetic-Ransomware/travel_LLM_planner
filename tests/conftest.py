@@ -1,5 +1,3 @@
-from contextlib import asynccontextmanager
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 from testcontainers.mongodb import MongoDbContainer
@@ -15,10 +13,12 @@ def mongo_container():
         yield container
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def test_db(mongo_container):
-    """Session-scoped Motor database connected to the testcontainer.
+    """Function-scoped Motor database connected to the testcontainer.
 
+    A new Motor client is created per test to avoid event loop conflicts.
+    The container itself is session-scoped (started once); only the connection is per-test.
     Calls MongoDBManager.connect() so indexes are created identically to prod.
     """
     manager = MongoDBManager(
@@ -33,21 +33,12 @@ async def test_db(mongo_container):
 
 @pytest.fixture
 async def client(test_db):
-    """Async HTTP client with the app lifespan replaced by a test stub.
+    """Async HTTP client with the testcontainer database injected into app.state.
 
-    Injects the testcontainer database via app.state instead of connecting
-    to the prod URI from settings. Restores the original lifespan after the test.
+    ASGITransport does not trigger the FastAPI lifespan, so app.state.db is set
+    directly before the request and cleared afterwards.
     """
-
-    @asynccontextmanager
-    async def _test_lifespan(application):
-        application.state.db = test_db
-        yield
-
-    original_lifespan = app.router.lifespan_context
-    app.router.lifespan_context = _test_lifespan
-
+    app.state.db = test_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
-
-    app.router.lifespan_context = original_lifespan
+    del app.state.db
