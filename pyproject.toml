@@ -31,7 +31,7 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-addopts = "--junitxml=./result/pytest_result.xml --cov=src --cov-report html:result/html"
+addopts = "--junitxml=./tests/result/pytest_result.xml --cov=src --cov-report html:tests/result/html -m 'not integration'"
 asyncio_mode = "auto"
 markers = [
     "unit: tests with no external dependencies",
@@ -71,9 +71,9 @@ exclude = ["tests/*"]
 skip = """
 ./.git,
 ./.github,
-./tests/.*,
-./temp/.*,
-./log/.*,
+./tests,
+./temp,
+./log,
 ./src/content/ui_content.yaml,
 ./src/core/agent/prompts/templates.yaml
 """

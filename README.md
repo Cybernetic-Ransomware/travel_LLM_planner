@@ -87,9 +87,14 @@ uv run pre-commit install
 
 ## Testing & Linting
 
-Run tests:
+Run unit and regression tests (no Docker required):
 ```powershell
-just test        # uv run pytest
+just test
+```
+
+Run integration tests (requires Docker Desktop running):
+```powershell
+just test-integration
 ```
 
 Run the full linting suite (format → lint → type check → spell check):

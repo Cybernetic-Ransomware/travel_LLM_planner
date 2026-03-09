@@ -24,6 +24,10 @@ lint:
 dev:
     uv run uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
 
-# Run tests
+# Run unit and regression tests (no Docker required)
 test:
     uv run pytest
+
+# Run integration tests — requires Docker Desktop running
+test-integration:
+    uv run pytest -m integration
