@@ -20,9 +20,21 @@ lint:
     uv run ty check
     uv run python -m codespell_lib
 
-# Start dev server
-dev:
-    uv run uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
+# Start full Docker stack (app + mongo) with rebuild
+up:
+    docker-compose -f docker/docker-compose.yml up --build -d
+
+# Stop and remove Docker stack containers
+down:
+    docker-compose -f docker/docker-compose.yml down
+
+# Stream Docker app logs
+logs:
+    docker-compose -f docker/docker-compose.yml logs -f app
+
+# Start Streamlit location management panel (requires: just up)
+panel:
+    $env:PYTHONPATH = "."; uv run streamlit run src/panel/app.py
 
 # Run unit and regression tests (no Docker required)
 test:
