@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 
-from src.api.routers import router as api_router
 from src.config.conf_logger import setup_logger
 from src.config.lifespan import lifespan
+from src.core.routers import router as api_router
 
 logger = setup_logger(__name__, "main")
 

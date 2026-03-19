@@ -164,3 +164,7 @@ cython_debug/
 !/log/main.log.template
 
 !/docs/00_ADR-subject.md.template
+
+
+/.claude/
+/src/arch.md

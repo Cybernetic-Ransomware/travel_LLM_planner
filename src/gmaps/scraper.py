@@ -9,7 +9,7 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from src.config.config import settings
-from src.core.gmaps.models import ScrapedPlace
+from src.gmaps.models import ScrapedPlace
 
 _COORDS_IN_AT = re.compile(r"@(-?\d+\.\d+),(-?\d+\.\d+)")
 _COORDS_IN_BANG = re.compile(r"!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)")

@@ -15,9 +15,9 @@ def mongo_container():
 
 @pytest.fixture
 async def test_db(mongo_container):
-    """Function-scoped Motor database connected to the testcontainer.
+    """Function-scoped PyMongo async database connected to the testcontainer.
 
-    A new Motor client is created per test to avoid event loop conflicts.
+    A new client is created per test to avoid event loop conflicts.
     The container itself is session-scoped (started once); only the connection is per-test.
     Calls MongoDBManager.connect() so indexes are created identically to prod.
     """
@@ -35,10 +35,12 @@ async def test_db(mongo_container):
 async def client(test_db):
     """Async HTTP client with the testcontainer database injected into app.state.
 
-    ASGITransport does not trigger the FastAPI lifespan, so app.state.db is set
-    directly before the request and cleared afterwards.
+    ASGITransport does not trigger the FastAPI lifespan, so app.state.db and
+    app.state.client are set directly before the request and cleared afterwards.
     """
     app.state.db = test_db
+    app.state.client = test_db.client
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     del app.state.db
+    del app.state.client

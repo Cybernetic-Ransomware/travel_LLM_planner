@@ -43,10 +43,10 @@ and the planner computes the most time-efficient visiting order using Google Map
       ```
 3. Run using Docker:
       ```powershell
-      docker-compose -f .\docker\docker-compose.yml up --build -d
+      just up
       ```
 
-****
+---
 
 ### Dev Instance
 1. Clone the repository:
@@ -74,49 +74,36 @@ uv run pre-commit run --all-files
 #### Versioning & Releases
 1. Daily commits — stage your changes and use Commitizen for consistent messages:
       ```powershell
-      uv sync
-      git add .
-      uv run cz commit
+      git add <files>
+      just commit
       ```
 2. Bump the application version on release branches:
       ```powershell
-      uv run cz bump  # auto-tags vX.Y.Z and updates pyproject.toml
+      just bump  # auto-tags vX.Y.Z and updates pyproject.toml
       ```
 
 ## Testing
 
 Run unit and regression tests (no Docker required):
 ```powershell
-uv run pytest
+just test
 ```
 
 Run integration tests (requires Docker Desktop running):
 ```powershell
-uv run ruff check
-```
-or as a standalone tool:
-```powershell
-uvx ruff check
+just test-integration
 ```
 
-#### Ty
-```powershell
-uv run ty check
-```
+## Linting
 
-Individual tools:
+Run the full linting suite (ruff format + check, ty, codespell):
 ```powershell
-uvx ty check
-```
-
-#### Codespell
-```powershell
-uv run codespell
+just lint
 ```
 
 ## Useful links and documentation
 - FastAPI docs: [fastapi.tiangolo.com](https://fastapi.tiangolo.com/)
 - Google Places API: [developers.google.com](https://developers.google.com/maps/documentation/places/web-service)
 - Pydantic AI docs: [ai.pydantic.dev](https://ai.pydantic.dev/)
-- Pendulum docs: [pendulum.eustace.io](https://pendulum.eustace.io/docs/)
+- PyMongo docs: [pymongo.readthedocs.io](https://pymongo.readthedocs.io/en/stable/)
 - uv docs: [docs.astral.sh/uv](https://docs.astral.sh/uv/)
