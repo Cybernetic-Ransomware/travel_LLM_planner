@@ -1,0 +1,38 @@
+# Version control
+.git
+
+# Python artefacts
+__pycache__
+*.pyc
+*.pyo
+.venv
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.coverage
+
+# Dev tooling
+justfile
+.pre-commit-config.yaml
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+
+# Tests & docs
+tests/
+docs/
+*.md
+
+# Docker build files (not needed inside the image)
+docker/
+
+# Local runtime directories
+temp/
+log/
+
+# Claude Code session data
+.claude/
+.streamlit/

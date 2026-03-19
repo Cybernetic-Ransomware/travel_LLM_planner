@@ -4,8 +4,8 @@ import pytest
 from bson import ObjectId
 
 from src.core.db.manager import GMAPS_COLLECTION
-from src.core.gmaps.models import PlacePatch
-from src.core.gmaps.storage import delete_place, fetch_place_by_id, fetch_places, update_place
+from src.gmaps.models import PlacePatch
+from src.gmaps.storage import delete_place, fetch_place_by_id, fetch_places, find_and_update_place
 
 
 @pytest.fixture(autouse=True)
@@ -88,34 +88,33 @@ class TestFetchPlaceById:
 
 
 @pytest.mark.integration
-class TestUpdatePlace:
+class TestFindAndUpdatePlace:
     async def test_updates_fields(self, test_db, sample_place):
         patch = PlacePatch(preferred_hour_from=9, preferred_hour_to=17, visit_duration_min=60)
-        matched = await update_place(test_db, sample_place, patch)
-        assert matched is True
-        doc = await test_db[GMAPS_COLLECTION].find_one({"_id": ObjectId(sample_place)})
+        doc = await find_and_update_place(test_db, sample_place, patch)
+        assert doc is not None
         assert doc["preferred_hour_from"] == 9
         assert doc["preferred_hour_to"] == 17
         assert doc["visit_duration_min"] == 60
 
     async def test_partial_patch(self, test_db, sample_place):
-        matched = await update_place(test_db, sample_place, PlacePatch(skipped=True))
-        assert matched is True
-        doc = await test_db[GMAPS_COLLECTION].find_one({"_id": ObjectId(sample_place)})
+        doc = await find_and_update_place(test_db, sample_place, PlacePatch(skipped=True))
+        assert doc is not None
         assert doc["skipped"] is True
         assert doc["name"] == "Test Place"
 
-    async def test_empty_patch_returns_true_when_exists(self, test_db, sample_place):
-        matched = await update_place(test_db, sample_place, PlacePatch())
-        assert matched is True
+    async def test_empty_patch_returns_existing_doc(self, test_db, sample_place):
+        doc = await find_and_update_place(test_db, sample_place, PlacePatch())
+        assert doc is not None
+        assert doc["name"] == "Test Place"
 
-    async def test_not_found_returns_false(self, test_db):
-        matched = await update_place(test_db, str(ObjectId()), PlacePatch(skipped=True))
-        assert matched is False
+    async def test_not_found_returns_none(self, test_db):
+        doc = await find_and_update_place(test_db, str(ObjectId()), PlacePatch(skipped=True))
+        assert doc is None
 
-    async def test_invalid_id_returns_false(self, test_db):
-        matched = await update_place(test_db, "bad-id", PlacePatch(skipped=True))
-        assert matched is False
+    async def test_invalid_id_returns_none(self, test_db):
+        doc = await find_and_update_place(test_db, "bad-id", PlacePatch(skipped=True))
+        assert doc is None
 
 
 @pytest.mark.integration

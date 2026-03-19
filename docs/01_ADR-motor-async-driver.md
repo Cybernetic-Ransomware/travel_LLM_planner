@@ -36,4 +36,4 @@ Motor supports change streams and async transactions — both relevant if real-t
 - Motor does not support every PyMongo feature (e.g., `gridfs` has a separate async wrapper). Not currently needed.
 
 ## Status
-`Accepted` — project-wide. Effective from the `features/basic_ui` branch.
+`Deprecated` — superseded by [ADR-06](./06_ADR-pymongo-async-replica-set.md). Motor replaced by PyMongo native async client on branch `refactor/mongo_connector`.
