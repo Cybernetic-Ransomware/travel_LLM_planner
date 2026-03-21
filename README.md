@@ -46,6 +46,16 @@ and the planner computes the most time-efficient visiting order using Google Map
       just up
       ```
 
+#### MongoDB Compass
+The Docker stack runs MongoDB as a single-node replica set for transaction support.
+The application connects from inside the Docker network via the service name `mongo`, but MongoDB Compass connects from the Windows host, so it should use:
+
+```text
+mongodb://localhost:27017/?directConnection=true
+```
+
+If you omit `directConnection=true`, Compass may try to follow the replica set host `mongo:27017`, which is resolvable inside Docker but not from Windows.
+
 ---
 
 ### Dev Instance
