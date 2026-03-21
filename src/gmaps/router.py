@@ -5,9 +5,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pymongo import UpdateOne
 
 from src.config.conf_logger import setup_logger
-from src.config.config import settings
 from src.core.db.deps import MongoDbDep
-from src.gmaps.enricher import fetch_place_details, search_place_id
+from src.gmaps.deps import GooglePlacesDep
 from src.gmaps.models import (
     EnrichRequest,
     EnrichResponse,
@@ -49,8 +48,8 @@ async def import_public_list(payload: ImportRequest, db: MongoDbDep) -> ImportRe
 
 
 @router.post("/enrich", response_model=EnrichResponse)
-async def enrich_places(payload: EnrichRequest, db: MongoDbDep) -> EnrichResponse:
-    api_key = settings.google_places_api_key
+async def enrich_places(payload: EnrichRequest, db: MongoDbDep, gp: GooglePlacesDep) -> EnrichResponse:
+    api_key = gp.api_key
     logger.info(
         "Enrich start: key_present=%s key_len=%s key_last4=%s",
         bool(api_key),
@@ -68,10 +67,10 @@ async def enrich_places(payload: EnrichRequest, db: MongoDbDep) -> EnrichRespons
         error_message = None
 
         if place_id:
-            details, status, error_message = await fetch_place_details(place_id)
+            details, status, error_message = await gp.fetch_place_details(place_id)
 
         if not details:
-            resolved_id, resolve_status, resolve_error = await search_place_id(
+            resolved_id, resolve_status, resolve_error = await gp.search_place_id(
                 doc.get("name"), doc.get("lat"), doc.get("lng")
             )
             update_doc: dict[str, Any] = {
@@ -82,7 +81,7 @@ async def enrich_places(payload: EnrichRequest, db: MongoDbDep) -> EnrichRespons
                 "enriched_at": pendulum.now("UTC"),
             }
             if resolved_id:
-                details, status, error_message = await fetch_place_details(resolved_id)
+                details, status, error_message = await gp.fetch_place_details(resolved_id)
                 update_doc["gmaps_place_id"] = resolved_id
                 update_doc["details_status"] = status
                 update_doc["details_error"] = error_message
@@ -143,8 +142,8 @@ async def remove_place(place_id: str, db: MongoDbDep) -> None:
 
 
 @router.get("/keycheck")
-async def keycheck():
-    api_key = settings.google_places_api_key
+async def keycheck(gp: GooglePlacesDep):
+    api_key = gp.api_key
     return {
         "present": bool(api_key),
         "length": len(api_key),
