@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from src.gmaps.models import PlaceOut, PlacePatch
 
 
+@pytest.mark.unit
 class TestPlacePatch:
     def test_valid_preferences(self):
         patch = PlacePatch(preferred_hour_from=9, preferred_hour_to=17, visit_duration_min=60)
@@ -60,6 +61,7 @@ class TestPlacePatch:
         assert patch.visit_duration_min == 1
 
 
+@pytest.mark.unit
 class TestPlaceOut:
     def test_object_id_coercion(self):
         oid = ObjectId()
@@ -79,5 +81,11 @@ class TestPlaceOut:
         assert place.name is None
         assert place.address is None
         assert place.lat is None
+        assert place.opening_hours is None
         assert place.preferred_hour_from is None
         assert place.visit_duration_min is None
+
+    def test_opening_hours_populated_from_document(self):
+        hours = {"periods": [{"open": {"day": 1, "hour": 9}, "close": {"day": 1, "hour": 18}}]}
+        place = PlaceOut.model_validate({"_id": "abc123", "opening_hours": hours})
+        assert place.opening_hours == hours
