@@ -2,11 +2,16 @@ from fastapi import FastAPI
 
 from src.config.conf_logger import setup_logger
 from src.config.lifespan import lifespan
+from src.core.middleware import ExceptionHandlerMiddleware, register_exception_handlers
 from src.core.routers import router as api_router
 
 logger = setup_logger(__name__, "main")
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(ExceptionHandlerMiddleware)  # type: ignore[arg-type]
+register_exception_handlers(app)
+
 app.include_router(api_router, prefix="/api/v1", tags=["api"])
 
 
