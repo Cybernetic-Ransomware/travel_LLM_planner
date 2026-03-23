@@ -1,4 +1,11 @@
 from fastapi import HTTPException
+from pydantic import BaseModel
+
+
+class ErrorResponse(BaseModel):
+    status_code: int
+    error: str
+    detail: str
 
 
 class EndpointUnimplementedException(HTTPException):
@@ -8,4 +15,4 @@ class EndpointUnimplementedException(HTTPException):
 
 class EndpointUnexpectedException(HTTPException):
     def __init__(self, message: str = ""):
-        super().__init__(status_code=404, detail=f"Unexpected Endpoint Error: {message}")
+        super().__init__(status_code=500, detail=f"Unexpected Endpoint Error: {message}")
