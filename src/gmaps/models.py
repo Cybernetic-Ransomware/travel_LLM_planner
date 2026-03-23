@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, mod
 class ImportRequest(BaseModel):
     """Request body for importing a public Google Maps saved list."""
 
+    model_config = ConfigDict(json_schema_extra={"example": {"list_url": "https://maps.app.goo.gl/o94j8NnqLffpivrv7"}})
+
     list_url: HttpUrl
 
 
