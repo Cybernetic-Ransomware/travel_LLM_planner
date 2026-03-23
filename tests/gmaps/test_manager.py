@@ -29,9 +29,6 @@ async def manager_no_key():
     await m.disconnect()
 
 
-# ── Lifecycle ─────────────────────────────────────────────────────────────────
-
-
 @pytest.mark.unit
 async def test_connect_creates_client():
     m = GooglePlacesManager(api_key="key", fields="id")
@@ -65,10 +62,7 @@ async def test_disconnect_is_idempotent():
     m = GooglePlacesManager(api_key="key", fields="id")
     await m.connect()
     await m.disconnect()
-    await m.disconnect()  # drugie wywołanie nie może rzucić wyjątku
-
-
-# ── fetch_place_details ────────────────────────────────────────────────────────
+    await m.disconnect()  # second call must not raise
 
 
 @pytest.mark.unit
@@ -89,7 +83,7 @@ async def test_fetch_place_details_success(httpx_mock, manager):
     assert payload == fake_payload
     assert status == "OK"
     assert error is None
-    # Weryfikacja że request trafił na właściwy endpoint
+    # Verify the request hit the correct endpoint
     request = httpx_mock.get_requests()[0]
     assert request.headers["X-Goog-Api-Key"] == "test-api-key"
     assert request.headers["X-Goog-FieldMask"] == _FIELDS
@@ -118,9 +112,6 @@ async def test_fetch_place_details_non_json_error(httpx_mock, manager):
     assert error == "500"
 
 
-# ── search_place_id ────────────────────────────────────────────────────────────
-
-
 @pytest.mark.unit
 async def test_search_place_id_missing_api_key(manager_no_key):
     place_id, status, error = await manager_no_key.search_place_id("Café Roma", 52.2, 21.0)
@@ -145,7 +136,7 @@ async def test_search_place_id_success(httpx_mock, manager):
     assert place_id == "ChIabc"
     assert status == "OK"
     assert error is None
-    # Weryfikacja locationBias w body requestu
+    # Verify locationBias in request body
     import json
 
     body = json.loads(httpx_mock.get_requests()[0].content)
