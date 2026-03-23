@@ -51,7 +51,7 @@ async def fetch_places(
     collection = db[GMAPS_COLLECTION]
     query: dict = {}
     if skipped is not None:
-        query["skipped"] = skipped
+        query["skipped"] = True if skipped else {"$ne": True}
     if list_name is not None:
         query["list_name"] = list_name
     return await collection.find(query).to_list(length=None)
