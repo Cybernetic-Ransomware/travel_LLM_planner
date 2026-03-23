@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     log_dir: str = Field(default="log", alias="LOG_DIR")
     google_places_api_key: str = Field(default="", alias="GOOGLE_PLACES_API_KEY")
     google_places_fields: str = Field(
-        default="id,displayName,formattedAddress,location,types,googleMapsUri,rating,userRatingCount",
+        default="id,displayName,formattedAddress,location,types,googleMapsUri,rating,userRatingCount,regularOpeningHours,currentOpeningHours",
         alias="GOOGLE_PLACES_FIELDS",
     )
 
