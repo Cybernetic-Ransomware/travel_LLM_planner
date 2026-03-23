@@ -3,6 +3,7 @@ from httpx import ASGITransport, AsyncClient
 from testcontainers.mongodb import MongoDbContainer
 
 from src.core.db.manager import MongoDBManager
+from src.gmaps.manager import GooglePlacesManager
 from src.main import app
 
 
@@ -32,15 +33,31 @@ async def test_db(mongo_container):
 
 
 @pytest.fixture
-async def client(test_db):
+async def google_places_manager():
+    """Function-scoped GooglePlacesManager with a test API key.
+
+    Provides a connected manager without hitting the real Google API.
+    Tests that need to assert API calls should mock the underlying httpx client.
+    """
+    manager = GooglePlacesManager(api_key="test-key", fields="id,displayName")
+    await manager.connect()
+    yield manager
+    await manager.disconnect()
+
+
+@pytest.fixture
+async def client(test_db, google_places_manager):
     """Async HTTP client with the testcontainer database injected into app.state.
 
-    ASGITransport does not trigger the FastAPI lifespan, so app.state.db and
-    app.state.client are set directly before the request and cleared afterwards.
+    ASGITransport does not trigger the FastAPI lifespan, so app.state.db,
+    app.state.client and app.state.google_places are set directly before the
+    request and cleared afterwards.
     """
     app.state.db = test_db
     app.state.client = test_db.client
+    app.state.google_places = google_places_manager
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
+    del app.state.google_places
     del app.state.db
     del app.state.client
