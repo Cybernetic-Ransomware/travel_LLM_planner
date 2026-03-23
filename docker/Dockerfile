@@ -29,13 +29,14 @@ ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 
 WORKDIR /src
 
-COPY --chown=appuser:appgroup ./src .
 COPY --from=builder --chown=appuser:appgroup /src/.venv /src/.venv
 RUN chmod -R +x /src/.venv/bin/
 
 RUN mkdir -p /ms-playwright /log && \
     /src/.venv/bin/python -m playwright install --with-deps chromium && \
     chown -R appuser:appgroup /ms-playwright /log
+
+COPY --chown=appuser:appgroup ./src .
 
 USER appuser
 
