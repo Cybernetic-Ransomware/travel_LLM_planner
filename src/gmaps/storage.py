@@ -66,6 +66,21 @@ async def fetch_place_by_id(db: AsyncDatabase, place_id: str) -> dict | None:
     return await db[GMAPS_COLLECTION].find_one({"_id": oid})
 
 
+async def fetch_places_by_ids(db: AsyncDatabase, place_ids: list[str]) -> list[dict]:
+    """Return all places whose _id is in the given list, preserving order."""
+    oids = []
+    for pid in place_ids:
+        try:
+            oids.append(ObjectId(pid))
+        except InvalidId:
+            continue
+    if not oids:
+        return []
+    docs = await db[GMAPS_COLLECTION].find({"_id": {"$in": oids}}).to_list(length=None)
+    order = {str(doc["_id"]): doc for doc in docs}
+    return [order[pid] for pid in place_ids if pid in order]
+
+
 async def find_and_update_place(db: AsyncDatabase, place_id: str, patch: PlacePatch) -> dict | None:
     """Atomically apply patch and return the updated document, or None if not found or invalid id."""
     try:

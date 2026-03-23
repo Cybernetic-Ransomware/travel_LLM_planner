@@ -22,14 +22,26 @@ and the planner computes the most time-efficient visiting order using Google Map
 - Enriches place data (address, opening hours, coordinates) via Google Places API.
 - Manages scheduling preferences per place: preferred visit window, duration, skip flag.
 - REST API for full CRUD management of the location pool.
-- Route optimization based on TSP with time window constraints *(upcoming)*.
+- Route optimization based on TSP with time window constraints (Nearest Neighbor + 2-opt, Google Routes API distance matrix).
 - Docker deployment with MongoDB persistence.
 
 ## Requirements
 - Python >=3.14
 - [uv](https://github.com/astral-sh/uv) package manager
 - Docker Desktop / Docker + Compose
-- Google Maps API key (Places API + Distance Matrix API)
+- Google Cloud API key with **Places API (New)** and **Routes API** enabled
+
+## Environment Variables
+
+Copy `docker/.env.template` to `docker/.env` and fill in the values:
+
+| Variable | Required | Description |
+|---|---|---|
+| `MONGO_URI` | yes | MongoDB connection string |
+| `MONGO_DB` | yes | Database name |
+| `GOOGLE_PLACES_API_KEY` | yes | Google Cloud key — must have **Places API (New)** enabled |
+| `GOOGLE_ROUTES_API_KEY` | yes | Google Cloud key — must have **Routes API** enabled (can be the same key) |
+| `DEBUG` | no | Set to `true` to enable debug logging |
 
 ## Getting Started (Windows)
 ### Docker Deploy
@@ -104,6 +116,7 @@ just lint
 ## Useful links and documentation
 - FastAPI docs: [fastapi.tiangolo.com](https://fastapi.tiangolo.com/)
 - Google Places API: [developers.google.com](https://developers.google.com/maps/documentation/places/web-service)
+- Google Routes API: [developers.google.com](https://developers.google.com/maps/documentation/routes)
 - Pydantic AI docs: [ai.pydantic.dev](https://ai.pydantic.dev/)
 - PyMongo docs: [pymongo.readthedocs.io](https://pymongo.readthedocs.io/en/stable/)
 - uv docs: [docs.astral.sh/uv](https://docs.astral.sh/uv/)

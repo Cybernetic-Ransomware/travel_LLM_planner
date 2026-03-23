@@ -4,6 +4,8 @@ from src.core.db.deps import MongoDbDep
 from src.optimizer.deps import GoogleRoutesDep
 from src.optimizer.matrix.cache import invalidate_cache
 from src.optimizer.matrix.models import TransportMode
+from src.optimizer.solver.models import OptimizeRequest, OptimizeResponse
+from src.optimizer.solver.service import optimize_route
 
 router = APIRouter()
 
@@ -23,6 +25,12 @@ async def matrix_cache_status(db: MongoDbDep) -> dict:
 async def clear_matrix_cache(db: MongoDbDep, transport_mode: TransportMode | None = None) -> None:
     """Invalidate cached distance matrix entries. Optionally filter by transport mode."""
     await invalidate_cache(db, transport_mode)
+
+
+@router.post("/route", response_model=OptimizeResponse)
+async def optimize(db: MongoDbDep, gr: GoogleRoutesDep, body: OptimizeRequest) -> OptimizeResponse:
+    """Optimize a visiting route for the given places using TSP with time windows."""
+    return await optimize_route(db, gr, body)
 
 
 @router.get("/keycheck")
