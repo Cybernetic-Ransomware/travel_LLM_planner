@@ -170,14 +170,31 @@ class TestNearestNeighbor:
         b_idx = route.index("B")
         assert c_idx < b_idx
 
+    def test_coverage_beats_shorter_travel_time(self):
+        """A 3-node route with more travel is preferred over a 2-node route with less."""
+        m = _matrix(
+            _entry("A", "B", 100),
+            _entry("B", "A", 100),
+            _entry("A", "C", 500),
+            _entry("C", "A", 500),
+            _entry("B", "C", 500),
+            _entry("C", "B", 500),
+        )
+        route, skipped = nearest_neighbor(["A", "B", "C"], m, {}, {}, _9H, _21H)
+        # All three nodes must be visited even though a 2-node route is shorter
+        assert skipped == []
+        assert sorted(route) == ["A", "B", "C"]
+
     def test_empty_input(self):
         m = _matrix()
         route, skipped = nearest_neighbor([], m, {}, {}, _9H, _21H)
         assert route == []
         assert skipped == []
 
-    def test_returns_shortest_over_all_starts(self):
-        """With asymmetric costs, NN must try all starts and pick the best total."""
+    def test_maximises_coverage_over_all_starts(self):
+        """Coverage (number of nodes) takes priority over travel time.
+        With asymmetric costs all 3-node routes are feasible, so the result
+        must include all nodes; among ties the shortest travel time is chosen."""
         m = _matrix(
             _entry("A", "B", 100),
             _entry("B", "C", 100),
@@ -186,8 +203,10 @@ class TestNearestNeighbor:
             _entry("C", "B", 900),
             _entry("B", "A", 900),
         )
-        route, _ = nearest_neighbor(["A", "B", "C"], m, {}, {}, _9H, _21H)
-        # Best path: A→B→C (total 200) vs any permutation starting differently
+        route, skipped = nearest_neighbor(["A", "B", "C"], m, {}, {}, _9H, _21H)
+        assert skipped == []
+        assert sorted(route) == ["A", "B", "C"]
+        # Among equal-length routes the shortest is preferred: A→B→C = 200
         assert route == ["A", "B", "C"] or route == ["B", "C", "A"] or route == ["C", "A", "B"]
 
 

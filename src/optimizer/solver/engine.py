@@ -89,9 +89,10 @@ def nearest_neighbor(
 ) -> tuple[list[str], list[str]]:
     """Build an initial route using the Nearest Neighbor heuristic.
 
-    Tries every node as the starting point and returns the route with the
-    shortest total travel time. Nodes that cannot be reached within their
-    time window are left out and returned in the skipped list.
+    Tries every node as the starting point. Selects the route that visits
+    the most nodes; among ties, prefers the shortest total travel time.
+    Nodes that cannot be reached within their time window are left out and
+    returned in the skipped list.
 
     Returns:
         (route, skipped_ids)
@@ -100,12 +101,15 @@ def nearest_neighbor(
         return [], []
 
     best_route: list[str] = []
+    best_count = 0
     best_time = _LARGE
 
     for start in nodes:
         route, _ = _nn_from_start(start, nodes, matrix, time_windows, visit_durations_s, day_start_s, day_end_s)
         t = _route_travel_time(route, matrix)
-        if t < best_time:
+        count = len(route)
+        if count > best_count or (count == best_count and t < best_time):
+            best_count = count
             best_time = t
             best_route = route
 
@@ -123,7 +127,12 @@ def _nn_from_start(
     day_start_s: int,
     day_end_s: int,
 ) -> tuple[list[str], list[str]]:
-    """Run Nearest Neighbor from a fixed starting node."""
+    """Run Nearest Neighbor with Earliest Deadline First from a fixed starting node.
+
+    Among feasible candidates the one with the soonest close time is chosen.
+    When close times are equal (e.g. all unconstrained nodes sharing day_end_s),
+    the shortest travel time breaks the tie — preserving classic NN behaviour.
+    """
     route = [start]
     unvisited = set(nodes) - {start}
     current_s = day_start_s
@@ -134,6 +143,7 @@ def _nn_from_start(
 
     while unvisited:
         best_node: str | None = None
+        best_close = _LARGE
         best_travel = _LARGE
 
         for candidate in unvisited:
@@ -149,7 +159,8 @@ def _nn_from_start(
             if arrival > close_s:
                 continue
 
-            if travel < best_travel:
+            if close_s < best_close or (close_s == best_close and travel < best_travel):
+                best_close = close_s
                 best_travel = travel
                 best_node = candidate
 

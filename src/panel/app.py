@@ -1,8 +1,10 @@
 """Streamlit location management panel for Travel Planner."""
 
+import folium
 import pendulum
 import polars as pl
 import streamlit as st
+from streamlit_folium import st_folium
 
 from src.panel.api_client import (
     delete_place,
@@ -240,11 +242,31 @@ with tab_optimizer:
                 with st.expander(f"{i}. {step['name']} — {step['arrival_time']}–{step['departure_time']}", expanded=True):
                     st.caption(f"{travel_info}{wait_info} · visit {step['visit_duration_min']} min")
 
-            map_data = pl.DataFrame(
-                [{"lat": s["lat"], "lon": s["lng"], "name": s["name"]} for s in steps if s["lat"] and s["lng"]]
-            )
-            if not map_data.is_empty():
-                st.map(map_data, latitude="lat", longitude="lon")
+            map_points = [(s["lat"], s["lng"], s["name"], i) for i, s in enumerate(steps, 1) if s["lat"] and s["lng"]]
+            if map_points:
+                center_lat = sum(p[0] for p in map_points) / len(map_points)
+                center_lng = sum(p[1] for p in map_points) / len(map_points)
+                m = folium.Map(location=[center_lat, center_lng], zoom_start=14)
+
+                coords = [(p[0], p[1]) for p in map_points]
+                folium.PolyLine(coords, color="#4A90E2", weight=3, opacity=0.8).add_to(m)
+
+                for lat, lng, name, idx in map_points:
+                    folium.Marker(
+                        location=[lat, lng],
+                        tooltip=f"{idx}. {name}",
+                        icon=folium.DivIcon(
+                            html=(
+                                f'<div style="background:#4A90E2;color:white;border-radius:50%;'
+                                f"width:24px;height:24px;display:flex;align-items:center;"
+                                f'justify-content:center;font-weight:bold;font-size:12px;">{idx}</div>'
+                            ),
+                            icon_size=(24, 24),
+                            icon_anchor=(12, 12),
+                        ),
+                    ).add_to(m)
+
+                st_folium(m, use_container_width=True, height=400, returned_objects=[])
 
         if skipped:
             with st.expander(f"Skipped places ({len(skipped)})"):

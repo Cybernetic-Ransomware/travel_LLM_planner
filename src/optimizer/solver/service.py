@@ -54,7 +54,13 @@ def _parse_time_window(
             oh_open_s = oh_open.get("hour", 0) * 3600 + oh_open.get("minute", 0) * 60
             oh_close_data = day_period.get("close")
             if oh_close_data is not None:
-                oh_close_s = oh_close_data.get("hour", 0) * 3600 + oh_close_data.get("minute", 0) * 60
+                close_day = oh_close_data.get("day")
+                open_day = oh_open.get("day")
+                if close_day is not None and open_day is not None and close_day != open_day:
+                    # Closes past midnight — treat as open until end of planning day
+                    oh_close_s = 24 * 3600
+                else:
+                    oh_close_s = oh_close_data.get("hour", 0) * 3600 + oh_close_data.get("minute", 0) * 60
                 open_s = max(open_s, oh_open_s)
                 close_s = min(close_s, oh_close_s)
             else:

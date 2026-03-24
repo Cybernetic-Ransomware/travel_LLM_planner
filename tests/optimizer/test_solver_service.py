@@ -74,6 +74,18 @@ class TestParseTimeWindow:
         tw = _parse_time_window(doc, _9H, _21H, 0)
         assert tw is None
 
+    def test_midnight_close_treated_as_end_of_day(self):
+        """Close on the next day (e.g. bar open 17:00 → midnight) must not produce close_s=0."""
+        doc = {
+            "opening_hours": {
+                "periods": [{"open": {"day": 2, "hour": 17, "minute": 0}, "close": {"day": 3, "hour": 0, "minute": 0}}]
+            }
+        }
+        tw = _parse_time_window(doc, _9H, _21H, 2)  # Tuesday
+        assert tw is not None
+        assert tw.open_s == 17 * 3600
+        assert tw.close_s == _21H  # capped by day_end_s (min of 24h and 21h)
+
     def test_no_opening_hours_data_uses_day_bounds(self):
         doc = {"opening_hours": None}
         tw = _parse_time_window(doc, _9H, _21H, 1)
