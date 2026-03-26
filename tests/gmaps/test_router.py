@@ -2,8 +2,11 @@
 
 import pytest
 from bson import ObjectId
+from pytest_httpx import HTTPXMock
 
 from src.core.db.manager import GMAPS_COLLECTION
+
+_PLACES_API_URL = "https://places.googleapis.com/v1/places"
 
 
 @pytest.fixture(autouse=True)
@@ -116,3 +119,61 @@ class TestDeletePlace:
     async def test_not_found(self, client):
         response = await client.delete(f"/api/v1/core/gmaps/places/{ObjectId()}")
         assert response.status_code == 404
+
+
+@pytest.mark.integration
+class TestEnrichPlaces:
+    @pytest.fixture
+    async def place_without_address(self, test_db):
+        result = await test_db[GMAPS_COLLECTION].insert_one(
+            {"name": "Wawel Castle", "gmaps_place_id": "ChItest123", "lat": 50.054, "lng": 19.935}
+        )
+        return str(result.inserted_id)
+
+    async def test_enrich_updates_address_and_opening_hours(
+        self, client, test_db, place_without_address, httpx_mock: HTTPXMock
+    ):
+        fake_details = {
+            "id": "ChItest123",
+            "formattedAddress": "Wawel 5, 31-001 Kraków",
+            "regularOpeningHours": {"periods": [{"open": {"day": 1, "hour": 9}, "close": {"day": 1, "hour": 17}}]},
+        }
+        httpx_mock.add_response(
+            url=f"{_PLACES_API_URL}/ChItest123",
+            json=fake_details,
+        )
+
+        response = await client.post("/api/v1/core/gmaps/enrich", json={"limit": 10})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["scanned"] == 1
+        assert data["updated"] == 1
+
+        doc = await test_db[GMAPS_COLLECTION].find_one({"name": "Wawel Castle"})
+        assert doc["address"] == "Wawel 5, 31-001 Kraków"
+        assert doc["opening_hours"] is not None
+        assert "periods" in doc["opening_hours"]
+
+    async def test_enrich_no_candidates_returns_zero(self, client, test_db):
+        await test_db[GMAPS_COLLECTION].insert_one(
+            {"name": "Already Enriched", "gmaps_place_id": "ChIdone", "address": "ul. Gotowa 1"}
+        )
+        response = await client.post("/api/v1/core/gmaps/enrich", json={"limit": 10})
+        assert response.status_code == 200
+        assert response.json()["scanned"] == 0
+
+    async def test_enrich_without_opening_hours_in_response(
+        self, client, test_db, place_without_address, httpx_mock: HTTPXMock
+    ):
+        fake_details = {
+            "id": "ChItest123",
+            "formattedAddress": "Wawel 5, 31-001 Kraków",
+        }
+        httpx_mock.add_response(url=f"{_PLACES_API_URL}/ChItest123", json=fake_details)
+
+        await client.post("/api/v1/core/gmaps/enrich", json={"limit": 10})
+
+        doc = await test_db[GMAPS_COLLECTION].find_one({"name": "Wawel Castle"})
+        assert doc["address"] == "Wawel 5, 31-001 Kraków"
+        assert doc.get("opening_hours") is None

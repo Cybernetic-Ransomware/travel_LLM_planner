@@ -88,6 +88,7 @@ async def enrich_places(payload: EnrichRequest, db: MongoDbDep, gp: GooglePlaces
             if details:
                 update_doc["details"] = details
                 update_doc["address"] = details.get("formattedAddress")
+                update_doc["opening_hours"] = details.get("regularOpeningHours")
             updates.append(UpdateOne({"_id": doc["_id"]}, {"$set": update_doc}))
             continue
 
@@ -96,6 +97,7 @@ async def enrich_places(payload: EnrichRequest, db: MongoDbDep, gp: GooglePlaces
             "details_error": error_message,
             "details": details,
             "address": details.get("formattedAddress") if details else None,
+            "opening_hours": details.get("regularOpeningHours") if details else None,
             "enriched_at": pendulum.now("UTC"),
         }
         updates.append(UpdateOne({"_id": doc["_id"]}, {"$set": update_doc}))
