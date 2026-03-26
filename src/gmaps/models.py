@@ -97,6 +97,8 @@ class PlaceOut(BaseModel):
     source_list_url: str | None = None
     scraped_at: datetime | None = None
     enriched_at: datetime | None = None
+    # Opening hours from Google Places API — populated after enrichment
+    opening_hours: dict | None = None  # regularOpeningHours from Places API (New)
     # Scheduling preferences — set via panel, consumed by the optimizer
     preferred_hour_from: int | None = None
     preferred_hour_to: int | None = None

@@ -6,6 +6,7 @@ from src.config.conf_logger import setup_logger
 from src.config.config import settings
 from src.core.db.manager import MongoDBManager
 from src.gmaps.manager import GooglePlacesManager
+from src.optimizer.matrix.client import GoogleRoutesManager
 
 logger = setup_logger(__name__, "main")
 
@@ -23,9 +24,14 @@ async def lifespan(app: FastAPI):
         app.state.google_places = gp_manager
         logger.info("GooglePlacesManager connected — key_present=%s", bool(settings.google_places_api_key))
 
-        yield
+        async with GoogleRoutesManager(settings.google_routes_api_key) as gr_manager:
+            app.state.google_routes = gr_manager
+            logger.info("GoogleRoutesManager connected — key_present=%s", bool(settings.google_routes_api_key))
+
+            yield
 
     logger.info("GooglePlacesManager disconnected")
+    logger.info("GoogleRoutesManager disconnected")
 
     await manager.disconnect()
     logger.info("MongoDB disconnected")

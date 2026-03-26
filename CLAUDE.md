@@ -49,7 +49,33 @@ Tests are organized by marker:
 - `integration` — requires Docker Desktop; uses `testcontainers[mongodb]` for real MongoDB
 - `regression` — end-to-end happy-path checks
 
-Coverage HTML report is written to `tests/result/html/`.
+Coverage is measured by `pytest-cov` and reported automatically on every run.
+HTML report is written to `tests/result/html/`. Known uncovered areas: `src/panel/`
+(Streamlit UI, no automated tests) and `src/gmaps/scraper.py` (Playwright, requires
+a real browser). These are intentional gaps, not regressions.
+
+### Test conventions
+
+Always mark every test or test class explicitly — never leave tests unmarked.
+The default `addopts` filter (`-m 'not integration'`) lets unmarked tests through,
+but unmarked tests are invisible to targeted runs like `pytest -m unit`.
+
+File layout mirrors the source tree — one test file per source module:
+```
+tests/
+  gmaps/       # mirrors src/gmaps/
+  optimizer/   # mirrors src/optimizer/
+  core/        # mirrors src/core/
+```
+
+Fixture hierarchy (all defined in `tests/conftest.py`):
+- `mongo_container` (session) — single MongoDB testcontainer for the whole run
+- `test_db` (function) — fresh `AsyncDatabase` per test; indexes created via `MongoDBManager.connect()`
+- `google_places_manager` / `google_routes_manager` (function) — connected managers with fake API keys
+- `client` (function) — `AsyncClient` with `ASGITransport`; bypasses lifespan, sets `app.state` directly
+
+HTTP calls in unit tests are intercepted by the `httpx_mock` fixture from `pytest-httpx`.
+Any test that instantiates a manager wrapping `httpx.AsyncClient` must use `httpx_mock` — never hit real APIs.
 
 ## Architecture
 

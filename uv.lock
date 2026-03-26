@@ -240,6 +240,18 @@ wheels = [
 ]
 
 [[package]]
+name = "branca"
+version = "0.8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/32/14/9d409124bda3f4ab7af3802aba07181d1fd56aa96cc4b999faea6a27a0d2/branca-0.8.2.tar.gz", hash = "sha256:e5040f4c286e973658c27de9225c1a5a7356dd0702a7c8d84c0f0dfbde388fe7", size = 27890, upload-time = "2025-10-06T10:28:20.305Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/50/fc9680058e63161f2f63165b84c957a0df1415431104c408e8104a3a18ef/branca-0.8.2-py3-none-any.whl", hash = "sha256:2ebaef3983e3312733c1ae2b793b0a8ba3e1c4edeb7598e10328505280cf2f7c", size = 26193, upload-time = "2025-10-06T10:28:19.255Z" },
+]
+
+[[package]]
 name = "cachetools"
 version = "7.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -712,6 +724,22 @@ wheels = [
 ]
 
 [[package]]
+name = "folium"
+version = "0.20.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "branca" },
+    { name = "jinja2" },
+    { name = "numpy" },
+    { name = "requests" },
+    { name = "xyzservices" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c7/76/84a1b1b00ce71f9c0c44af7d80f310c02e2e583591fe7d4cb03baecd0d3f/folium-0.20.0.tar.gz", hash = "sha256:a0d78b9d5a36ba7589ca9aedbd433e84e9fcab79cd6ac213adbcff922e454cb9", size = 109932, upload-time = "2025-06-16T20:22:51.803Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b5/a8/5f764f333204db0390362a4356d03a43626997f26818a0e9396f1b3bd8c9/folium-0.20.0-py2.py3-none-any.whl", hash = "sha256:f0bc2a92acde20bca56367aa5c1c376c433f450608d058daebab2fc9bf8198bf", size = 113394, upload-time = "2025-06-16T20:22:50.318Z" },
+]
+
+[[package]]
 name = "frozenlist"
 version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -879,6 +907,7 @@ wheels = [
 name = "griffelib"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/06/eccbd311c9e2b3ca45dbc063b93134c57a1ccc7607c5e545264ad092c4a9/griffelib-2.0.0.tar.gz", hash = "sha256:e504d637a089f5cab9b5daf18f7645970509bf4f53eda8d79ed71cce8bd97934", size = 166312, upload-time = "2026-03-23T21:06:55.954Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/51/c936033e16d12b627ea334aaaaf42229c37620d0f15593456ab69ab48161/griffelib-2.0.0-py3-none-any.whl", hash = "sha256:01284878c966508b6d6f1dbff9b6fa607bc062d8261c5c7253cb285b06422a7f", size = 142004, upload-time = "2026-02-09T19:09:40.561Z" },
 ]
@@ -2678,6 +2707,21 @@ wheels = [
 ]
 
 [[package]]
+name = "streamlit-folium"
+version = "0.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "branca" },
+    { name = "folium" },
+    { name = "jinja2" },
+    { name = "streamlit" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6a/cd/d762458ca6bb1e5966e175702b26220c95482828d5f483c7612d8f09a45f/streamlit_folium-0.27.0.tar.gz", hash = "sha256:312ea4023504c1e81ceae1a472725eb429872fd91825ce23a0e3772dfca87c97", size = 526249, upload-time = "2026-03-22T22:47:05.355Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/50/6db1f94e88a88a5ea2054d26b8bcb6d38d70072c6830b00c9dfb0176f60c/streamlit_folium-0.27.0-py3-none-any.whl", hash = "sha256:70c10c26f0453e2e480e157118815172ccd6f6f9718928ba5c45d99b9decda18", size = 528545, upload-time = "2026-03-22T22:47:07.052Z" },
+]
+
+[[package]]
 name = "temporalio"
 version = "1.20.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2842,6 +2886,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "folium" },
     { name = "httpx" },
     { name = "pendulum" },
     { name = "playwright" },
@@ -2851,6 +2896,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pymongo" },
     { name = "streamlit" },
+    { name = "streamlit-folium" },
     { name = "uvicorn" },
 ]
 
@@ -2871,6 +2917,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115.12" },
+    { name = "folium", specifier = ">=0.20.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pendulum", specifier = ">=3.2.0" },
     { name = "playwright", specifier = ">=1.58.0" },
@@ -2880,6 +2927,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "pymongo", specifier = ">=4.16.0" },
     { name = "streamlit", specifier = ">=1.55.0" },
+    { name = "streamlit-folium", specifier = ">=0.27.0" },
     { name = "uvicorn", specifier = ">=0.34.2" },
 ]
 
@@ -3167,6 +3215,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8f/cd/752bf4a3e13619e6eb6c2ca0df18890aa70b21f299a51c126079e3c1c7b6/xai_sdk-1.8.0.tar.gz", hash = "sha256:614301eed7f7e986897ac8d6836900391756d0cdee725370d21e1a2c1b4b8bc3", size = 391420, upload-time = "2026-03-05T06:50:47.091Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/98/cd/183e7541990f46474ce33aaf2b2573f8848e71871669e01ed1fb02e6bc3b/xai_sdk-1.8.0-py3-none-any.whl", hash = "sha256:af63766db7f8a070d57e15e052fb57fdfacacbc604590c4350ad1aef03dda374", size = 242349, upload-time = "2026-03-05T06:50:45.789Z" },
+]
+
+[[package]]
+name = "xyzservices"
+version = "2025.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/0f/022795fc1201e7c29e742a509913badb53ce0b38f64b6db859e2f6339da9/xyzservices-2025.11.0.tar.gz", hash = "sha256:2fc72b49502b25023fd71e8f532fb4beddbbf0aa124d90ea25dba44f545e17ce", size = 1135703, upload-time = "2025-11-22T11:31:51.82Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ef/5c/2c189d18d495dd0fa3f27ccc60762bbc787eed95b9b0147266e72bb76585/xyzservices-2025.11.0-py3-none-any.whl", hash = "sha256:de66a7599a8d6dad63980b77defd1d8f5a5a9cb5fc8774ea1c6e89ca7c2a3d2f", size = 93916, upload-time = "2025-11-22T11:31:50.525Z" },
 ]
 
 [[package]]

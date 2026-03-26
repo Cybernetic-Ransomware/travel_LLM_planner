@@ -2,6 +2,7 @@ from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
 
 GMAPS_COLLECTION = "gmaps_places"
+MATRIX_COLLECTION = "distance_matrix_cache"
 
 
 class MongoDBManager:
@@ -39,3 +40,10 @@ class MongoDBManager:
         await collection.create_index("source_list_url")
         await collection.create_index("scraped_at")
         await collection.create_index("skipped")
+
+        matrix = db[MATRIX_COLLECTION]
+        await matrix.create_index(
+            [("origin_id", 1), ("dest_id", 1), ("transport_mode", 1)],
+            unique=True,
+        )
+        await matrix.create_index("computed_at")
