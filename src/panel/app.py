@@ -20,8 +20,6 @@ st.title("Travel Planner")
 
 tab_import, tab_locations, tab_optimizer = st.tabs(["Import & Enrich", "Locations", "Route Optimizer"])
 
-# ── Import & Enrich ────────────────────────────────────────────────────────────
-
 with tab_import:
     st.subheader("Import from Google Maps list")
     st.caption("Paste the URL of a public Google Maps saved list (e.g. maps.app.goo.gl/...).")
@@ -58,8 +56,6 @@ with tab_import:
                 st.success(f"Scanned {res['scanned']} places, updated {res['updated']}.")
             except Exception as e:
                 st.error(f"Enrichment failed: {e}")
-
-# ── Locations ──────────────────────────────────────────────────────────────────
 
 with tab_locations:
     with st.sidebar:
@@ -166,8 +162,6 @@ with tab_locations:
             else:
                 st.success(f"Deleted {len(to_delete)} place(s).")
                 st.rerun()
-
-# ── Route Optimizer ────────────────────────────────────────────────────────────
 
 with tab_optimizer:
     try:
