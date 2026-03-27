@@ -83,14 +83,19 @@ async def optimize_route(
     db: AsyncDatabase,
     manager: GoogleRoutesManager,
     request: OptimizeRequest,
+    docs: list[dict] | None = None,
 ) -> OptimizeResponse:
     """Run the full TSP optimization pipeline.
 
-    1. Fetch place documents from MongoDB.
+    1. Fetch place documents from MongoDB (skipped when docs are provided).
     2. Filter out places without coordinates or with an infeasible time window.
     3. Build a distance matrix (cache → Google Routes API).
     4. Run Nearest Neighbor construction + 2-opt improvement.
     5. Schedule wall-clock arrival/departure times and build the response.
+
+    Args:
+        docs: Pre-fetched place documents. When supplied the DB fetch is skipped,
+              allowing callers to apply in-memory overrides before optimization.
     """
     day_start_s = request.day_start_hour * 3600
     day_end_s = request.day_end_hour * 3600
@@ -106,7 +111,8 @@ async def optimize_route(
             tzinfo=UTC,
         )
 
-    docs = await fetch_places_by_ids(db, request.place_ids)
+    if docs is None:
+        docs = await fetch_places_by_ids(db, request.place_ids)
     doc_map = {str(doc["_id"]): doc for doc in docs}
 
     skipped: list[SkippedPlace] = []
