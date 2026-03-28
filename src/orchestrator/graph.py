@@ -1,12 +1,32 @@
 from __future__ import annotations
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from src.orchestrator.models import AgentState
+
+
+def _build_place_context_prompt(places: list[dict]) -> str:
+    """Build a system prompt describing the user's trip places for the LLM."""
+    lines = ["You are a travel planning assistant. The user has the following places in their trip plan:"]
+    for p in places:
+        name = p.get("name") or str(p.get("_id", ""))
+        line = f"- {name}"
+        address = p.get("address")
+        if address:
+            line += f" ({address})"
+        dur = p.get("visit_duration_min")
+        if dur is not None:
+            line += f", {dur} min visit"
+        h_from = p.get("preferred_hour_from")
+        h_to = p.get("preferred_hour_to")
+        if h_from is not None and h_to is not None:
+            line += f", preferred {h_from}:00\u2013{h_to}:00"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 async def router_node(state: AgentState) -> str:
@@ -25,8 +45,17 @@ async def router_node(state: AgentState) -> str:
 
 
 async def chatbot_node(state: AgentState, llm: BaseChatModel) -> dict:
-    """Invoke the LLM with the full conversation history and return the response."""
-    response = await llm.ainvoke(state["messages"])
+    """Invoke the LLM with the full conversation history and return the response.
+
+    When place_context is provided, prepends a SystemMessage describing the trip
+    so the LLM can reason about the user's specific places.
+    """
+    place_context = state.get("place_context") or []
+    if place_context:
+        messages = [SystemMessage(content=_build_place_context_prompt(place_context))] + list(state["messages"])
+    else:
+        messages = list(state["messages"])
+    response = await llm.ainvoke(messages)
     return {"messages": [response]}
 
 

@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, ToolCall
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolCall
 
 from src.orchestrator.graph import build_graph, chatbot_node, router_node
 from src.orchestrator.models import AgentState
@@ -116,3 +116,129 @@ class TestChatbotNode:
         returned_msg = result["messages"][0]
         assert isinstance(returned_msg, AIMessage)
         assert len(returned_msg.tool_calls) == 1
+
+
+@pytest.mark.unit
+class TestBuildPlaceContextPrompt:
+    def test_header_present(self):
+        from src.orchestrator.graph import _build_place_context_prompt
+
+        result = _build_place_context_prompt([])
+        assert "travel planning assistant" in result
+
+    def test_formats_place_with_all_fields(self):
+        from src.orchestrator.graph import _build_place_context_prompt
+
+        place = {
+            "_id": "abc123",
+            "name": "Wawel Castle",
+            "address": "Wawel 5, Kraków",
+            "visit_duration_min": 90,
+            "preferred_hour_from": 9,
+            "preferred_hour_to": 17,
+        }
+        result = _build_place_context_prompt([place])
+        assert "Wawel Castle" in result
+        assert "Wawel 5, Kraków" in result
+        assert "90 min" in result
+        assert "9:00" in result
+        assert "17:00" in result
+
+    def test_formats_multiple_places(self):
+        from src.orchestrator.graph import _build_place_context_prompt
+
+        places = [
+            {"_id": "a", "name": "Place A"},
+            {"_id": "b", "name": "Place B"},
+        ]
+        result = _build_place_context_prompt(places)
+        assert "Place A" in result
+        assert "Place B" in result
+
+    def test_objectid_used_as_name_fallback(self):
+        from bson import ObjectId
+
+        from src.orchestrator.graph import _build_place_context_prompt
+
+        oid = ObjectId()
+        place = {"_id": oid}
+        result = _build_place_context_prompt([place])
+        assert str(oid) in result
+
+    def test_missing_optional_fields_no_crash(self):
+        from src.orchestrator.graph import _build_place_context_prompt
+
+        place = {"_id": "xyz", "name": "Minimal Place"}
+        result = _build_place_context_prompt([place])
+        assert "Minimal Place" in result
+
+
+@pytest.mark.unit
+class TestChatbotNodePlaceContext:
+    async def test_system_message_prepended_when_context_nonempty(self):
+        mock_response = AIMessage(content="Sure!")
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+
+        state = _make_state(
+            messages=[HumanMessage(content="Tell me about Wawel")],
+            place_context=[{"_id": "abc", "name": "Wawel Castle"}],
+        )
+        await chatbot_node(state, mock_llm)
+
+        called_messages = mock_llm.ainvoke.call_args[0][0]
+        assert isinstance(called_messages[0], SystemMessage)
+
+    async def test_system_message_contains_place_name(self):
+        mock_response = AIMessage(content="Sure!")
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+
+        state = _make_state(
+            messages=[HumanMessage(content="Hi")],
+            place_context=[{"_id": "abc", "name": "Wawel Castle"}],
+        )
+        await chatbot_node(state, mock_llm)
+
+        called_messages = mock_llm.ainvoke.call_args[0][0]
+        assert "Wawel Castle" in called_messages[0].content
+
+    async def test_no_system_message_when_context_empty(self):
+        mock_response = AIMessage(content="Sure!")
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+
+        state = _make_state(messages=[HumanMessage(content="Hi")], place_context=[])
+        await chatbot_node(state, mock_llm)
+
+        called_messages = mock_llm.ainvoke.call_args[0][0]
+        assert not any(isinstance(m, SystemMessage) for m in called_messages)
+
+    async def test_original_user_message_preserved_in_call(self):
+        mock_response = AIMessage(content="Sure!")
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+
+        original = HumanMessage(content="Tell me about Wawel")
+        state = _make_state(
+            messages=[original],
+            place_context=[{"_id": "abc", "name": "Wawel Castle"}],
+        )
+        await chatbot_node(state, mock_llm)
+
+        called_messages = mock_llm.ainvoke.call_args[0][0]
+        assert called_messages[-1] is original
+
+    async def test_message_count_with_context(self):
+        mock_response = AIMessage(content="Sure!")
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+
+        state = _make_state(
+            messages=[HumanMessage(content="Hi")],
+            place_context=[{"_id": "abc", "name": "Wawel Castle"}],
+        )
+        await chatbot_node(state, mock_llm)
+
+        called_messages = mock_llm.ainvoke.call_args[0][0]
+        assert len(called_messages) == 2

@@ -1,5 +1,7 @@
 """Streamlit location management panel for Travel Planner."""
 
+import datetime as _dt
+
 import folium
 import pendulum
 import polars as pl
@@ -14,6 +16,16 @@ from src.panel.api_client import (
     optimize_route,
     optimize_trip,
     patch_place,
+)
+from src.panel.chat_client import ChatHistory, stream_chat
+from src.panel.messages import (
+    ERR_API_UNREACHABLE,
+    ERR_ENRICHMENT_FAILED,
+    ERR_IMPORT_FAILED,
+    ERR_OPTIMIZATION_FAILED,
+    ERR_PLACE_COUNT,
+    ERR_TRIP_FAILED,
+    SKIP_REASON,
 )
 
 st.set_page_config(page_title="Travel Planner", layout="wide")
@@ -70,8 +82,33 @@ def _render_day_route(steps: list[dict], skipped: list[dict]) -> None:
     if skipped:
         with st.expander(f"Skipped places ({len(skipped)})"):
             for s in skipped:
-                st.write(f"- **{s['name'] or s['place_id']}** — {s['reason']}")
+                st.write(f"- **{s['name'] or s['place_id']}** — {SKIP_REASON.get(s['reason'], s['reason'])}")
 
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = ChatHistory()
+
+with st.sidebar, st.expander("💬 Chat", expanded=False):
+    history: ChatHistory = st.session_state.chat_history
+    for msg in history.messages:
+        with st.chat_message(msg.role):
+            st.write(msg.content)
+
+    try:
+        _place_ids = [p["id"] for p in list_places(skipped=False)]
+    except Exception:
+        _place_ids = []
+
+    if prompt := st.chat_input("Ask about your trip…", key="chat_input"):
+        history.add("user", prompt)
+        with st.chat_message("user"):
+            st.write(prompt)
+        try:
+            with st.chat_message("assistant"):
+                full = str(st.write_stream(stream_chat(history, _place_ids)))
+            history.add("assistant", full)
+        except Exception as e:
+            st.error(str(e))
 
 tab_import, tab_locations, tab_optimizer, tab_multiday = st.tabs(
     ["Import & Enrich", "Locations", "Route Optimizer", "Multi-Day Trip"]
@@ -91,7 +128,7 @@ with tab_import:
                     f"{res['total']} places found, {res['upserted']} new/updated."
                 )
             except Exception as e:
-                st.error(f"Import failed: {e}")
+                st.error(ERR_IMPORT_FAILED.format(detail=e))
 
     st.divider()
 
@@ -102,8 +139,8 @@ with tab_import:
         all_places = list_places()
         missing = sum(1 for p in all_places if not p.get("address"))
         st.info(f"{missing} of {len(all_places)} places still need enrichment.")
-    except Exception as e:
-        st.warning(f"Could not load place count: {e}")
+    except Exception:
+        st.warning(ERR_PLACE_COUNT)
 
     limit = st.slider("Batch size", min_value=1, max_value=100, value=20)
     if st.button("Run enrichment", type="primary"):
@@ -112,13 +149,20 @@ with tab_import:
                 res = enrich_places(limit)
                 st.success(f"Scanned {res['scanned']} places, updated {res['updated']}.")
             except Exception as e:
-                st.error(f"Enrichment failed: {e}")
+                st.error(ERR_ENRICHMENT_FAILED.format(detail=e))
 
 with tab_locations:
-    with st.sidebar:
-        st.header("Filters")
-        skipped_option = st.selectbox("Show", ["All", "Active only", "Skipped only"])
-        list_name_filter = st.text_input("List name")
+    col_show, col_list = st.columns([1, 2])
+    skipped_option = col_show.selectbox("Show", ["All", "Active only", "Skipped only"])
+
+    try:
+        _all_places = list_places()
+        _list_names = sorted({p["list_name"] for p in _all_places if p.get("list_name")})
+    except Exception:
+        _list_names = []
+
+    list_name_choice = col_list.selectbox("List name", ["All"] + _list_names)
+    list_name_filter = None if list_name_choice == "All" else list_name_choice
 
     skipped_filter: bool | None = None
     if skipped_option == "Active only":
@@ -127,9 +171,9 @@ with tab_locations:
         skipped_filter = True
 
     try:
-        places = list_places(skipped=skipped_filter, list_name=list_name_filter or None)
-    except Exception as e:
-        st.error(f"Cannot connect to API: {e}")
+        places = list_places(skipped=skipped_filter, list_name=list_name_filter)
+    except Exception:
+        st.error(ERR_API_UNREACHABLE)
         st.stop()
 
     if not places:
@@ -162,9 +206,78 @@ with tab_locations:
         [pl.col(c).map_elements(_hour_to_time, return_dtype=pl.Object) for c in HOUR_COLS if c in df.columns]
     ).with_columns(pl.lit(False).alias("delete"))
 
+    _table_ver: int = st.session_state.get("_table_key_ver", 0)
+    _table_key = f"places_table_{_table_ver}"
+
+    @st.dialog("Confirm deletion")
+    def _confirm_delete_dialog() -> None:
+        pending: dict = st.session_state.get("_pending_delete", {})
+        names: list[str] = pending.get("names", [])
+        ids: list[str] = pending.get("ids", [])
+        st.write(f"Permanently delete {len(ids)} place(s)?")
+        for name in names:
+            st.write(f"- **{name}**")
+        col1, col2 = st.columns(2)
+        if col1.button("Delete", type="primary"):
+            errors: list[str] = []
+            for place_id in ids:
+                try:
+                    delete_place(place_id)
+                except Exception as e:
+                    errors.append(str(e))
+            st.session_state.pop("_pending_delete", None)
+            st.session_state["_table_key_ver"] = _table_ver + 1
+            st.session_state["_table_save_result"] = ("error", errors) if errors else ("ok", len(ids))
+            st.rerun()
+        if col2.button("Cancel"):
+            st.session_state.pop("_pending_delete", None)
+            st.session_state["_table_key_ver"] = _table_ver + 1
+            st.rerun()
+
+    def _apply_table_changes() -> None:
+        table_state: dict = st.session_state.get(_table_key) or {}
+        edits: dict = table_state.get("edited_rows", {})
+        if not edits:
+            return
+
+        to_delete_indices = {idx for idx, ch in edits.items() if ch.get("delete")}
+        to_patch = {
+            idx: {k: v for k, v in ch.items() if k != "delete"}
+            for idx, ch in edits.items()
+            if idx not in to_delete_indices and any(k != "delete" for k in ch)
+        }
+
+        if to_delete_indices:
+            st.session_state["_pending_delete"] = {
+                "ids": [places[idx]["id"] for idx in to_delete_indices],
+                "names": [places[idx].get("name") or places[idx]["id"] for idx in to_delete_indices],
+            }
+
+        errors: list[str] = []
+        for row_idx, changes in to_patch.items():
+            for col in HOUR_COLS:
+                if col in changes:
+                    val = changes[col]
+                    if hasattr(val, "hour"):
+                        changes[col] = val.hour
+                    elif isinstance(val, str) and val:
+                        changes[col] = int(val.split(":")[0])
+            try:
+                patch_place(places[row_idx]["id"], changes)
+            except Exception as e:
+                errors.append(str(e))
+
+        if errors:
+            st.session_state["_table_save_result"] = ("error", errors)
+        elif to_patch:
+            st.session_state["_table_save_result"] = ("ok", len(to_patch))
+
+    if "_pending_delete" in st.session_state:
+        _confirm_delete_dialog()
+
     st.data_editor(
         display_df,
-        width="stretch",
+        use_container_width=True,
         disabled=[c for c in display_df.columns if c not in EDITABLE],
         column_config={
             "skipped": st.column_config.CheckboxColumn("Skipped"),
@@ -173,55 +286,16 @@ with tab_locations:
             "preferred_hour_to": st.column_config.TimeColumn("Hour to", step=3600),
             "visit_duration_min": st.column_config.NumberColumn("Duration (min)", min_value=1, max_value=480, step=5),
         },
-        key="places_table",
+        key=_table_key,
+        on_change=_apply_table_changes,
     )
 
-    table_state: dict = st.session_state.get("places_table") or {}
-    edits: dict = table_state.get("edited_rows", {})
-
-    to_delete = {idx for idx, ch in edits.items() if ch.get("delete")}
-    to_patch = {
-        idx: {k: v for k, v in ch.items() if k != "delete"}
-        for idx, ch in edits.items()
-        if idx not in to_delete and len(ch) > (1 if "delete" in ch else 0)
-    }
-
-    col_apply, col_delete = st.columns([1, 1])
-
-    with col_apply:
-        if to_patch and st.button("Apply changes", type="primary"):
-            errors = []
-            for row_idx, changes in to_patch.items():
-                for col in HOUR_COLS:
-                    if col in changes:
-                        val = changes[col]
-                        if hasattr(val, "hour"):
-                            changes[col] = val.hour
-                        elif isinstance(val, str) and val:
-                            changes[col] = int(val.split(":")[0])
-                try:
-                    patch_place(places[row_idx]["id"], changes)
-                except Exception as e:
-                    errors.append(str(e))
-            if errors:
-                st.error("\n".join(errors))
-            else:
-                st.success(f"Updated {len(to_patch)} place(s).")
-                st.rerun()
-
-    with col_delete:
-        if to_delete and st.button(f"Delete {len(to_delete)} selected", type="secondary"):
-            errors = []
-            for row_idx in to_delete:
-                try:
-                    delete_place(places[row_idx]["id"])
-                except Exception as e:
-                    errors.append(str(e))
-            if errors:
-                st.error("\n".join(errors))
-            else:
-                st.success(f"Deleted {len(to_delete)} place(s).")
-                st.rerun()
+    if _result := st.session_state.pop("_table_save_result", None):
+        _kind, _data = _result
+        if _kind == "error":
+            st.error("\n".join(_data))
+        else:
+            st.success(f"Saved {_data} change(s).")
 
     map_places = [p for p in places if p.get("lat") and p.get("lng")]
     if map_places:
@@ -248,8 +322,8 @@ with tab_locations:
 with tab_optimizer:
     try:
         all_places = list_places(skipped=False)
-    except Exception as e:
-        st.error(f"Cannot connect to API: {e}")
+    except Exception:
+        st.error(ERR_API_UNREACHABLE)
         st.stop()
 
     active_with_coords = [p for p in all_places if p.get("lat") and p.get("lng")]
@@ -276,7 +350,7 @@ with tab_optimizer:
             day_start_hour = st.number_input("Start hour", min_value=0, max_value=23, value=9)
         with col_end:
             day_end_hour = st.number_input("End hour", min_value=1, max_value=24, value=21)
-        departure_date = st.date_input("Departure date (optional)", value=None)
+        departure_date = st.date_input("Departure date (optional)", value=None, min_value=_dt.date.today())
 
     if len(selected_names) < 2:
         st.warning("Select at least 2 places.")
@@ -295,7 +369,7 @@ with tab_optimizer:
         try:
             result = optimize_route(payload)
         except Exception as e:
-            st.error(f"Optimization failed: {e}")
+            st.error(ERR_OPTIMIZATION_FAILED.format(detail=e))
             st.stop()
 
         _render_day_route(result.get("steps", []), result.get("skipped", []))
@@ -303,8 +377,8 @@ with tab_optimizer:
 with tab_multiday:
     try:
         all_places_md = list_places(skipped=False)
-    except Exception as e:
-        st.error(f"Cannot connect to API: {e}")
+    except Exception:
+        st.error(ERR_API_UNREACHABLE)
         st.stop()
 
     active_md = [p for p in all_places_md if p.get("lat") and p.get("lng")]
@@ -323,12 +397,16 @@ with tab_multiday:
     day_dates = []
     day_start_hours = []
     day_end_hours = []
-    import datetime as _dt
 
     for i in range(num_days):
         cols = st.columns([2, 1, 1])
         with cols[0]:
-            d = st.date_input(f"Day {i + 1} date", value=_dt.date.today() + _dt.timedelta(days=i), key=f"trip_date_{i}")
+            d = st.date_input(
+                f"Day {i + 1} date",
+                value=_dt.date.today() + _dt.timedelta(days=i),
+                min_value=_dt.date.today(),
+                key=f"trip_date_{i}",
+            )
             day_dates.append(d)
         with cols[1]:
             sh = st.number_input("Start hour", min_value=0, max_value=23, value=9, key=f"trip_start_{i}")
@@ -404,7 +482,7 @@ with tab_multiday:
         try:
             trip_result = optimize_trip(trip_payload)
         except Exception as e:
-            st.error(f"Trip optimization failed: {e}")
+            st.error(ERR_TRIP_FAILED.format(detail=e))
             st.stop()
 
         for day_data in trip_result.get("days", []):
@@ -415,4 +493,4 @@ with tab_multiday:
         if trip_result.get("unassigned"):
             with st.expander(f"Unassigned places ({len(trip_result['unassigned'])})"):
                 for s in trip_result["unassigned"]:
-                    st.write(f"- **{s['name'] or s['place_id']}** — {s['reason']}")
+                    st.write(f"- **{s['name'] or s['place_id']}** — {SKIP_REASON.get(s['reason'], s['reason'])}")

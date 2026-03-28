@@ -2,11 +2,14 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from src.config.conf_logger import setup_logger
+from src.core.db.deps import MongoDbDep
+from src.core.exceptions import OrchestratorUnavailableError
+from src.gmaps.storage import fetch_places_by_ids
 from src.orchestrator.deps import OrchestratorDep
 from src.orchestrator.models import AgentState, ChatMessage, ChatRequest
 
@@ -22,7 +25,12 @@ def _to_lc_messages(messages: list[ChatMessage]) -> list:
 
 
 async def _stream_sse(orch, state: AgentState, thread_id: str) -> AsyncIterator[str]:
-    """Convert OrchestratorManager astream events into SSE-formatted strings."""
+    """Convert OrchestratorManager astream events into SSE-formatted strings.
+
+    Emits session_id as the first event so the client can correlate the stream
+    with a conversation session before any LLM tokens arrive.
+    """
+    yield f"data: {json.dumps({'session_id': thread_id})}\n\n"
     try:
         async for event in orch.astream(state, thread_id=thread_id):
             if event.get("event") == "on_chat_model_stream":
@@ -38,25 +46,24 @@ async def _stream_sse(orch, state: AgentState, thread_id: str) -> AsyncIterator[
 
 
 @router.post("/chat")
-async def chat(payload: ChatRequest, orch: OrchestratorDep) -> StreamingResponse:
+async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep) -> StreamingResponse:
     """Stream a chat response using the LangGraph orchestrator.
 
-    Returns Server-Sent Events (text/event-stream). Each event carries a JSON
-    object with a ``content`` key containing the next token chunk.
+    Returns Server-Sent Events (text/event-stream). The first event carries
+    ``session_id``. Subsequent events carry ``content`` token chunks.
     A final ``data: [DONE]`` line signals the end of the stream.
     """
     if orch is None:
-        raise HTTPException(
-            status_code=503, detail="Orchestrator not available — configure LLM_PROVIDER and the corresponding API key."
-        )
+        raise OrchestratorUnavailableError(provider="configured LLM_PROVIDER")
 
     session_id = payload.session_id or str(uuid.uuid4())
+    place_context = await fetch_places_by_ids(db, payload.place_ids) if payload.place_ids else []
     state: AgentState = {
         "messages": _to_lc_messages(payload.messages),
-        "place_context": [],
+        "place_context": place_context,
         "session_id": session_id,
     }
-    logger.info("chat request — session_id=%s messages=%d", session_id, len(payload.messages))
+    logger.info("chat request — session_id=%s messages=%d places=%d", session_id, len(payload.messages), len(place_context))
     return StreamingResponse(_stream_sse(orch, state, session_id), media_type="text/event-stream")
 
 
