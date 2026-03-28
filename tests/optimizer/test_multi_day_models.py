@@ -11,6 +11,7 @@ from src.optimizer.matrix.models import TransportMode
 from src.optimizer.solver.models import (
     DayConfig,
     DayPlan,
+    DaySlot,
     MultiDayRequest,
     MultiDayResponse,
     PlaceDayPreference,
@@ -24,8 +25,12 @@ def _day_config(**kwargs) -> DayConfig:
     return DayConfig(**{**defaults, **kwargs})
 
 
-def _pref(place_id: str = "p1", **kwargs) -> PlaceDayPreference:
-    return PlaceDayPreference(place_id=place_id, **kwargs)
+def _slot(day_index: int = 0, **kwargs) -> DaySlot:
+    return DaySlot(day_index=day_index, **kwargs)
+
+
+def _pref(place_id: str = "p1", day_preferences: list[DaySlot] | None = None) -> PlaceDayPreference:
+    return PlaceDayPreference(place_id=place_id, day_preferences=day_preferences or [])
 
 
 def _req(**kwargs) -> MultiDayRequest:
@@ -38,21 +43,43 @@ def _req(**kwargs) -> MultiDayRequest:
 
 
 @pytest.mark.unit
-class TestPlaceDayPreference:
-    def test_valid_with_auto_assignment(self):
-        pref = PlaceDayPreference(place_id="abc123")
-        assert pref.place_id == "abc123"
-        assert pref.day_index is None
-        assert pref.preferred_hour_from is None
-        assert pref.preferred_hour_to is None
-
-    def test_explicit_day_index_stored(self):
-        pref = PlaceDayPreference(place_id="p1", day_index=2)
-        assert pref.day_index == 2
+class TestDaySlot:
+    def test_valid_slot_with_all_fields(self):
+        slot = DaySlot(day_index=1, preferred_hour_from=14, preferred_hour_to=16)
+        assert slot.day_index == 1
+        assert slot.preferred_hour_from == 14
+        assert slot.preferred_hour_to == 16
 
     def test_negative_day_index_raises(self):
-        with pytest.raises(ValidationError, match="day_index"):
-            PlaceDayPreference(place_id="p1", day_index=-1)
+        with pytest.raises(ValidationError):
+            DaySlot(day_index=-1)
+
+
+@pytest.mark.unit
+class TestPlaceDayPreference:
+    def test_auto_assignment_when_no_day_preferences(self):
+        pref = PlaceDayPreference(place_id="abc123")
+        assert pref.place_id == "abc123"
+        assert pref.day_preferences == []
+
+    def test_pinned_with_single_day_preference(self):
+        pref = PlaceDayPreference(place_id="p1", day_preferences=[_slot(2)])
+        assert len(pref.day_preferences) == 1
+        assert pref.day_preferences[0].day_index == 2
+
+    def test_flexible_with_multiple_day_preferences(self):
+        pref = PlaceDayPreference(
+            place_id="p1",
+            day_preferences=[
+                _slot(0, preferred_hour_from=14, preferred_hour_to=16),
+                _slot(2, preferred_hour_from=10, preferred_hour_to=12),
+            ],
+        )
+        assert len(pref.day_preferences) == 2
+
+    def test_negative_day_index_in_slot_raises(self):
+        with pytest.raises(ValidationError):
+            PlaceDayPreference(place_id="p1", day_preferences=[DaySlot(day_index=-1)])
 
 
 @pytest.mark.unit
@@ -98,7 +125,11 @@ class TestMultiDayRequest:
 
     def test_day_index_out_of_range_raises(self):
         with pytest.raises(ValidationError, match="day_index"):
-            _req(places=[_pref("p1", day_index=5), _pref("p2")])
+            _req(places=[_pref("p1", day_preferences=[_slot(5)]), _pref("p2")])
+
+    def test_duplicate_place_ids_raises(self):
+        with pytest.raises(ValidationError, match="place_id"):
+            _req(places=[_pref("p1"), _pref("p1"), _pref("p2")])
 
     def test_start_location_only_lat_raises(self):
         with pytest.raises(ValidationError, match="start_lat"):

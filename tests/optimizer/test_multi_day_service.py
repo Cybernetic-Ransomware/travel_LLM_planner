@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, time
+from datetime import date, time
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 
-from src.optimizer.matrix.models import DistanceMatrix, MatrixEntry, TransportMode
+from src.optimizer.matrix.models import TransportMode
 from src.optimizer.solver.models import (
     DayConfig,
+    DaySlot,
     MultiDayRequest,
     MultiDayResponse,
     OptimizeResponse,
@@ -20,15 +21,26 @@ from src.optimizer.solver.models import (
 )
 from src.optimizer.solver.multi_day_service import _partition_places, optimize_trip
 
-_NOW = datetime(2026, 6, 1, tzinfo=UTC)
-
 
 def _day_config(d: date = date(2026, 6, 1), **kwargs) -> DayConfig:
     return DayConfig(date=d, **kwargs)
 
 
-def _pref(place_id: str, *, day_index: int | None = None, **kwargs) -> PlaceDayPreference:
-    return PlaceDayPreference(place_id=place_id, day_index=day_index, **kwargs)
+def _pref(
+    place_id: str,
+    *,
+    day_index: int | None = None,
+    preferred_hour_from: int | None = None,
+    preferred_hour_to: int | None = None,
+) -> PlaceDayPreference:
+    if day_index is not None:
+        slot = DaySlot(day_index=day_index, preferred_hour_from=preferred_hour_from, preferred_hour_to=preferred_hour_to)
+        return PlaceDayPreference(place_id=place_id, day_preferences=[slot])
+    return PlaceDayPreference(place_id=place_id, day_preferences=[])
+
+
+def _pref_flexible(place_id: str, *slots: DaySlot) -> PlaceDayPreference:
+    return PlaceDayPreference(place_id=place_id, day_preferences=list(slots))
 
 
 def _place(pid: str, *, lat: float = 50.0, lng: float = 20.0, visit_min: int = 30, **kwargs) -> dict:
@@ -118,10 +130,34 @@ class TestPlacePartitioning:
         assert "p1" in buckets[0]
         assert sum(len(v) for v in buckets.values()) == 3
 
+    def test_flexible_place_goes_to_best_candidate_day(self):
+        # p1 pinned to day 0 (fill: 30 min); p2 flexible (day 0 or day 1)
+        # day 0 remaining after p1: 720-30=690, day 1 remaining: 720
+        # p2 should go to day 1 (more remaining capacity)
+        configs = [_day_config(), _day_config(date(2026, 6, 2))]
+        places = [
+            _pref("p1", day_index=0),
+            _pref_flexible("p2", DaySlot(day_index=0), DaySlot(day_index=1)),
+        ]
+        doc_map = {"p1": _place("p1"), "p2": _place("p2")}
+
+        buckets = _partition_places(places, 2, configs, doc_map)
+
+        assert "p1" in buckets[0]
+        assert "p2" in buckets[1]
+
+
+def _mock_db():
+    return AsyncMock()
+
+
+def _mock_manager():
+    return AsyncMock()
+
 
 @pytest.mark.unit
 class TestOptimizeTrip:
-    async def test_two_days_happy_path(self, test_db, google_routes_manager):
+    async def test_two_days_happy_path(self):
         docs = [_place("p1"), _place("p2"), _place("p3"), _place("p4")]
 
         with (
@@ -131,12 +167,12 @@ class TestOptimizeTrip:
                 new=AsyncMock(return_value=_single_day_response("p1", "p2")),
             ),
         ):
-            result = await optimize_trip(test_db, google_routes_manager, _req())
+            result = await optimize_trip(_mock_db(), _mock_manager(), _req())
 
         assert isinstance(result, MultiDayResponse)
         assert len(result.days) == 2
 
-    async def test_departure_dates_per_day(self, test_db, google_routes_manager):
+    async def test_departure_dates_per_day(self):
         docs = [_place("p1"), _place("p2"), _place("p3"), _place("p4")]
         mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
 
@@ -153,13 +189,13 @@ class TestOptimizeTrip:
                     _pref("p4", day_index=1),
                 ],
             )
-            await optimize_trip(test_db, google_routes_manager, req)
+            await optimize_trip(_mock_db(), _mock_manager(), req)
 
         assert mock_optimize.call_count == 2
         assert mock_optimize.call_args_list[0][0][2].departure_date == date(2026, 6, 10)
         assert mock_optimize.call_args_list[1][0][2].departure_date == date(2026, 6, 11)
 
-    async def test_per_day_hours_forwarded(self, test_db, google_routes_manager):
+    async def test_per_day_hours_forwarded(self):
         docs = [_place("p1"), _place("p2"), _place("p3"), _place("p4")]
         mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
 
@@ -179,13 +215,13 @@ class TestOptimizeTrip:
                     _pref("p4", day_index=1),
                 ],
             )
-            await optimize_trip(test_db, google_routes_manager, req)
+            await optimize_trip(_mock_db(), _mock_manager(), req)
 
         first_request = mock_optimize.call_args_list[0][0][2]
         assert first_request.day_start_hour == 8
         assert first_request.day_end_hour == 13
 
-    async def test_day_plan_index_and_date_in_response(self, test_db, google_routes_manager):
+    async def test_day_plan_index_and_date_in_response(self):
         docs = [_place("p1"), _place("p2")]
 
         with (
@@ -199,14 +235,14 @@ class TestOptimizeTrip:
                 days=[_day_config(date(2026, 6, 10)), _day_config(date(2026, 6, 11))],
                 places=[_pref("p1", day_index=0), _pref("p2", day_index=1)],
             )
-            result = await optimize_trip(test_db, google_routes_manager, req)
+            result = await optimize_trip(_mock_db(), _mock_manager(), req)
 
         assert result.days[0].day_index == 0
         assert result.days[0].date == date(2026, 6, 10)
         assert result.days[1].day_index == 1
         assert result.days[1].date == date(2026, 6, 11)
 
-    async def test_skipped_places_appear_in_day_plan(self, test_db, google_routes_manager):
+    async def test_skipped_places_appear_in_day_plan(self):
         docs = [_place("p1"), _place("p2"), _place("p3")]
         skipped_response = OptimizeResponse(
             steps=[],
@@ -222,14 +258,14 @@ class TestOptimizeTrip:
             patch("src.optimizer.solver.multi_day_service.optimize_route", new=AsyncMock(return_value=skipped_response)),
         ):
             result = await optimize_trip(
-                test_db,
-                google_routes_manager,
+                _mock_db(),
+                _mock_manager(),
                 _req(places=[_pref("p1", day_index=0), _pref("p2", day_index=0), _pref("p3", day_index=1)]),
             )
 
         assert any(len(d.skipped) > 0 for d in result.days)
 
-    async def test_per_day_preference_overrides_doc_fields(self, test_db, google_routes_manager):
+    async def test_per_day_preference_overrides_doc_fields(self):
         docs = [_place("p1", preferred_hour_from=9, preferred_hour_to=17), _place("p2"), _place("p3")]
         mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
 
@@ -245,7 +281,7 @@ class TestOptimizeTrip:
                     _pref("p3", day_index=1),
                 ],
             )
-            await optimize_trip(test_db, google_routes_manager, req)
+            await optimize_trip(_mock_db(), _mock_manager(), req)
 
         day0_call = mock_optimize.call_args_list[0]
         day0_docs = day0_call.kwargs.get("docs")
@@ -254,7 +290,7 @@ class TestOptimizeTrip:
         assert p1_doc["preferred_hour_from"] == 10
         assert p1_doc["preferred_hour_to"] == 14
 
-    async def test_response_transport_mode_preserved(self, test_db, google_routes_manager):
+    async def test_response_transport_mode_preserved(self):
         docs = [_place("p1"), _place("p2")]
 
         with (
@@ -264,11 +300,11 @@ class TestOptimizeTrip:
                 new=AsyncMock(return_value=_single_day_response("p1")),
             ),
         ):
-            result = await optimize_trip(test_db, google_routes_manager, _req())
+            result = await optimize_trip(_mock_db(), _mock_manager(), _req())
 
         assert result.transport_mode == TransportMode.WALK
 
-    async def test_matrix_error_propagates_as_502(self, test_db, google_routes_manager):
+    async def test_matrix_error_propagates_as_502(self):
         docs = [_place("p1"), _place("p2")]
 
         with (
@@ -280,14 +316,14 @@ class TestOptimizeTrip:
             pytest.raises(HTTPException) as exc_info,
         ):
             await optimize_trip(
-                test_db,
-                google_routes_manager,
+                _mock_db(),
+                _mock_manager(),
                 _req(places=[_pref("p1", day_index=0), _pref("p2", day_index=0)]),
             )
 
         assert exc_info.value.status_code == 502
 
-    async def test_day_with_no_places_produces_empty_steps(self, test_db, google_routes_manager):
+    async def test_day_with_no_places_produces_empty_steps(self):
         docs = [_place("p1"), _place("p2")]
 
         with (
@@ -298,6 +334,6 @@ class TestOptimizeTrip:
             ),
         ):
             req = _req(places=[_pref("p1", day_index=0), _pref("p2", day_index=0)])
-            result = await optimize_trip(test_db, google_routes_manager, req)
+            result = await optimize_trip(_mock_db(), _mock_manager(), req)
 
         assert result.days[1].steps == []

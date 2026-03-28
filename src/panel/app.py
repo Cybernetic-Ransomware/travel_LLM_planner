@@ -309,12 +309,14 @@ with tab_multiday:
             day_end_hours.append(int(eh))
 
     st.subheader("Place assignment")
+    st.caption("Add multiple rows for the same place to give it flexible day alternatives.")
     day_options = ["Auto"] + [f"Day {i + 1}" for i in range(num_days)]
+    name_to_id = {p.get("name") or p["id"]: p["id"] for p in active_md}
+    place_names = list(name_to_id.keys())
 
     assign_df = pl.DataFrame(
         {
-            "id": [p["id"] for p in active_md],
-            "name": [p.get("name") or p["id"] for p in active_md],
+            "place": place_names,
             "day": ["Auto"] * len(active_md),
             "hour_from": [None] * len(active_md),
             "hour_to": [None] * len(active_md),
@@ -324,9 +326,9 @@ with tab_multiday:
     edited_df = st.data_editor(
         assign_df,
         use_container_width=True,
+        num_rows="dynamic",
         column_config={
-            "id": None,
-            "name": st.column_config.TextColumn("Place", disabled=True),
+            "place": st.column_config.SelectboxColumn("Place", options=place_names, required=True),
             "day": st.column_config.SelectboxColumn("Day", options=day_options),
             "hour_from": st.column_config.NumberColumn("Hour from", min_value=0, max_value=23, step=1),
             "hour_to": st.column_config.NumberColumn("Hour to", min_value=1, max_value=24, step=1),
@@ -344,17 +346,24 @@ with tab_multiday:
             for i in range(num_days)
         ]
 
-        places_payload = []
+        places_by_id: dict[str, list[dict]] = {}
         for row in edited_df.to_dicts():
-            entry: dict = {"place_id": row["id"]}
+            place_name = row.get("place")
+            place_id = name_to_id.get(place_name) if place_name else None
+            if place_id is None:
+                continue
+            if place_id not in places_by_id:
+                places_by_id[place_id] = []
             day_val = row.get("day") or "Auto"
             if day_val != "Auto":
-                entry["day_index"] = int(day_val.split(" ")[1]) - 1
-            if row.get("hour_from") is not None:
-                entry["preferred_hour_from"] = int(row["hour_from"])
-            if row.get("hour_to") is not None:
-                entry["preferred_hour_to"] = int(row["hour_to"])
-            places_payload.append(entry)
+                slot: dict = {"day_index": int(day_val.split(" ")[1]) - 1}
+                if row.get("hour_from") is not None:
+                    slot["preferred_hour_from"] = int(row["hour_from"])
+                if row.get("hour_to") is not None:
+                    slot["preferred_hour_to"] = int(row["hour_to"])
+                places_by_id[place_id].append(slot)
+
+        places_payload = [{"place_id": pid, "day_preferences": slots} for pid, slots in places_by_id.items()]
 
         trip_payload = {
             "days": days_payload,

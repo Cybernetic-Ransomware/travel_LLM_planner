@@ -17,12 +17,14 @@ repos:
         entry: uv run ruff format
         language: system
         types: [python]
+        files: ^src/
 
       - id: ruff-check
         name: ruff lint
         entry: uv run ruff check --fix
         language: system
         types: [python]
+        files: ^src/
 
       - id: ty-check
         name: ty type checker
