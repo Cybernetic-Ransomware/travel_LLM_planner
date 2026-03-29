@@ -19,6 +19,7 @@ def _make_mock_orchestrator(events: list | None = None) -> MagicMock:
     mock = MagicMock()
     mock.astream = _astream
     mock._graph = MagicMock()
+    mock._checkpointer = None
     mock._provider = "openai"
     mock._model_name = "gpt-4o-mini"
     return mock
@@ -96,7 +97,7 @@ class TestChatEndpointUnit:
     async def test_session_id_forwarded_to_astream(self, client):
         received_thread_ids = []
 
-        async def _capturing_astream(state, thread_id=None):
+        async def _capturing_astream(state, thread_id=None, **kwargs):
             received_thread_ids.append(thread_id)
             yield {"event": "on_chain_end", "data": {}}
 
@@ -201,7 +202,7 @@ class TestChatEndpointPlaceContext:
 
         monkeypatch.setattr(_router_mod, "fetch_places_by_ids", mock_fetch)
 
-        async def _capturing_astream(state, thread_id=None):
+        async def _capturing_astream(state, thread_id=None, **kwargs):
             received_states.append(state)
             yield {"event": "on_chain_end", "data": {}}
 

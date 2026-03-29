@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from pymongo.asynchronous.database import AsyncDatabase
 
 from src.orchestrator.models import AgentState
 
@@ -13,8 +14,9 @@ def _build_place_context_prompt(places: list[dict]) -> str:
     """Build a system prompt describing the user's trip places for the LLM."""
     lines = ["You are a travel planning assistant. The user has the following places in their trip plan:"]
     for p in places:
-        name = p.get("name") or str(p.get("_id", ""))
-        line = f"- {name}"
+        pid = str(p.get("_id", ""))
+        name = p.get("name") or pid
+        line = f"- [id={pid}] {name}"
         address = p.get("address")
         if address:
             line += f" ({address})"
@@ -26,6 +28,10 @@ def _build_place_context_prompt(places: list[dict]) -> str:
         if h_from is not None and h_to is not None:
             line += f", preferred {h_from}:00\u2013{h_to}:00"
         lines.append(line)
+    lines.append(
+        "\nWhen suggesting changes to visit hours, always describe the proposed change first "
+        "and ask the user for confirmation before calling any tool."
+    )
     return "\n".join(lines)
 
 
@@ -59,21 +65,62 @@ async def chatbot_node(state: AgentState, llm: BaseChatModel) -> dict:
     return {"messages": [response]}
 
 
-def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver | None = None) -> CompiledStateGraph:
+def _after_chatbot(state: AgentState) -> str:
+    """Conditional edge after chatbot — routes to tool execution or END."""
+    messages = state.get("messages", [])
+    if not messages:
+        return "end"
+    last = messages[-1]
+    if isinstance(last, AIMessage) and last.tool_calls:
+        return "tools"
+    return "end"
+
+
+def build_graph(
+    llm: BaseChatModel,
+    checkpointer: BaseCheckpointSaver | None = None,
+    db: AsyncDatabase | None = None,
+) -> CompiledStateGraph:
     """Build and compile the LangGraph StateGraph for the orchestrator.
 
-    The graph topology for this skeleton:
-        START → router_node ─── "chatbot" ──→ chatbot_node → END
-                             └── "end" ──→ END
+    When ``db`` is provided, the graph is extended with a tool node for
+    ``update_visit_hours``. The LLM is bound with tool schemas so it can emit
+    tool calls, and the graph topology becomes a ReAct loop:
 
-    Future extensions: add tool nodes and wire them from router_node.
+        START → router_node ─── "chatbot" ──→ chatbot ──→ (tool_calls?) ──→ tools ──→ chatbot
+                             └── "end" ──→ END                           └── END
+
+    ``interrupt_before=["tools"]`` is applied only when a checkpointer is present,
+    enabling human-in-the-loop confirmation before any tool writes to MongoDB.
+
+    Without ``db`` the graph retains the original linear topology.
     """
+    if db is not None:
+        from langgraph.prebuilt import ToolNode
 
-    async def _chatbot(state: AgentState) -> dict:
+        from src.orchestrator.tools import create_tools
+
+        tools = create_tools(db)
+        llm_with_tools = llm.bind_tools(tools)
+
+        async def _chatbot(state: AgentState) -> dict:
+            return await chatbot_node(state, llm_with_tools)
+
+        graph = StateGraph(AgentState)
+        graph.add_node("chatbot", _chatbot)
+        graph.add_node("tools", ToolNode(tools))
+        graph.add_conditional_edges(START, router_node, {"chatbot": "chatbot", "end": END})
+        graph.add_conditional_edges("chatbot", _after_chatbot, {"tools": "tools", "end": END})
+        graph.add_edge("tools", "chatbot")
+
+        interrupt_before = ["tools"] if checkpointer is not None else []
+        return graph.compile(checkpointer=checkpointer, interrupt_before=interrupt_before)
+
+    async def _chatbot_no_tools(state: AgentState) -> dict:
         return await chatbot_node(state, llm)
 
     graph = StateGraph(AgentState)
-    graph.add_node("chatbot", _chatbot)
+    graph.add_node("chatbot", _chatbot_no_tools)
     graph.add_conditional_edges(START, router_node, {"chatbot": "chatbot", "end": END})
     graph.add_edge("chatbot", END)
     return graph.compile(checkpointer=checkpointer)
