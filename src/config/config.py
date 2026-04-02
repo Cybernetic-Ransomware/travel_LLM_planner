@@ -23,6 +23,14 @@ class Settings(BaseSettings):
         alias="GOOGLE_PLACES_FIELDS",
     )
 
+    llm_provider: str = Field(default="openai", alias="LLM_PROVIDER")
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
+    llm_model_name: str = Field(default="gpt-4o-mini", alias="LLM_MODEL_NAME")
+    langsmith_api_key: str = Field(default="", alias="LANGSMITH_API_KEY")
+    langsmith_tracing: bool = Field(default=False, alias="LANGSMITH_TRACING")
+    langsmith_project: str = Field(default="travel-planner", alias="LANGSMITH_PROJECT")
+
     @property
     def logger_level(self) -> int:
         return 10 if self.debug else INFO

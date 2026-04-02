@@ -222,3 +222,27 @@ async def test_optimize_step_fields_populated(test_db, google_routes_manager):
     assert second_step.travel_from_previous_s == 600
     assert second_step.lat is not None
     assert second_step.lng is not None
+
+
+@pytest.mark.unit
+async def test_optimize_past_departure_time_clamped_to_now(test_db, google_routes_manager):
+    """A departure_time in the past must be clamped to now before calling get_matrix."""
+    docs = [_place("p1"), _place("p2")]
+    matrix = _make_matrix(("p1", "p2", 300), ("p2", "p1", 300))
+    mock_get_matrix = AsyncMock(return_value=(matrix, "OK", None))
+    before_call = datetime.now(UTC)
+
+    with (
+        patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+        patch("src.optimizer.solver.service.get_matrix", new=mock_get_matrix),
+    ):
+        request = OptimizeRequest(
+            place_ids=["p1", "p2"],
+            transport_mode=TransportMode.TRANSIT,
+            departure_date=date(2020, 1, 1),  # well in the past
+        )
+        await optimize_route(test_db, google_routes_manager, request)
+
+    departure_time = mock_get_matrix.call_args[0][4]
+    assert departure_time is not None
+    assert departure_time >= before_call

@@ -89,7 +89,9 @@ class TestValidationHandler:
         data = response.json()
         assert data["status_code"] == 422
         assert data["error"] == "Unprocessable Entity"
-        assert "detail" in data
+        detail = data["detail"]
+        assert "[{" not in detail, "detail must not be raw Pydantic error list"
+        assert "value" in detail
 
     async def test_missing_body_422(self, client):
         response = await client.post("/validation", json={})

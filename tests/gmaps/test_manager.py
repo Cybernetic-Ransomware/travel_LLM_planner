@@ -108,8 +108,8 @@ async def test_fetch_place_details_non_json_error(httpx_mock, manager):
     payload, status, error = await manager.fetch_place_details("ChIxyz")
 
     assert payload is None
-    assert status == "HTTP_ERROR"
-    assert error == "500"
+    assert status == "HTTP_500"
+    assert error == "Internal Server Error"
 
 
 @pytest.mark.unit

@@ -19,7 +19,7 @@ from src.optimizer.solver.models import (
     RouteStep,
     SkippedPlace,
 )
-from src.optimizer.solver.multi_day_service import _partition_places, optimize_trip
+from src.optimizer.solver.multi_day_service import _open_day_indices, _partition_places, optimize_trip
 
 
 def _day_config(d: date = date(2026, 6, 1), **kwargs) -> DayConfig:
@@ -145,6 +145,84 @@ class TestPlacePartitioning:
 
         assert "p1" in buckets[0]
         assert "p2" in buckets[1]
+
+
+def _opening_hours(*google_days: int) -> dict:
+    """Build a minimal opening_hours dict with periods for the given Google weekday numbers."""
+    return {
+        "periods": [{"open": {"day": d, "hour": 9}, "close": {"day": d, "hour": 17}} for d in google_days]
+    }
+
+
+# 2026-03-30 = Monday (Python weekday 0, Google weekday 1)
+# 2026-03-31 = Tuesday (Python weekday 1, Google weekday 2)
+_MON = date(2026, 3, 30)
+_TUE = date(2026, 3, 31)
+
+
+@pytest.mark.unit
+class TestOpenDayIndices:
+    def test_no_opening_hours_returns_all_days(self):
+        configs = [_day_config(_MON), _day_config(_TUE)]
+        assert _open_day_indices({}, configs) == [0, 1]
+
+    def test_open_on_tuesday_only(self):
+        doc = {"opening_hours": _opening_hours(2)}  # Google day 2 = Tuesday
+        configs = [_day_config(_MON), _day_config(_TUE)]
+        assert _open_day_indices(doc, configs) == [1]
+
+    def test_open_on_both_days(self):
+        doc = {"opening_hours": _opening_hours(1, 2)}  # Mon + Tue
+        configs = [_day_config(_MON), _day_config(_TUE)]
+        assert _open_day_indices(doc, configs) == [0, 1]
+
+    def test_open_on_neither_day_falls_back_to_all(self):
+        doc = {"opening_hours": _opening_hours(3, 4, 5)}  # Wed-Fri only
+        configs = [_day_config(_MON), _day_config(_TUE)]
+        assert _open_day_indices(doc, configs) == [0, 1]
+
+    def test_single_day_open(self):
+        doc = {"opening_hours": _opening_hours(2)}  # Tuesday only
+        configs = [_day_config(_TUE)]
+        assert _open_day_indices(doc, configs) == [0]
+
+
+@pytest.mark.unit
+class TestPartitionOpeningHoursAware:
+    def test_auto_place_assigned_to_open_day(self):
+        """Muzeum scenario: Auto place closed Monday, open Tuesday → must go to Day 1 (Tue)."""
+        doc = _place("museum", opening_hours=_opening_hours(2))  # Tuesday only
+        configs = [_day_config(_MON), _day_config(_TUE)]
+        places = [_pref("museum")]
+        doc_map = {"museum": doc}
+
+        buckets = _partition_places(places, 2, configs, doc_map)
+
+        assert "museum" in buckets[1], "museum should be assigned to Tuesday (day index 1)"
+        assert "museum" not in buckets[0]
+
+    def test_flexible_place_skips_closed_day(self):
+        """Flexible place prefers day 0 and day 1; closed on Monday → should go to Tuesday."""
+        doc = _place("p1", opening_hours=_opening_hours(2))  # Tuesday only
+        configs = [_day_config(_MON), _day_config(_TUE)]
+        places = [_pref_flexible("p1", DaySlot(day_index=0), DaySlot(day_index=1))]
+        doc_map = {"p1": doc}
+
+        buckets = _partition_places(places, 2, configs, doc_map)
+
+        assert "p1" in buckets[1]
+        assert "p1" not in buckets[0]
+
+    def test_flexible_falls_back_when_all_preferred_days_closed(self):
+        """If all preferred days are closed, fall back to original preferences."""
+        doc = _place("p1", opening_hours=_opening_hours(3))  # Wednesday only
+        configs = [_day_config(_MON), _day_config(_TUE)]
+        places = [_pref_flexible("p1", DaySlot(day_index=0), DaySlot(day_index=1))]
+        doc_map = {"p1": doc}
+
+        buckets = _partition_places(places, 2, configs, doc_map)
+
+        assert "p1" in buckets[0] or "p1" in buckets[1]
 
 
 def _mock_db():
