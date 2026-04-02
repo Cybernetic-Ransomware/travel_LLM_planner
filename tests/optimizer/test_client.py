@@ -162,8 +162,21 @@ async def test_non_json_error_response(httpx_mock, manager):
     entries, status, error = await manager.compute_matrix(_PLACE_COORDS, TransportMode.WALK)
 
     assert entries is None
-    assert status == "HTTP_ERROR"
-    assert error == "500"
+    assert status == "HTTP_500"
+    assert error == "Internal Server Error"
+
+
+@pytest.mark.unit
+async def test_array_error_response_parsed(httpx_mock, manager):
+    """Google Routes API sometimes wraps errors in a JSON array."""
+    error_body = [{"error": {"status": "INVALID_ARGUMENT", "message": "Timestamp must be set to a future time."}}]
+    httpx_mock.add_response(url=_MATRIX_URL, status_code=400, json=error_body)
+
+    entries, status, error = await manager.compute_matrix(_PLACE_COORDS, TransportMode.WALK)
+
+    assert entries is None
+    assert status == "INVALID_ARGUMENT"
+    assert error == "Timestamp must be set to a future time."
 
 
 @pytest.mark.unit

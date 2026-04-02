@@ -1,5 +1,7 @@
 import traceback
+from collections.abc import Sequence
 from http import HTTPStatus
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -12,6 +14,16 @@ from src.config.conf_logger import setup_logger
 from src.core.exceptions import ErrorResponse
 
 logger = setup_logger(__name__, "middleware")
+
+
+def _format_validation_errors(errors: Sequence[Any]) -> str:
+    """Convert Pydantic validation errors to a human-readable string."""
+    parts = []
+    for err in errors:
+        loc = " → ".join(str(x) for x in err.get("loc", []) if x != "body")
+        msg = err.get("msg", "invalid value")
+        parts.append(f"{loc}: {msg}" if loc else msg)
+    return "; ".join(parts)
 
 
 class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
@@ -53,6 +65,6 @@ def register_exception_handlers(app: FastAPI) -> None:
         body = ErrorResponse(
             status_code=422,
             error="Unprocessable Entity",
-            detail=str(exc.errors()),
+            detail=_format_validation_errors(exc.errors()),
         )
         return JSONResponse(status_code=422, content=body.model_dump())

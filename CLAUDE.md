@@ -98,7 +98,7 @@ See `docs/` for Architecture Decision Records that explain key structural choice
 Configured in `pyproject.toml`, enforced via pre-commit and `just lint`:
 
 - **ruff** — formatter + linter (line length: 124, rules: E, F, UP, B, SIM, I)
-- **ty** — type checker (src only, tests excluded)
+- **ty** — type checker (src only, tests excluded; `src/orchestrator/*` also excluded — see ADR-08)
 - **codespell** — spell check for `.py`, `.md`, `.yaml`, `.rst` files
 - **pre-commit** also checks `uv.lock` consistency with `pyproject.toml`
 
@@ -139,6 +139,9 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 04 | Accepted | testcontainers[mongodb] for integration test isolation |
 | 05 | Accepted | pendulum usage limited to service layer only |
 | 06 | Accepted | PyMongo native async client + single-node Replica Set |
+| 07 | Accepted | Hybrid exception handling — exception handlers + catch-all middleware |
+| 08 | Accepted | LangGraph orchestrator module with configurable LLM provider |
+| 09 | Accepted | Custom MongoDB checkpoint saver for LangGraph |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.
 

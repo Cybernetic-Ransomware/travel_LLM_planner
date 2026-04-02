@@ -7,6 +7,7 @@ from src.config.config import settings
 from src.core.db.manager import MongoDBManager
 from src.gmaps.manager import GooglePlacesManager
 from src.optimizer.matrix.client import GoogleRoutesManager
+from src.orchestrator.manager import OrchestratorManager
 
 logger = setup_logger(__name__, "main")
 
@@ -28,7 +29,32 @@ async def lifespan(app: FastAPI):
             app.state.google_routes = gr_manager
             logger.info("GoogleRoutesManager connected — key_present=%s", bool(settings.google_routes_api_key))
 
-            yield
+            llm_key = settings.openai_api_key if settings.llm_provider == "openai" else settings.anthropic_api_key
+            if llm_key:
+                async with OrchestratorManager(
+                    provider=settings.llm_provider,
+                    api_key=llm_key,
+                    model_name=settings.llm_model_name,
+                    langsmith_api_key=settings.langsmith_api_key,
+                    langsmith_tracing=settings.langsmith_tracing,
+                    langsmith_project=settings.langsmith_project,
+                    db=app.state.db,
+                ) as orch_manager:
+                    app.state.orchestrator = orch_manager
+                    logger.info(
+                        "OrchestratorManager connected — provider=%s model=%s",
+                        settings.llm_provider,
+                        settings.llm_model_name,
+                    )
+                    yield
+                logger.info("OrchestratorManager disconnected")
+            else:
+                app.state.orchestrator = None
+                logger.warning(
+                    "OrchestratorManager skipped — no API key for provider=%s",
+                    settings.llm_provider,
+                )
+                yield
 
     logger.info("GooglePlacesManager disconnected")
     logger.info("GoogleRoutesManager disconnected")

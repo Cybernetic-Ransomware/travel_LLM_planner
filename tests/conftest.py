@@ -71,8 +71,10 @@ async def client(test_db, google_places_manager, google_routes_manager):
     app.state.client = test_db.client
     app.state.google_places = google_places_manager
     app.state.google_routes = google_routes_manager
+    app.state.orchestrator = None
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
+    del app.state.orchestrator
     del app.state.google_routes
     del app.state.google_places
     del app.state.db

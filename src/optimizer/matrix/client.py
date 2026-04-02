@@ -92,10 +92,16 @@ class GoogleRoutesManager:
         if response.status_code != 200:
             try:
                 payload = response.json()
+                if isinstance(payload, list) and payload:
+                    payload = payload[0]
                 error = payload.get("error", {}) if isinstance(payload, dict) else {}
-                return None, error.get("status") or "HTTP_ERROR", error.get("message") or str(response.status_code)
+                return (
+                    None,
+                    error.get("status") or f"HTTP_{response.status_code}",
+                    error.get("message") or response.text[:200],
+                )
             except Exception:
-                return None, "HTTP_ERROR", str(response.status_code)
+                return None, f"HTTP_{response.status_code}", response.text[:200]
 
         raw_entries: list[dict[str, Any]] = response.json()
         if not isinstance(raw_entries, list):

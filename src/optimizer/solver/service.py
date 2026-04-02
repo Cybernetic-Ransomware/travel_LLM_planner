@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, time
 
-from fastapi import HTTPException
 from pymongo.asynchronous.database import AsyncDatabase
 
+from src.config.conf_logger import setup_logger
+from src.core.exceptions import MatrixUnavailableError
 from src.gmaps.storage import fetch_places_by_ids
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.optimizer.matrix.service import get_matrix
@@ -18,6 +19,8 @@ from src.optimizer.solver.models import (
     SkippedPlace,
     TimeWindow,
 )
+
+logger = setup_logger(__name__, "optimizer")
 
 
 def _google_weekday(d: date) -> int:
@@ -110,6 +113,14 @@ async def optimize_route(
             request.day_start_hour,
             tzinfo=UTC,
         )
+        now = datetime.now(UTC)
+        if departure_time < now:
+            logger.warning(
+                "departure_time %s is in the past — clamping to now (%s)",
+                departure_time.isoformat(),
+                now.isoformat(),
+            )
+            departure_time = now
 
     if docs is None:
         docs = await fetch_places_by_ids(db, request.place_ids)
@@ -154,7 +165,8 @@ async def optimize_route(
     matrix, status, error = await get_matrix(db, manager, coords, request.transport_mode, departure_time)
 
     if matrix is None:
-        raise HTTPException(status_code=502, detail=f"Distance matrix unavailable: {status} — {error}")
+        logger.error("Distance matrix unavailable: status=%s error=%s", status, error)
+        raise MatrixUnavailableError(status=status or "UNKNOWN", error=error)
 
     node_ids = [pid for pid, _, _ in coords]
     route, solver_skipped = nearest_neighbor(node_ids, matrix, time_windows, visit_durations_s, day_start_s, day_end_s)

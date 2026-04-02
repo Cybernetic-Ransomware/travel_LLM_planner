@@ -17,6 +17,11 @@ dependencies = [
     "streamlit>=1.55.0",
     "folium>=0.20.0",
     "streamlit-folium>=0.27.0",
+    "langchain>=1.2.13",
+    "langsmith>=0.7.22",
+    "langgraph>=1.1.3",
+    "langchain-openai>=1.1.12",
+    "langchain-anthropic>=1.4.0",
 ]
 
 [dependency-groups]
@@ -69,7 +74,7 @@ select = ["E", "F", "UP", "B", "SIM", "I"]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends", "fastapi.Query", "fastapi.params.Query"]
 
 [tool.ty.src]
-exclude = ["tests/*"]
+exclude = ["tests/*", "src/orchestrator/*"]
 
 [tool.codespell]
 skip = """

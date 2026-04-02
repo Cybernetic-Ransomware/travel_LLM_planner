@@ -16,7 +16,25 @@ from src.optimizer.solver.models import (
     PlaceDayPreference,
     SkippedPlace,
 )
-from src.optimizer.solver.service import _seconds_to_time, optimize_route
+from src.optimizer.solver.service import _google_weekday, _seconds_to_time, optimize_route
+
+
+def _open_day_indices(doc: dict, day_configs: list[DayConfig]) -> list[int]:
+    """Return indices of days on which the place has at least one opening-hours period.
+
+    Falls back to all days when the place has no opening_hours data — the single-day
+    solver will then decide feasibility at runtime.
+    """
+    periods: list[dict] = (doc.get("opening_hours") or {}).get("periods", [])
+    if not periods:
+        return list(range(len(day_configs)))
+
+    open_google_days = {p.get("open", {}).get("day") for p in periods}
+    result = []
+    for i, cfg in enumerate(day_configs):
+        if _google_weekday(cfg.date) in open_google_days:
+            result.append(i)
+    return result if result else list(range(len(day_configs)))
 
 
 def _partition_places(
@@ -46,16 +64,22 @@ def _partition_places(
         fill[day_idx] += visit_min
 
     for pref in flexible:
-        candidate_days = [slot.day_index for slot in pref.day_preferences]
+        doc = doc_map.get(pref.place_id) or {}
+        open_days = set(_open_day_indices(doc, day_configs))
+        candidate_days = [slot.day_index for slot in pref.day_preferences if slot.day_index in open_days]
+        if not candidate_days:
+            candidate_days = [slot.day_index for slot in pref.day_preferences]
         best_day = max(candidate_days, key=lambda i: capacity[i] - fill[i])
         buckets[best_day].append(pref.place_id)
-        visit_min = (doc_map.get(pref.place_id) or {}).get("visit_duration_min") or 30
+        visit_min = doc.get("visit_duration_min") or 30
         fill[best_day] += visit_min
 
     for pref in auto:
-        best_day = max(range(num_days), key=lambda i: capacity[i] - fill[i])
+        doc = doc_map.get(pref.place_id) or {}
+        candidate_days = _open_day_indices(doc, day_configs)
+        best_day = max(candidate_days, key=lambda i: capacity[i] - fill[i])
         buckets[best_day].append(pref.place_id)
-        visit_min = (doc_map.get(pref.place_id) or {}).get("visit_duration_min") or 30
+        visit_min = doc.get("visit_duration_min") or 30
         fill[best_day] += visit_min
 
     return buckets
