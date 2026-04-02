@@ -53,3 +53,10 @@ def optimize_route(payload: dict) -> dict:
     r = httpx.post(f"{_OPTIMIZER_BASE}/route", json=payload, timeout=30.0)
     r.raise_for_status()
     return r.json()
+
+
+def optimize_trip(payload: dict) -> dict:
+    """Request a multi-day optimized trip from the TSP solver endpoint."""
+    r = httpx.post(f"{_OPTIMIZER_BASE}/trip", json=payload, timeout=60.0)
+    r.raise_for_status()
+    return r.json()
