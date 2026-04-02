@@ -4,7 +4,8 @@ from src.core.db.deps import MongoDbDep
 from src.optimizer.deps import GoogleRoutesDep
 from src.optimizer.matrix.cache import invalidate_cache
 from src.optimizer.matrix.models import TransportMode
-from src.optimizer.solver.models import OptimizeRequest, OptimizeResponse
+from src.optimizer.solver.models import MultiDayRequest, MultiDayResponse, OptimizeRequest, OptimizeResponse
+from src.optimizer.solver.multi_day_service import optimize_trip
 from src.optimizer.solver.service import optimize_route
 
 router = APIRouter()
@@ -31,6 +32,12 @@ async def clear_matrix_cache(db: MongoDbDep, transport_mode: TransportMode | Non
 async def optimize(db: MongoDbDep, gr: GoogleRoutesDep, body: OptimizeRequest) -> OptimizeResponse:
     """Optimize a visiting route for the given places using TSP with time windows."""
     return await optimize_route(db, gr, body)
+
+
+@router.post("/trip", response_model=MultiDayResponse)
+async def optimize_trip_route(db: MongoDbDep, gr: GoogleRoutesDep, body: MultiDayRequest) -> MultiDayResponse:
+    """Optimize a multi-day trip by distributing places across days using TSP with time windows."""
+    return await optimize_trip(db, gr, body)
 
 
 @router.get("/keycheck")
