@@ -9,6 +9,7 @@ from src.optimizer.matrix.client import GoogleRoutesManager
 from src.optimizer.solver.models import (
     DayConfig,
     DayPlan,
+    DaySlot,
     MultiDayRequest,
     MultiDayResponse,
     OptimizeRequest,
@@ -24,25 +25,32 @@ def _partition_places(
     day_configs: list[DayConfig],
     doc_map: dict[str, dict],
 ) -> dict[int, list[str]]:
-    """Assign places to day buckets.
+    """Assign places to day buckets using a 3-tier strategy.
 
-    Places with an explicit day_index are pinned to that day.
-    Remaining places are distributed greedily: each goes to the day with
-    the most remaining capacity (total day window minus sum of visit durations).
+    Tier 1 — pinned (1 DaySlot):   assigned to that exact day.
+    Tier 2 — flexible (>1 DaySlots): assigned to the candidate day with the most remaining capacity.
+    Tier 3 — auto (0 DaySlots):    greedy bin-pack to whichever day has the most remaining capacity.
     """
     buckets: dict[int, list[str]] = {i: [] for i in range(num_days)}
     fill: dict[int, int] = {i: 0 for i in range(num_days)}
     capacity: dict[int, int] = {i: (cfg.day_end_hour - cfg.day_start_hour) * 60 for i, cfg in enumerate(day_configs)}
 
-    pinned = [p for p in places if p.day_index is not None]
-    auto = [p for p in places if p.day_index is None]
+    pinned = [p for p in places if len(p.day_preferences) == 1]
+    flexible = [p for p in places if len(p.day_preferences) > 1]
+    auto = [p for p in places if len(p.day_preferences) == 0]
 
     for pref in pinned:
-        day_idx = pref.day_index
-        assert day_idx is not None  # guaranteed by the pinned filter above
+        day_idx = pref.day_preferences[0].day_index
         buckets[day_idx].append(pref.place_id)
         visit_min = (doc_map.get(pref.place_id) or {}).get("visit_duration_min") or 30
         fill[day_idx] += visit_min
+
+    for pref in flexible:
+        candidate_days = [slot.day_index for slot in pref.day_preferences]
+        best_day = max(candidate_days, key=lambda i: capacity[i] - fill[i])
+        buckets[best_day].append(pref.place_id)
+        visit_min = (doc_map.get(pref.place_id) or {}).get("visit_duration_min") or 30
+        fill[best_day] += visit_min
 
     for pref in auto:
         best_day = max(range(num_days), key=lambda i: capacity[i] - fill[i])
@@ -112,7 +120,10 @@ async def optimize_trip(
     docs = await fetch_places_by_ids(db, all_place_ids)
     doc_map: dict[str, dict] = {str(doc["_id"]): doc for doc in docs}
 
-    pref_map: dict[str, PlaceDayPreference] = {p.place_id: p for p in request.places}
+    slot_map: dict[tuple[str, int], DaySlot] = {}
+    for p in request.places:
+        for slot in p.day_preferences:
+            slot_map[(p.place_id, slot.day_index)] = slot
 
     buckets = _partition_places(request.places, len(request.days), request.days, doc_map)
 
@@ -145,12 +156,12 @@ async def optimize_trip(
             if pid not in doc_map:
                 continue
             doc = dict(doc_map[pid])
-            pref = pref_map.get(pid)
-            if pref:
-                if pref.preferred_hour_from is not None:
-                    doc["preferred_hour_from"] = pref.preferred_hour_from
-                if pref.preferred_hour_to is not None:
-                    doc["preferred_hour_to"] = pref.preferred_hour_to
+            slot = slot_map.get((pid, day_idx))
+            if slot:
+                if slot.preferred_hour_from is not None:
+                    doc["preferred_hour_from"] = slot.preferred_hour_from
+                if slot.preferred_hour_to is not None:
+                    doc["preferred_hour_to"] = slot.preferred_hour_to
             day_docs.append(doc)
 
         day_request = OptimizeRequest(

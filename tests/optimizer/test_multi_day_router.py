@@ -116,7 +116,7 @@ class TestMultiDayRouteEndpoint:
         payload = {
             **_VALID_PAYLOAD,
             "places": [
-                {"place_id": "p1", "day_index": 99},
+                {"place_id": "p1", "day_preferences": [{"day_index": 99}]},
                 {"place_id": "p2"},
             ],
         }
