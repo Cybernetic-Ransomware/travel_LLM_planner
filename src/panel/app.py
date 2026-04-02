@@ -20,6 +20,10 @@ st.set_page_config(page_title="Travel Planner", layout="wide")
 st.title("Travel Planner")
 
 
+def _hour_to_time(h: int | None) -> pendulum.Time | None:
+    return pendulum.time(int(h), 0) if h is not None else None
+
+
 def _render_day_route(steps: list[dict], skipped: list[dict]) -> None:
     """Render route steps and a folium map for a single day."""
     if not steps:
@@ -132,6 +136,12 @@ with tab_locations:
         st.info("No places match the current filters.")
         st.stop()
 
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total", len(places))
+    m2.metric("Active", sum(1 for p in places if not p.get("skipped")))
+    m3.metric("Enriched", sum(1 for p in places if p.get("enriched_at")))
+    m4.metric("With hours", sum(1 for p in places if p.get("preferred_hour_from") is not None))
+
     DISPLAY_COLUMNS = [
         "name",
         "address",
@@ -146,9 +156,6 @@ with tab_locations:
     ]
     EDITABLE = {"skipped", "preferred_hour_from", "preferred_hour_to", "visit_duration_min", "delete"}
     HOUR_COLS = ("preferred_hour_from", "preferred_hour_to")
-
-    def _hour_to_time(h: int | None) -> pendulum.Time | None:
-        return pendulum.time(int(h), 0) if h is not None else None
 
     df = pl.DataFrame(places).select([c for c in DISPLAY_COLUMNS if c in pl.DataFrame(places).columns])
     display_df = df.with_columns(
@@ -215,6 +222,28 @@ with tab_locations:
             else:
                 st.success(f"Deleted {len(to_delete)} place(s).")
                 st.rerun()
+
+    map_places = [p for p in places if p.get("lat") and p.get("lng")]
+    if map_places:
+        center_lat = sum(p["lat"] for p in map_places) / len(map_places)
+        center_lng = sum(p["lng"] for p in map_places) / len(map_places)
+        loc_map = folium.Map(location=[center_lat, center_lng], zoom_start=13)
+        for p in map_places:
+            color = "#6c757d" if p.get("skipped") else "#28a745"
+            folium.Marker(
+                location=[p["lat"], p["lng"]],
+                tooltip=p.get("name") or p["id"],
+                icon=folium.DivIcon(
+                    html=(
+                        f'<div style="background:{color};color:white;border-radius:50%;'
+                        f"width:20px;height:20px;display:flex;align-items:center;"
+                        f'justify-content:center;font-size:10px;">●</div>'
+                    ),
+                    icon_size=(20, 20),
+                    icon_anchor=(10, 10),
+                ),
+            ).add_to(loc_map)
+        st_folium(loc_map, use_container_width=True, height=400, returned_objects=[])
 
 with tab_optimizer:
     try:
@@ -309,27 +338,30 @@ with tab_multiday:
             day_end_hours.append(int(eh))
 
     st.subheader("Place assignment")
+    st.caption("Add multiple rows for the same place to give it flexible day alternatives.")
     day_options = ["Auto"] + [f"Day {i + 1}" for i in range(num_days)]
+    name_to_id = {p.get("name") or p["id"]: p["id"] for p in active_md}
+    place_names = list(name_to_id.keys())
 
     assign_df = pl.DataFrame(
         {
-            "id": [p["id"] for p in active_md],
-            "name": [p.get("name") or p["id"] for p in active_md],
+            "place": place_names,
             "day": ["Auto"] * len(active_md),
             "hour_from": [None] * len(active_md),
             "hour_to": [None] * len(active_md),
-        }
-    ).cast({"hour_from": pl.Int32, "hour_to": pl.Int32})
+        },
+        schema={"place": pl.String, "day": pl.String, "hour_from": pl.Object, "hour_to": pl.Object},
+    )
 
     edited_df = st.data_editor(
         assign_df,
         use_container_width=True,
+        num_rows="dynamic",
         column_config={
-            "id": None,
-            "name": st.column_config.TextColumn("Place", disabled=True),
+            "place": st.column_config.SelectboxColumn("Place", options=place_names, required=True),
             "day": st.column_config.SelectboxColumn("Day", options=day_options),
-            "hour_from": st.column_config.NumberColumn("Hour from", min_value=0, max_value=23, step=1),
-            "hour_to": st.column_config.NumberColumn("Hour to", min_value=1, max_value=24, step=1),
+            "hour_from": st.column_config.TimeColumn("Hour from", step=3600),
+            "hour_to": st.column_config.TimeColumn("Hour to", step=3600),
         },
         key="trip_assignment_table",
     )
@@ -344,17 +376,24 @@ with tab_multiday:
             for i in range(num_days)
         ]
 
-        places_payload = []
+        places_by_id: dict[str, list[dict]] = {}
         for row in edited_df.to_dicts():
-            entry: dict = {"place_id": row["id"]}
+            place_name = row.get("place")
+            place_id = name_to_id.get(place_name) if place_name else None
+            if place_id is None:
+                continue
+            if place_id not in places_by_id:
+                places_by_id[place_id] = []
             day_val = row.get("day") or "Auto"
             if day_val != "Auto":
-                entry["day_index"] = int(day_val.split(" ")[1]) - 1
-            if row.get("hour_from") is not None:
-                entry["preferred_hour_from"] = int(row["hour_from"])
-            if row.get("hour_to") is not None:
-                entry["preferred_hour_to"] = int(row["hour_to"])
-            places_payload.append(entry)
+                slot: dict = {"day_index": int(day_val.split(" ")[1]) - 1}
+                for field, key in (("hour_from", "preferred_hour_from"), ("hour_to", "preferred_hour_to")):
+                    val = row.get(field)
+                    if val is not None:
+                        slot[key] = val.hour if hasattr(val, "hour") else int(str(val).split(":")[0])
+                places_by_id[place_id].append(slot)
+
+        places_payload = [{"place_id": pid, "day_preferences": slots} for pid, slots in places_by_id.items()]
 
         trip_payload = {
             "days": days_payload,

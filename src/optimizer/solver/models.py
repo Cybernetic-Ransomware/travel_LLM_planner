@@ -83,19 +83,25 @@ class OptimizeResponse(BaseModel):
     skipped: list[SkippedPlace]
 
 
-class PlaceDayPreference(BaseModel):
-    """Per-place day assignment and optional time overrides for a multi-day trip."""
+class DaySlot(BaseModel):
+    """A candidate day with optional time window for a multi-day place preference."""
 
-    place_id: str
-    day_index: int | None = None
+    day_index: int = Field(ge=0)
     preferred_hour_from: int | None = None
     preferred_hour_to: int | None = None
 
-    @model_validator(mode="after")
-    def validate_day_index(self) -> PlaceDayPreference:
-        if self.day_index is not None and self.day_index < 0:
-            raise ValueError("day_index must be non-negative")
-        return self
+
+class PlaceDayPreference(BaseModel):
+    """Per-place day assignment and optional time overrides for a multi-day trip.
+
+    day_preferences semantics:
+    - empty list  → auto-assign to any day (greedy bin-pack)
+    - one slot    → pinned to that day
+    - two or more → flexible; assigned to the candidate day with most remaining capacity
+    """
+
+    place_id: str
+    day_preferences: list[DaySlot] = []
 
 
 class DayConfig(BaseModel):
@@ -131,8 +137,16 @@ class MultiDayRequest(BaseModel):
     def validate_day_indices(self) -> MultiDayRequest:
         num_days = len(self.days)
         for pref in self.places:
-            if pref.day_index is not None and pref.day_index >= num_days:
-                raise ValueError(f"day_index {pref.day_index} is out of range for {num_days} day(s)")
+            for slot in pref.day_preferences:
+                if slot.day_index >= num_days:
+                    raise ValueError(f"day_index {slot.day_index} is out of range for {num_days} day(s)")
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_place_ids(self) -> MultiDayRequest:
+        ids = [p.place_id for p in self.places]
+        if len(ids) != len(set(ids)):
+            raise ValueError("duplicate place_id found in places list")
         return self
 
     @model_validator(mode="after")
