@@ -319,6 +319,28 @@ with tab_locations:
             ).add_to(loc_map)
         st_folium(loc_map, use_container_width=True, height=400, returned_objects=[])
 
+    map_places = [p for p in places if p.get("lat") and p.get("lng")]
+    if map_places:
+        center_lat = sum(p["lat"] for p in map_places) / len(map_places)
+        center_lng = sum(p["lng"] for p in map_places) / len(map_places)
+        loc_map = folium.Map(location=[center_lat, center_lng], zoom_start=13)
+        for p in map_places:
+            color = "#6c757d" if p.get("skipped") else "#28a745"
+            folium.Marker(
+                location=[p["lat"], p["lng"]],
+                tooltip=p.get("name") or p["id"],
+                icon=folium.DivIcon(
+                    html=(
+                        f'<div style="background:{color};color:white;border-radius:50%;'
+                        f"width:20px;height:20px;display:flex;align-items:center;"
+                        f'justify-content:center;font-size:10px;">●</div>'
+                    ),
+                    icon_size=(20, 20),
+                    icon_anchor=(10, 10),
+                ),
+            ).add_to(loc_map)
+        st_folium(loc_map, use_container_width=True, height=400, returned_objects=[])
+
 with tab_optimizer:
     try:
         all_places = list_places(skipped=False)
