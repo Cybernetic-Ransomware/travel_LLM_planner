@@ -8,7 +8,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from src.config.conf_logger import setup_logger
 from src.core.exceptions import MatrixUnavailableError
-from src.gmaps.storage import fetch_places_by_ids
+from src.gmaps import fetch_places_by_ids
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.optimizer.matrix.service import get_matrix
 from src.optimizer.solver.engine import nearest_neighbor, schedule_route, two_opt

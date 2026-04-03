@@ -142,6 +142,7 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 07 | Accepted | Hybrid exception handling — exception handlers + catch-all middleware |
 | 08 | Accepted | LangGraph orchestrator module with configurable LLM provider |
 | 09 | Accepted | Custom MongoDB checkpoint saver for LangGraph |
+| 10 | Accepted | LLM tool pattern — closure factory, RunnableConfig scope guard, conditional interrupt |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.
 
