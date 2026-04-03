@@ -50,6 +50,26 @@ class OrchestratorManager:
             raise RuntimeError("OrchestratorManager: not connected — call connect() first")
         return self._graph
 
+    @property
+    def is_ready(self) -> bool:
+        """Whether the orchestrator graph has been compiled and is ready to serve."""
+        return self._graph is not None
+
+    @property
+    def has_checkpointer(self) -> bool:
+        """Whether a checkpointer is active (conversation persistence enabled)."""
+        return self._checkpointer is not None
+
+    @property
+    def provider(self) -> str:
+        """LLM provider name (e.g. ``'openai'``, ``'anthropic'``)."""
+        return self._provider
+
+    @property
+    def model_name(self) -> str:
+        """LLM model identifier (e.g. ``'gpt-4o'``, ``'claude-sonnet-4-20250514'``)."""
+        return self._model_name
+
     def _create_llm(self) -> BaseChatModel:
         """Instantiate the LLM based on the configured provider."""
         if self._provider == "openai":

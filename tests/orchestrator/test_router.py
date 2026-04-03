@@ -18,10 +18,10 @@ def _make_mock_orchestrator(events: list | None = None) -> MagicMock:
 
     mock = MagicMock()
     mock.astream = _astream
-    mock._graph = MagicMock()
-    mock._checkpointer = None
-    mock._provider = "openai"
-    mock._model_name = "gpt-4o-mini"
+    mock.is_ready = True
+    mock.has_checkpointer = False
+    mock.provider = "openai"
+    mock.model_name = "gpt-4o-mini"
     return mock
 
 

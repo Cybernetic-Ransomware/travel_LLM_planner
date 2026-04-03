@@ -50,7 +50,7 @@ async def _stream_sse(
         yield f"data: {json.dumps({'error': 'Stream interrupted'})}\n\n"
         stream_error = True
 
-    if not stream_error and orch._checkpointer is not None:
+    if not stream_error and orch.has_checkpointer:
         try:
             graph_state = await orch.graph.aget_state({"configurable": {"thread_id": thread_id}})
             if graph_state and graph_state.next:
@@ -142,7 +142,7 @@ async def status(orch: OrchestratorDep) -> dict:
     if orch is None:
         return {"ready": False}
     return {
-        "ready": orch._graph is not None,
-        "provider": orch._provider,
-        "model": orch._model_name,
+        "ready": orch.is_ready,
+        "provider": orch.provider,
+        "model": orch.model_name,
     }
