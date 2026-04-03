@@ -117,6 +117,147 @@ class TestOrchestratorManagerLifecycle:
 
 
 @pytest.mark.unit
+class TestOrchestratorManagerAstreamResume:
+    async def test_raises_when_not_connected(self):
+        manager = _make_manager()
+        with pytest.raises(RuntimeError, match="not connected"):
+            async for _ in manager.astream_resume("thread-1", confirmed=True):
+                pass
+
+    async def test_confirmed_streams_events(self):
+        manager = _make_manager()
+
+        async def _fake_events(*args, **kwargs):
+            yield {"event": "on_chat_model_stream", "data": {"chunk": "Done"}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream_events = _fake_events
+        manager._graph = mock_graph
+
+        events = [e async for e in manager.astream_resume("thread-1", confirmed=True)]
+        assert len(events) == 1
+        assert events[0]["data"]["chunk"] == "Done"
+
+    async def test_confirmed_with_user_message_updates_state(self):
+        manager = _make_manager()
+
+        async def _fake_events(*args, **kwargs):
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream_events = _fake_events
+        mock_graph.aupdate_state = AsyncMock()
+        manager._graph = mock_graph
+
+        events = [e async for e in manager.astream_resume("thread-1", confirmed=True, user_message="Go ahead")]
+        assert len(events) == 1
+        mock_graph.aupdate_state.assert_called_once()
+        update_arg = mock_graph.aupdate_state.call_args[0][1]
+        assert any(m.content == "Go ahead" for m in update_arg["messages"])
+
+    async def test_confirmed_without_user_message_does_not_update_state(self):
+        manager = _make_manager()
+
+        async def _fake_events(*args, **kwargs):
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream_events = _fake_events
+        mock_graph.aupdate_state = AsyncMock()
+        manager._graph = mock_graph
+
+        [e async for e in manager.astream_resume("thread-1", confirmed=True)]
+        mock_graph.aupdate_state.assert_not_called()
+
+    async def test_cancelled_replaces_ai_message_without_tool_calls(self):
+        from langchain_core.messages import AIMessage, ToolCall
+
+        manager = _make_manager()
+        tool_call = ToolCall(name="update_visit_hours", args={"place_id": "abc"}, id="call_1")
+        interrupted_msg = AIMessage(id="msg-1", content="Let me update that.", tool_calls=[tool_call])
+
+        graph_state = MagicMock()
+        graph_state.next = ("tools",)
+        graph_state.values = {"messages": [interrupted_msg]}
+
+        async def _fake_events(*args, **kwargs):
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=graph_state)
+        mock_graph.aupdate_state = AsyncMock()
+        mock_graph.astream_events = _fake_events
+        manager._graph = mock_graph
+
+        [e async for e in manager.astream_resume("thread-1", confirmed=False)]
+
+        mock_graph.aupdate_state.assert_called_once()
+        update_arg = mock_graph.aupdate_state.call_args[0][1]
+        cancelled_msg = update_arg["messages"][0]
+        assert cancelled_msg.id == "msg-1"
+        assert cancelled_msg.tool_calls == []
+
+    async def test_cancelled_with_user_message_appends_human_message(self):
+        from langchain_core.messages import AIMessage, ToolCall
+
+        manager = _make_manager()
+        tool_call = ToolCall(name="update_visit_hours", args={"place_id": "abc"}, id="call_1")
+        interrupted_msg = AIMessage(id="msg-1", content="Updating...", tool_calls=[tool_call])
+
+        graph_state = MagicMock()
+        graph_state.next = ("tools",)
+        graph_state.values = {"messages": [interrupted_msg]}
+
+        async def _fake_events(*args, **kwargs):
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=graph_state)
+        mock_graph.aupdate_state = AsyncMock()
+        mock_graph.astream_events = _fake_events
+        manager._graph = mock_graph
+
+        [e async for e in manager.astream_resume("thread-1", confirmed=False, user_message="No, cancel it")]
+
+        update_arg = mock_graph.aupdate_state.call_args[0][1]
+        assert len(update_arg["messages"]) == 2
+        assert update_arg["messages"][1].content == "No, cancel it"
+
+    async def test_cancelled_skips_update_when_no_pending_interrupt(self):
+        manager = _make_manager()
+
+        graph_state = MagicMock()
+        graph_state.next = ()
+
+        async def _fake_events(*args, **kwargs):
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=graph_state)
+        mock_graph.aupdate_state = AsyncMock()
+        mock_graph.astream_events = _fake_events
+        manager._graph = mock_graph
+
+        [e async for e in manager.astream_resume("thread-1", confirmed=False)]
+        mock_graph.aupdate_state.assert_not_called()
+
+    async def test_thread_id_passed_in_config(self):
+        manager = _make_manager()
+        captured_configs = []
+
+        async def _capturing_events(state, config=None, **kwargs):
+            captured_configs.append(config)
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream_events = _capturing_events
+        manager._graph = mock_graph
+
+        [e async for e in manager.astream_resume("my-thread-42", confirmed=True)]
+        assert captured_configs[0]["configurable"]["thread_id"] == "my-thread-42"
+
+
+@pytest.mark.unit
 class TestOrchestratorManagerAstream:
     async def test_astream_yields_events(self):
         manager = _make_manager()
