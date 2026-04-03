@@ -5,9 +5,11 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.prebuilt import ToolNode
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.orchestrator.models import AgentState
+from src.orchestrator.tools import create_tools
 
 
 def _build_place_context_prompt(places: list[dict]) -> str:
@@ -96,10 +98,6 @@ def build_graph(
     Without ``db`` the graph retains the original linear topology.
     """
     if db is not None:
-        from langgraph.prebuilt import ToolNode
-
-        from src.orchestrator.tools import create_tools
-
         tools = create_tools(db)
         llm_with_tools = llm.bind_tools(tools)
 
