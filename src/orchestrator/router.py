@@ -11,6 +11,7 @@ from src.core.db.deps import MongoDbDep
 from src.core.exceptions import OrchestratorUnavailableError
 from src.gmaps import fetch_places_by_ids
 from src.orchestrator.deps import OrchestratorDep
+from src.orchestrator.manager import OrchestratorManager
 from src.orchestrator.models import AgentState, ChatMessage, ChatRequest
 
 router = APIRouter()
@@ -25,7 +26,7 @@ def _to_lc_messages(messages: list[ChatMessage]) -> list:
 
 
 async def _stream_sse(
-    orch,
+    orch: OrchestratorManager,
     state: AgentState,
     thread_id: str,
     configurable: dict | None,
@@ -66,7 +67,7 @@ async def _stream_sse(
 
 
 async def _stream_sse_resume(
-    orch,
+    orch: OrchestratorManager,
     thread_id: str,
     confirmed: bool,
     user_message: str | None,
