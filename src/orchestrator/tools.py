@@ -21,7 +21,7 @@ def create_tools(db: AsyncDatabase) -> list:
         preferred_hour_from: int | None = None,
         preferred_hour_to: int | None = None,
         visit_duration_min: int | None = None,
-        config: RunnableConfig = None,  # type: ignore[assignment]
+        config: RunnableConfig = None,  # type: ignore[assignment]  # LangChain injects RunnableConfig by exact type match; RunnableConfig | None breaks injection
     ) -> str:
         """Update the preferred visit window or visit duration for a place in the trip plan.
 
