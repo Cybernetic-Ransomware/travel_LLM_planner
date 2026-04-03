@@ -168,6 +168,8 @@ class OrchestratorManager:
         """
         if self._graph is None:
             raise RuntimeError("OrchestratorManager: not connected — call connect() first")
+        if self._checkpointer is None:
+            raise RuntimeError("OrchestratorManager: checkpointer not configured — resume requires persistence")
 
         config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 

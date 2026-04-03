@@ -124,6 +124,13 @@ class TestOrchestratorManagerAstreamResume:
             async for _ in manager.astream_resume("thread-1", confirmed=True):
                 pass
 
+    async def test_raises_when_no_checkpointer(self):
+        manager = _make_manager()
+        manager._graph = MagicMock()
+        with pytest.raises(RuntimeError, match="checkpointer not configured"):
+            async for _ in manager.astream_resume("thread-1", confirmed=True):
+                pass
+
     async def test_confirmed_streams_events(self):
         manager = _make_manager()
 
@@ -133,6 +140,7 @@ class TestOrchestratorManagerAstreamResume:
         mock_graph = MagicMock()
         mock_graph.astream_events = _fake_events
         manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
 
         events = [e async for e in manager.astream_resume("thread-1", confirmed=True)]
         assert len(events) == 1
@@ -148,6 +156,7 @@ class TestOrchestratorManagerAstreamResume:
         mock_graph.astream_events = _fake_events
         mock_graph.aupdate_state = AsyncMock()
         manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
 
         events = [e async for e in manager.astream_resume("thread-1", confirmed=True, user_message="Go ahead")]
         assert len(events) == 1
@@ -165,6 +174,7 @@ class TestOrchestratorManagerAstreamResume:
         mock_graph.astream_events = _fake_events
         mock_graph.aupdate_state = AsyncMock()
         manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
 
         [e async for e in manager.astream_resume("thread-1", confirmed=True)]
         mock_graph.aupdate_state.assert_not_called()
@@ -188,6 +198,7 @@ class TestOrchestratorManagerAstreamResume:
         mock_graph.aupdate_state = AsyncMock()
         mock_graph.astream_events = _fake_events
         manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
 
         [e async for e in manager.astream_resume("thread-1", confirmed=False)]
 
@@ -216,6 +227,7 @@ class TestOrchestratorManagerAstreamResume:
         mock_graph.aupdate_state = AsyncMock()
         mock_graph.astream_events = _fake_events
         manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
 
         [e async for e in manager.astream_resume("thread-1", confirmed=False, user_message="No, cancel it")]
 
@@ -237,6 +249,7 @@ class TestOrchestratorManagerAstreamResume:
         mock_graph.aupdate_state = AsyncMock()
         mock_graph.astream_events = _fake_events
         manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
 
         [e async for e in manager.astream_resume("thread-1", confirmed=False)]
         mock_graph.aupdate_state.assert_not_called()
@@ -252,6 +265,7 @@ class TestOrchestratorManagerAstreamResume:
         mock_graph = MagicMock()
         mock_graph.astream_events = _capturing_events
         manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
 
         [e async for e in manager.astream_resume("my-thread-42", confirmed=True)]
         assert captured_configs[0]["configurable"]["thread_id"] == "my-thread-42"
