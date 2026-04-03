@@ -5,8 +5,7 @@ from langchain_core.tools import tool
 from pydantic import ValidationError
 from pymongo.asynchronous.database import AsyncDatabase
 
-from src.gmaps.models import PlacePatch
-from src.gmaps.storage import find_and_update_place
+from src.gmaps import PlacePatch, find_and_update_place
 
 
 def create_tools(db: AsyncDatabase) -> list:

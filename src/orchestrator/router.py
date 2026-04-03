@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from src.config.conf_logger import setup_logger
 from src.core.db.deps import MongoDbDep
 from src.core.exceptions import OrchestratorUnavailableError
-from src.gmaps.storage import fetch_places_by_ids
+from src.gmaps import fetch_places_by_ids
 from src.orchestrator.deps import OrchestratorDep
 from src.orchestrator.models import AgentState, ChatMessage, ChatRequest
 
