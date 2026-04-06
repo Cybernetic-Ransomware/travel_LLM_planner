@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from pydantic import ValidationError
