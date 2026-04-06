@@ -1,6 +1,6 @@
 import importlib
 import json
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -391,6 +391,123 @@ class TestChatEndpointResume:
 
         parsed = _parse_sse(response.content)
         assert any("error" in p for p in parsed)
+
+
+@pytest.mark.unit
+class TestChatEndpointToolProposal:
+    async def test_tool_proposal_emitted_on_pending_interrupt(self, client):
+        from langchain_core.messages import AIMessage
+
+        tool_calls = [{"name": "update_visit_hours", "args": {"place_id": "abc123", "preferred_hour_from": 9}, "id": "call_1"}]
+        interrupted_msg = AIMessage(id="msg-1", content="Let me update that.", tool_calls=tool_calls)
+
+        graph_state = MagicMock()
+        graph_state.next = ("tools",)
+        graph_state.values = {"messages": [interrupted_msg]}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = True
+        mock_orch.graph.aget_state = AsyncMock(return_value=graph_state)
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Update visit hours for Wawel"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        proposals = [p["tool_proposal"] for p in parsed if "tool_proposal" in p]
+        assert len(proposals) == 1
+        assert proposals[0]["tool"] == "update_visit_hours"
+        assert proposals[0]["args"]["place_id"] == "abc123"
+
+    async def test_multiple_tool_calls_emit_multiple_proposals(self, client):
+        from langchain_core.messages import AIMessage
+
+        tool_calls = [
+            {"name": "update_visit_hours", "args": {"place_id": "abc"}, "id": "call_1"},
+            {"name": "skip_place", "args": {"place_id": "def"}, "id": "call_2"},
+        ]
+        interrupted_msg = AIMessage(id="msg-2", content="Updating...", tool_calls=tool_calls)
+
+        graph_state = MagicMock()
+        graph_state.next = ("tools",)
+        graph_state.values = {"messages": [interrupted_msg]}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = True
+        mock_orch.graph.aget_state = AsyncMock(return_value=graph_state)
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Update both"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        proposals = [p["tool_proposal"] for p in parsed if "tool_proposal" in p]
+        assert len(proposals) == 2
+        assert {p["tool"] for p in proposals} == {"update_visit_hours", "skip_place"}
+
+    async def test_no_tool_proposal_when_graph_next_is_empty(self, client):
+        graph_state = MagicMock()
+        graph_state.next = ()
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = True
+        mock_orch.graph.aget_state = AsyncMock(return_value=graph_state)
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Hi"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        assert not any("tool_proposal" in p for p in parsed)
+
+    async def test_no_tool_proposal_when_no_checkpointer(self, client):
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = False
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Hi"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        assert not any("tool_proposal" in p for p in parsed)
+
+    async def test_aget_state_error_does_not_crash_stream(self, client):
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = True
+        mock_orch.graph.aget_state = AsyncMock(side_effect=RuntimeError("DB unavailable"))
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Hi"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        assert response.status_code == 200
+        parsed = _parse_sse(response.content)
+        assert not any("tool_proposal" in p for p in parsed)
 
 
 @pytest.mark.unit

@@ -272,6 +272,47 @@ class TestOrchestratorManagerAstreamResume:
 
 
 @pytest.mark.unit
+class TestOrchestratorManagerProperties:
+    def test_is_ready_false_before_connect(self):
+        manager = _make_manager()
+        assert manager.is_ready is False
+
+    def test_is_ready_true_when_graph_assigned(self):
+        manager = _make_manager()
+        manager._graph = MagicMock()
+        assert manager.is_ready is True
+
+    def test_is_ready_false_after_graph_cleared(self):
+        manager = _make_manager()
+        manager._graph = MagicMock()
+        manager._graph = None
+        assert manager.is_ready is False
+
+    def test_has_checkpointer_false_before_connect(self):
+        manager = _make_manager()
+        assert manager.has_checkpointer is False
+
+    def test_has_checkpointer_true_when_checkpointer_set(self):
+        manager = _make_manager()
+        manager._checkpointer = MagicMock()
+        assert manager.has_checkpointer is True
+
+    def test_has_checkpointer_false_after_checkpointer_cleared(self):
+        manager = _make_manager()
+        manager._checkpointer = MagicMock()
+        manager._checkpointer = None
+        assert manager.has_checkpointer is False
+
+    def test_provider_returns_constructor_value(self):
+        manager = _make_manager(provider="anthropic")
+        assert manager.provider == "anthropic"
+
+    def test_model_name_returns_constructor_value(self):
+        manager = _make_manager(model_name="claude-sonnet-4-20250514")
+        assert manager.model_name == "claude-sonnet-4-20250514"
+
+
+@pytest.mark.unit
 class TestOrchestratorManagerAstream:
     async def test_astream_yields_events(self):
         manager = _make_manager()
