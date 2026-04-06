@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from src.config.conf_logger import setup_logger
 from src.config.config import settings
 from src.core.db.manager import MongoDBManager
-from src.gmaps.manager import GooglePlacesManager
+from src.gmaps import GooglePlacesManager
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.orchestrator.manager import OrchestratorManager
 
