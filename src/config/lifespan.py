@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
                     langsmith_tracing=settings.langsmith_tracing,
                     langsmith_project=settings.langsmith_project,
                     db=app.state.db,
+                    places_manager=gp_manager,
                 ) as orch_manager:
                     app.state.orchestrator = orch_manager
                     logger.info(

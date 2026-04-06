@@ -7,7 +7,7 @@ from pymongo import ReturnDocument, UpdateOne
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.core.db.manager import GMAPS_COLLECTION
-from src.gmaps.models import PlacePatch, ScrapedPlace
+from src.gmaps.models import PlaceCreate, PlacePatch, ScrapedPlace
 
 
 async def upsert_places(
@@ -96,6 +96,17 @@ async def find_and_update_place(db: AsyncDatabase, place_id: str, patch: PlacePa
         {"$set": fields},
         return_document=ReturnDocument.AFTER,
     )
+
+
+async def insert_place(db: AsyncDatabase, place: PlaceCreate) -> dict:
+    """Insert a new place document and return the inserted document."""
+    doc = place.model_dump(exclude_none=True)
+    doc["skipped"] = False
+    collection = db[GMAPS_COLLECTION]
+    result = await collection.insert_one(doc)
+    inserted = await collection.find_one({"_id": result.inserted_id})
+    assert inserted is not None
+    return inserted
 
 
 async def delete_place(db: AsyncDatabase, place_id: str) -> bool:

@@ -9,6 +9,7 @@ from langgraph.graph.state import CompiledStateGraph
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.config.conf_logger import setup_logger
+from src.gmaps import GooglePlacesManager
 from src.orchestrator.checkpointer import MongoCheckpointSaver
 from src.orchestrator.graph import build_graph
 from src.orchestrator.models import AgentState
@@ -32,6 +33,7 @@ class OrchestratorManager:
         langsmith_tracing: bool,
         langsmith_project: str,
         db: AsyncDatabase | None = None,
+        places_manager: GooglePlacesManager | None = None,
     ) -> None:
         self._provider = provider
         self._api_key = api_key
@@ -40,6 +42,7 @@ class OrchestratorManager:
         self._langsmith_tracing = langsmith_tracing
         self._langsmith_project = langsmith_project
         self._db = db
+        self._places_manager = places_manager
         self._llm: BaseChatModel | None = None
         self._graph: CompiledStateGraph | None = None
         self._checkpointer: MongoCheckpointSaver | None = None
@@ -49,6 +52,11 @@ class OrchestratorManager:
         if self._graph is None:
             raise RuntimeError("OrchestratorManager: not connected — call connect() first")
         return self._graph
+
+    @property
+    def places_manager(self) -> GooglePlacesManager | None:
+        """Google Places API manager, or None if not configured."""
+        return self._places_manager
 
     @property
     def is_ready(self) -> bool:
@@ -94,14 +102,19 @@ class OrchestratorManager:
 
         if self._db is not None:
             self._checkpointer = MongoCheckpointSaver(self._db)
-            self._graph = build_graph(self._llm, checkpointer=self._checkpointer, db=self._db)
+            self._graph = build_graph(
+                self._llm,
+                checkpointer=self._checkpointer,
+                db=self._db,
+                places_manager=self._places_manager,
+            )
             logger.info(
                 "OrchestratorManager connected — provider=%s model=%s checkpointer=mongodb",
                 self._provider,
                 self._model_name,
             )
         else:
-            self._graph = build_graph(self._llm, db=self._db)
+            self._graph = build_graph(self._llm)
             logger.info(
                 "OrchestratorManager connected — provider=%s model=%s checkpointer=none", self._provider, self._model_name
             )
@@ -111,6 +124,7 @@ class OrchestratorManager:
         self._graph = None
         self._llm = None
         self._checkpointer = None
+        self._places_manager = None
 
     async def __aenter__(self) -> OrchestratorManager:
         await self.connect()

@@ -8,6 +8,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 from pymongo.asynchronous.database import AsyncDatabase
 
+from src.gmaps import GooglePlacesManager
 from src.orchestrator.models import AgentState
 from src.orchestrator.tools import create_tools
 
@@ -82,6 +83,7 @@ def build_graph(
     llm: BaseChatModel,
     checkpointer: BaseCheckpointSaver | None = None,
     db: AsyncDatabase | None = None,
+    places_manager: GooglePlacesManager | None = None,
 ) -> CompiledStateGraph:
     """Build and compile the LangGraph StateGraph for the orchestrator.
 
@@ -98,7 +100,7 @@ def build_graph(
     Without ``db`` the graph retains the original linear topology.
     """
     if db is not None:
-        tools = create_tools(db)
+        tools = create_tools(db, places_manager)
         llm_with_tools = llm.bind_tools(tools)
 
         async def _chatbot(state: AgentState) -> dict:
