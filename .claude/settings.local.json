@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run:*)",
+      "Bash(git:*)",
+      "Bash(just lint:*)",
+      "Bash(just test:*)",
+      "Bash(python3 -m py_compile src/orchestrator/tools.py src/orchestrator/graph.py src/orchestrator/manager.py src/orchestrator/router.py src/config/lifespan.py)",
+      "Bash(python3:*)"
+    ]
+  },
+  "outputStyle": "Explanatory",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "DISABLED",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsx .claude/hooks/pre/secrets.ts"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "DISABLED",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsx .claude/hooks/post/console-log.ts"
+          }
+        ]
+      }
+    ]
+  }
+}
