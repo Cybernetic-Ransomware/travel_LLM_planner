@@ -1,6 +1,6 @@
 import importlib
 import json
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -18,9 +18,10 @@ def _make_mock_orchestrator(events: list | None = None) -> MagicMock:
 
     mock = MagicMock()
     mock.astream = _astream
-    mock._graph = MagicMock()
-    mock._provider = "openai"
-    mock._model_name = "gpt-4o-mini"
+    mock.is_ready = True
+    mock.has_checkpointer = False
+    mock.provider = "openai"
+    mock.model_name = "gpt-4o-mini"
     return mock
 
 
@@ -96,7 +97,7 @@ class TestChatEndpointUnit:
     async def test_session_id_forwarded_to_astream(self, client):
         received_thread_ids = []
 
-        async def _capturing_astream(state, thread_id=None):
+        async def _capturing_astream(state, thread_id=None, **kwargs):
             received_thread_ids.append(thread_id)
             yield {"event": "on_chain_end", "data": {}}
 
@@ -201,7 +202,7 @@ class TestChatEndpointPlaceContext:
 
         monkeypatch.setattr(_router_mod, "fetch_places_by_ids", mock_fetch)
 
-        async def _capturing_astream(state, thread_id=None):
+        async def _capturing_astream(state, thread_id=None, **kwargs):
             received_states.append(state)
             yield {"event": "on_chain_end", "data": {}}
 
@@ -221,6 +222,292 @@ class TestChatEndpointPlaceContext:
 
         assert len(received_states) == 1
         assert received_states[0]["place_context"] == [{"_id": "abc", "name": "Wawel"}]
+
+
+@pytest.mark.unit
+class TestChatEndpointResume:
+    async def test_resume_confirmed_true_returns_200(self, client):
+        async def _astream_resume(thread_id, confirmed, user_message=None):
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.astream_resume = _astream_resume
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "Yes, go ahead"}],
+                    "session_id": "sess-resume-1",
+                    "resume_confirmed": True,
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers["content-type"]
+
+    async def test_resume_confirmed_false_returns_200(self, client):
+        async def _astream_resume(thread_id, confirmed, user_message=None):
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.astream_resume = _astream_resume
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "No, cancel"}],
+                    "session_id": "sess-resume-2",
+                    "resume_confirmed": False,
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        assert response.status_code == 200
+
+    async def test_resume_session_id_emitted_as_first_event(self, client):
+        async def _astream_resume(thread_id, confirmed, user_message=None):
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.astream_resume = _astream_resume
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "Yes"}],
+                    "session_id": "sess-42",
+                    "resume_confirmed": True,
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        assert parsed[0].get("session_id") == "sess-42"
+
+    async def test_resume_forwards_content_chunks(self, client):
+        async def _astream_resume(thread_id, confirmed, user_message=None):
+            yield {"event": "on_chat_model_stream", "data": {"chunk": type("C", (), {"content": "Updated!"})()}}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.astream_resume = _astream_resume
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "Yes"}],
+                    "session_id": "sess-chunks",
+                    "resume_confirmed": True,
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        contents = [p["content"] for p in parsed if "content" in p]
+        assert "Updated!" in contents
+
+    async def test_resume_passes_last_message_as_user_message(self, client):
+        captured = []
+
+        async def _astream_resume(thread_id, confirmed, user_message=None):
+            captured.append(user_message)
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.astream_resume = _astream_resume
+        app.state.orchestrator = mock_orch
+        try:
+            await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "Yes please"}],
+                    "session_id": "sess-msg",
+                    "resume_confirmed": True,
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        assert captured == ["Yes please"]
+
+    async def test_resume_skips_astream_and_calls_astream_resume(self, client):
+        astream_called = []
+        astream_resume_called = []
+
+        async def _astream(state, thread_id=None, **kwargs):
+            astream_called.append(True)
+            yield {"event": "on_chain_end", "data": {}}
+
+        async def _astream_resume(thread_id, confirmed, user_message=None):
+            astream_resume_called.append(True)
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.astream = _astream
+        mock_orch.astream_resume = _astream_resume
+        app.state.orchestrator = mock_orch
+        try:
+            await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "Yes"}],
+                    "session_id": "sess-dispatch",
+                    "resume_confirmed": True,
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        assert astream_called == []
+        assert astream_resume_called == [True]
+
+    async def test_resume_stream_error_yields_error_event(self, client):
+        async def _astream_resume(thread_id, confirmed, user_message=None):
+            raise RuntimeError("graph exploded")
+            yield  # make it a generator
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.astream_resume = _astream_resume
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "Yes"}],
+                    "session_id": "sess-err",
+                    "resume_confirmed": True,
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        assert any("error" in p for p in parsed)
+
+
+@pytest.mark.unit
+class TestChatEndpointToolProposal:
+    async def test_tool_proposal_emitted_on_pending_interrupt(self, client):
+        from langchain_core.messages import AIMessage
+
+        tool_calls = [{"name": "update_visit_hours", "args": {"place_id": "abc123", "preferred_hour_from": 9}, "id": "call_1"}]
+        interrupted_msg = AIMessage(id="msg-1", content="Let me update that.", tool_calls=tool_calls)
+
+        graph_state = MagicMock()
+        graph_state.next = ("tools",)
+        graph_state.values = {"messages": [interrupted_msg]}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = True
+        mock_orch.graph.aget_state = AsyncMock(return_value=graph_state)
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Update visit hours for Wawel"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        proposals = [p["tool_proposal"] for p in parsed if "tool_proposal" in p]
+        assert len(proposals) == 1
+        assert proposals[0]["tool"] == "update_visit_hours"
+        assert proposals[0]["args"]["place_id"] == "abc123"
+
+    async def test_multiple_tool_calls_emit_multiple_proposals(self, client):
+        from langchain_core.messages import AIMessage
+
+        tool_calls = [
+            {"name": "update_visit_hours", "args": {"place_id": "abc"}, "id": "call_1"},
+            {"name": "skip_place", "args": {"place_id": "def"}, "id": "call_2"},
+        ]
+        interrupted_msg = AIMessage(id="msg-2", content="Updating...", tool_calls=tool_calls)
+
+        graph_state = MagicMock()
+        graph_state.next = ("tools",)
+        graph_state.values = {"messages": [interrupted_msg]}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = True
+        mock_orch.graph.aget_state = AsyncMock(return_value=graph_state)
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Update both"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        proposals = [p["tool_proposal"] for p in parsed if "tool_proposal" in p]
+        assert len(proposals) == 2
+        assert {p["tool"] for p in proposals} == {"update_visit_hours", "skip_place"}
+
+    async def test_no_tool_proposal_when_graph_next_is_empty(self, client):
+        graph_state = MagicMock()
+        graph_state.next = ()
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = True
+        mock_orch.graph.aget_state = AsyncMock(return_value=graph_state)
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Hi"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        assert not any("tool_proposal" in p for p in parsed)
+
+    async def test_no_tool_proposal_when_no_checkpointer(self, client):
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = False
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Hi"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        parsed = _parse_sse(response.content)
+        assert not any("tool_proposal" in p for p in parsed)
+
+    async def test_aget_state_error_does_not_crash_stream(self, client):
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = True
+        mock_orch.graph.aget_state = AsyncMock(side_effect=RuntimeError("DB unavailable"))
+
+        app.state.orchestrator = mock_orch
+        try:
+            response = await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Hi"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        assert response.status_code == 200
+        parsed = _parse_sse(response.content)
+        assert not any("tool_proposal" in p for p in parsed)
 
 
 @pytest.mark.unit

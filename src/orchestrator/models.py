@@ -26,6 +26,7 @@ class ChatRequest(BaseModel):
                 "messages": [{"role": "user", "content": "Tell me about Wawel Castle"}],
                 "session_id": "550e8400-e29b-41d4-a716-446655440000",
                 "place_ids": [],
+                "resume_confirmed": None,
             }
         }
     )
@@ -33,6 +34,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1)
     session_id: str | None = None
     place_ids: list[str] = Field(default_factory=list)
+    resume_confirmed: bool | None = None
 
 
 class ChatResponse(BaseModel):

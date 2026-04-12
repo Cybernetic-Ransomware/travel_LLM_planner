@@ -77,6 +77,11 @@ Fixture hierarchy (all defined in `tests/conftest.py`):
 HTTP calls in unit tests are intercepted by the `httpx_mock` fixture from `pytest-httpx`.
 Any test that instantiates a manager wrapping `httpx.AsyncClient` must use `httpx_mock` — never hit real APIs.
 
+Coverage depth expectations:
+- **Pydantic models with validators** — each model that defines `@field_validator` or `@model_validator` must have a dedicated test class in `tests/{domain}/test_models.py`. Indirect coverage through service or tool tests is not sufficient; validators must be exercised in isolation.
+- **Manager `@property` members** — properties must have direct unit tests on the manager instance. Coverage through HTTP endpoint tests is indirect and does not verify the property contract.
+- **Router SSE event types** — each new SSE event key emitted by a router helper function (e.g. `tool_proposal`, `session_id`) must have at least one test case verifying its presence and structure.
+
 ## Architecture
 
 ```
@@ -142,6 +147,7 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 07 | Accepted | Hybrid exception handling — exception handlers + catch-all middleware |
 | 08 | Accepted | LangGraph orchestrator module with configurable LLM provider |
 | 09 | Accepted | Custom MongoDB checkpoint saver for LangGraph |
+| 10 | Accepted | LLM tool pattern — closure factory, RunnableConfig scope guard, conditional interrupt |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.
 
