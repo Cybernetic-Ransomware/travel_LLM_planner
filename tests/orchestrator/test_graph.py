@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolCall
 
-from src.orchestrator.graph import build_graph, chatbot_node, router_node
+from src.orchestrator.graph import _after_chatbot, build_graph, chatbot_node, router_node
 from src.orchestrator.models import AgentState
 
 
@@ -172,6 +172,13 @@ class TestBuildPlaceContextPrompt:
         result = _build_place_context_prompt([place])
         assert "Minimal Place" in result
 
+    def test_place_id_included_in_prompt(self):
+        from src.orchestrator.graph import _build_place_context_prompt
+
+        place = {"_id": "abc123", "name": "Wawel Castle"}
+        result = _build_place_context_prompt([place])
+        assert "[id=abc123]" in result
+
 
 @pytest.mark.unit
 class TestChatbotNodePlaceContext:
@@ -242,3 +249,65 @@ class TestChatbotNodePlaceContext:
 
         called_messages = mock_llm.ainvoke.call_args[0][0]
         assert len(called_messages) == 2
+
+
+@pytest.mark.unit
+class TestGraphStructureWithTools:
+    def test_build_graph_with_db_returns_compiled_graph(self):
+        from langgraph.graph.state import CompiledStateGraph
+
+        mock_llm = MagicMock()
+        mock_llm.bind_tools = MagicMock(return_value=mock_llm)
+        mock_db = MagicMock()
+        graph = build_graph(mock_llm, db=mock_db)
+        assert isinstance(graph, CompiledStateGraph)
+
+    def test_graph_with_db_has_tools_node(self):
+        mock_llm = MagicMock()
+        mock_llm.bind_tools = MagicMock(return_value=mock_llm)
+        mock_db = MagicMock()
+        graph = build_graph(mock_llm, db=mock_db)
+        assert "tools" in graph.get_graph().nodes
+
+    def test_graph_with_db_still_has_chatbot_node(self):
+        mock_llm = MagicMock()
+        mock_llm.bind_tools = MagicMock(return_value=mock_llm)
+        mock_db = MagicMock()
+        graph = build_graph(mock_llm, db=mock_db)
+        assert "chatbot" in graph.get_graph().nodes
+
+    def test_graph_without_db_has_no_tools_node(self):
+        mock_llm = MagicMock()
+        graph = build_graph(mock_llm)
+        assert "tools" not in graph.get_graph().nodes
+
+    def test_graph_without_db_backward_compatible(self):
+        from langgraph.graph.state import CompiledStateGraph
+
+        mock_llm = MagicMock()
+        graph = build_graph(mock_llm)
+        assert isinstance(graph, CompiledStateGraph)
+
+
+@pytest.mark.unit
+class TestAfterChatbot:
+    async def test_routes_to_tools_when_ai_message_has_tool_calls(self):
+        tool_call = ToolCall(name="update_visit_hours", args={"place_id": "abc"}, id="call_1")
+        state = _make_state(messages=[AIMessage(content="", tool_calls=[tool_call])])
+        result = _after_chatbot(state)
+        assert result == "tools"
+
+    async def test_routes_to_end_when_ai_message_has_no_tool_calls(self):
+        state = _make_state(messages=[AIMessage(content="Here is the answer.")])
+        result = _after_chatbot(state)
+        assert result == "end"
+
+    async def test_routes_to_end_for_human_message(self):
+        state = _make_state(messages=[HumanMessage(content="Hello")])
+        result = _after_chatbot(state)
+        assert result == "end"
+
+    async def test_routes_to_end_for_empty_messages(self):
+        state = _make_state(messages=[])
+        result = _after_chatbot(state)
+        assert result == "end"

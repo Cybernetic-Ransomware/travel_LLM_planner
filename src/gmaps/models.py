@@ -81,6 +81,42 @@ class PlacePatch(BaseModel):
         return self
 
 
+class PlaceCreate(BaseModel):
+    """Input model for creating a new place via the LLM tool."""
+
+    name: str
+    address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    visit_duration_min: int | None = None
+    preferred_hour_from: int | None = None
+    preferred_hour_to: int | None = None
+
+    @field_validator("preferred_hour_from", "preferred_hour_to")
+    @classmethod
+    def validate_hour(cls, v: int | None) -> int | None:
+        if v is not None and not (0 <= v <= 23):
+            raise ValueError("Hour must be between 0 and 23")
+        return v
+
+    @field_validator("visit_duration_min")
+    @classmethod
+    def validate_duration(cls, v: int | None) -> int | None:
+        if v is not None and v <= 0:
+            raise ValueError("visit_duration_min must be a positive integer")
+        return v
+
+    @model_validator(mode="after")
+    def validate_hour_range(self) -> PlaceCreate:
+        if (
+            self.preferred_hour_from is not None
+            and self.preferred_hour_to is not None
+            and self.preferred_hour_from >= self.preferred_hour_to
+        ):
+            raise ValueError("preferred_hour_from must be less than preferred_hour_to")
+        return self
+
+
 class PlaceOut(BaseModel):
     """Read model for a single place document returned to the panel."""
 

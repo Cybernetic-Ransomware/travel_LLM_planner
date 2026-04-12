@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pymongo.asynchronous.database import AsyncDatabase
 
-from src.gmaps.storage import fetch_places_by_ids
+from src.gmaps import fetch_places_by_ids
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.optimizer.solver.models import (
     DayConfig,

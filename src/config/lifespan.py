@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from src.config.conf_logger import setup_logger
 from src.config.config import settings
 from src.core.db.manager import MongoDBManager
-from src.gmaps.manager import GooglePlacesManager
+from src.gmaps import GooglePlacesManager
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.orchestrator.manager import OrchestratorManager
 
@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
                     langsmith_tracing=settings.langsmith_tracing,
                     langsmith_project=settings.langsmith_project,
                     db=app.state.db,
+                    places_manager=gp_manager,
                 ) as orch_manager:
                     app.state.orchestrator = orch_manager
                     logger.info(

@@ -1,10 +1,80 @@
-"""Unit tests for PlacePatch and PlaceOut Pydantic models."""
+"""Unit tests for PlaceCreate, PlacePatch, and PlaceOut Pydantic models."""
 
 import pytest
 from bson import ObjectId
 from pydantic import ValidationError
 
-from src.gmaps.models import PlaceOut, PlacePatch
+from src.gmaps.models import PlaceCreate, PlaceOut, PlacePatch
+
+
+@pytest.mark.unit
+class TestPlaceCreate:
+    def test_valid_minimal_creates_instance(self):
+        place = PlaceCreate(name="Wawel Castle")
+        assert place.name == "Wawel Castle"
+        assert place.address is None
+        assert place.lat is None
+        assert place.lng is None
+        assert place.visit_duration_min is None
+        assert place.preferred_hour_from is None
+        assert place.preferred_hour_to is None
+
+    def test_valid_full_creates_instance(self):
+        place = PlaceCreate(
+            name="Wawel Castle",
+            address="Wawel 5, Krakow",
+            lat=50.054,
+            lng=19.935,
+            visit_duration_min=120,
+            preferred_hour_from=9,
+            preferred_hour_to=17,
+        )
+        assert place.name == "Wawel Castle"
+        assert place.visit_duration_min == 120
+        assert place.preferred_hour_from == 9
+        assert place.preferred_hour_to == 17
+
+    def test_name_required(self):
+        with pytest.raises(ValidationError):
+            PlaceCreate()
+
+    def test_hour_above_range(self):
+        with pytest.raises(ValidationError):
+            PlaceCreate(name="Place", preferred_hour_from=24)
+
+    def test_hour_below_range(self):
+        with pytest.raises(ValidationError):
+            PlaceCreate(name="Place", preferred_hour_to=-1)
+
+    def test_hour_range_inverted(self):
+        with pytest.raises(ValidationError):
+            PlaceCreate(name="Place", preferred_hour_from=17, preferred_hour_to=9)
+
+    def test_hour_range_equal(self):
+        with pytest.raises(ValidationError):
+            PlaceCreate(name="Place", preferred_hour_from=9, preferred_hour_to=9)
+
+    def test_hour_boundary_values(self):
+        place = PlaceCreate(name="Place", preferred_hour_from=0, preferred_hour_to=23)
+        assert place.preferred_hour_from == 0
+        assert place.preferred_hour_to == 23
+
+    def test_duration_zero(self):
+        with pytest.raises(ValidationError):
+            PlaceCreate(name="Place", visit_duration_min=0)
+
+    def test_duration_negative(self):
+        with pytest.raises(ValidationError):
+            PlaceCreate(name="Place", visit_duration_min=-30)
+
+    def test_duration_minimum_valid(self):
+        place = PlaceCreate(name="Place", visit_duration_min=1)
+        assert place.visit_duration_min == 1
+
+    def test_only_hour_from_without_hour_to_is_valid(self):
+        place = PlaceCreate(name="Place", preferred_hour_from=10)
+        assert place.preferred_hour_from == 10
+        assert place.preferred_hour_to is None
 
 
 @pytest.mark.unit
