@@ -51,6 +51,9 @@ async def _stream_sse(
         yield f"data: {json.dumps({'error': 'Stream interrupted'})}\n\n"
         stream_error = True
 
+    # A second aget_state() call is required because the interrupt fires *after* the stream ends —
+    # the last event yielded by astream_events is the interrupted node output, not the interrupt
+    # itself. Only the checkpointed state reflects whether the graph is now paused at "tools".
     if not stream_error and orch.has_checkpointer:
         try:
             graph_state = await orch.graph.aget_state({"configurable": {"thread_id": thread_id}})

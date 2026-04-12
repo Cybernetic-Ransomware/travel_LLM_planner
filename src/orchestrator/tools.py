@@ -3,7 +3,10 @@ from langchain_core.tools import tool
 from pydantic import ValidationError
 from pymongo.asynchronous.database import AsyncDatabase
 
+from src.config.conf_logger import setup_logger
 from src.gmaps import GooglePlacesManager, PlaceCreate, PlacePatch, find_and_update_place, insert_place
+
+logger = setup_logger(__name__, "orchestrator")
 
 
 def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None = None) -> list:
@@ -19,7 +22,10 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
     def _extract_allowed(config: RunnableConfig | None) -> list[str]:
         configurable: dict = {}
         if config is not None:
-            configurable = (config.get("configurable") or {}) if isinstance(config, dict) else {}
+            if isinstance(config, dict):
+                configurable = config.get("configurable") or {}
+            else:
+                logger.warning("Tool config is not a dict (got %s); allowed_place_ids defaults to []", type(config))
         return configurable.get("allowed_place_ids", [])
 
     @tool
