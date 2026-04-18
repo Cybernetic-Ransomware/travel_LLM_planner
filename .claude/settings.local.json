@@ -9,7 +9,9 @@
       "Bash(python3:*)"
     ]
   },
-  "outputStyle": "Explanatory",
+  "enabledMcpjsonServers": [
+    "travel-planner"
+  ],
   "hooks": {
     "PreToolUse": [
       {
@@ -33,5 +35,7 @@
         ]
       }
     ]
-  }
+  },
+  "outputStyle": "Explanatory",
+  "enableAllProjectMcpServers": true
 }
