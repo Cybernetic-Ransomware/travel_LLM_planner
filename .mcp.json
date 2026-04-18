@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "travel-planner": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", ".claude/plugins/server.py"]
+    }
+  }
+}
