@@ -3123,6 +3123,7 @@ dependencies = [
 dev = [
     { name = "codespell" },
     { name = "commitizen" },
+    { name = "mcp" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -3159,6 +3160,7 @@ requires-dist = [
 dev = [
     { name = "codespell", specifier = ">=2.4.1" },
     { name = "commitizen", specifier = ">=4.13.9" },
+    { name = "mcp", specifier = ">=1.26.0" },
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=0.26.0" },
