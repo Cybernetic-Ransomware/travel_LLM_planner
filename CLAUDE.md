@@ -150,6 +150,8 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 08 | Accepted | LangGraph orchestrator module with configurable LLM provider |
 | 09 | Accepted | Custom MongoDB checkpoint saver for LangGraph |
 | 10 | Accepted | LLM tool pattern — closure factory, RunnableConfig scope guard, conditional interrupt |
+| 11 | Accepted | Svelte 5 + SvelteKit as frontend framework (runes mode, Tailwind v4, Paraglide) |
+| 12 | Accepted | Frontend co-location — `apps/frontend/` alongside root `src/` |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.
 
