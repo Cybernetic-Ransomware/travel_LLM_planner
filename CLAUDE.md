@@ -132,6 +132,8 @@ just bump     # bumps version in pyproject.toml and creates a git tag
 
 Tag format: `v{version}`. Supported types: `feat`, `fix`, `hotfix`, `chore`, `docs`, `refactor`, `test`.
 
+Do not add `Co-Authored-By` trailers to commit messages.
+
 ## Architecture Decision Records
 
 ADRs are stored in `docs/`. Before making structural decisions, check existing ADRs for context:
