@@ -119,13 +119,53 @@ async def delete_place(db: AsyncDatabase, place_id: str) -> bool:
     return result.deleted_count > 0
 
 
-async def fetch_places_missing_address(db: AsyncDatabase, limit: int) -> list[dict]:
-    """Return places that have a place_id but no address yet — candidates for enrichment."""
+async def fetch_enrichment_candidates(db: AsyncDatabase, limit: int) -> list[dict]:
+    """Return places that have a place_id but no address, ordered by enrichment priority.
+
+    Priority order:
+    1. Never attempted (enriched_at is None) — returned first.
+    2. Places within the 24-hour backoff window after a non-OK attempt — excluded entirely.
+    3. All others sorted by enriched_at ASC so the stalest data is refreshed first.
+    """
     collection = db[GMAPS_COLLECTION]
-    cursor = collection.find(
-        {"gmaps_place_id": {"$ne": None}, "$or": [{"address": None}, {"address": ""}]},
-        {"gmaps_place_id": 1, "name": 1, "lat": 1, "lng": 1},
-    ).limit(limit)
+    pipeline = [
+        {
+            "$match": {
+                "gmaps_place_id": {"$ne": None},
+                "$or": [{"address": None}, {"address": ""}],
+            }
+        },
+        {
+            "$addFields": {
+                "_never_attempted": {"$eq": ["$enriched_at", None]},
+                "_recent_failure": {
+                    "$and": [
+                        {"$ne": ["$enriched_at", None]},
+                        {"$ne": ["$details_status", None]},
+                        {"$ne": ["$details_status", "OK"]},
+                        {
+                            "$gte": [
+                                "$enriched_at",
+                                {
+                                    "$dateSubtract": {
+                                        "startDate": "$$NOW",
+                                        "unit": "hour",
+                                        "amount": 24,
+                                    }
+                                },
+                            ]
+                        },
+                    ]
+                },
+            }
+        },
+        {"$match": {"_recent_failure": False}},
+        {"$addFields": {"_sort_tier": {"$cond": {"if": "$_never_attempted", "then": 0, "else": 1}}}},
+        {"$sort": {"_sort_tier": 1, "enriched_at": 1}},
+        {"$limit": limit},
+        {"$project": {"gmaps_place_id": 1, "name": 1, "lat": 1, "lng": 1}},
+    ]
+    cursor = await collection.aggregate(pipeline)
     return await cursor.to_list(length=limit)
 
 

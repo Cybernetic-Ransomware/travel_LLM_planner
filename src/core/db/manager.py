@@ -40,6 +40,10 @@ class MongoDBManager:
         await collection.create_index("source_list_url")
         await collection.create_index("scraped_at")
         await collection.create_index("skipped")
+        await collection.create_index(
+            [("gmaps_place_id", 1), ("address", 1), ("enriched_at", 1)],
+            name="enrichment_candidates",
+        )
 
         matrix = db[MATRIX_COLLECTION]
         await matrix.create_index(

@@ -19,9 +19,9 @@ from src.gmaps.scraper import scrape_public_list
 from src.gmaps.storage import (
     bulk_update_enrichment,
     delete_place,
+    fetch_enrichment_candidates,
     fetch_place_by_id,
     fetch_places,
-    fetch_places_missing_address,
     find_and_update_place,
     upsert_places,
 )
@@ -56,7 +56,7 @@ async def enrich_places(payload: EnrichRequest, db: MongoDbDep, gp: GooglePlaces
         len(api_key),
         api_key[-4:] if api_key else None,
     )
-    candidates = await fetch_places_missing_address(db, payload.limit)
+    candidates = await fetch_enrichment_candidates(db, payload.limit)
     updates: list[UpdateOne] = []
     for doc in candidates:
         place_id = doc.get("gmaps_place_id")
