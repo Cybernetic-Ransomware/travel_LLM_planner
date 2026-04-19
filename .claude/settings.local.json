@@ -6,9 +6,13 @@
       "Bash(just lint:*)",
       "Bash(just test:*)",
       "Bash(python3 -m py_compile src/orchestrator/tools.py src/orchestrator/graph.py src/orchestrator/manager.py src/orchestrator/router.py src/config/lifespan.py)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "mcp__svelte__svelte-autofixer"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "travel-planner"
   ],
@@ -36,6 +40,5 @@
       }
     ]
   },
-  "outputStyle": "Explanatory",
-  "enableAllProjectMcpServers": true
+  "outputStyle": "Explanatory"
 }

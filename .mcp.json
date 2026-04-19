@@ -7,8 +7,8 @@
     },
     "svelte": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@sveltejs/mcp"],
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@sveltejs/mcp"],
       "cwd": "apps/frontend"
     }
   }

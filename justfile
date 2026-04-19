@@ -43,3 +43,7 @@ test:
 # Run integration tests — requires Docker Desktop running
 test-integration:
     uv run pytest -m integration
+
+# Start SvelteKit frontend dev server
+dev-frontend:
+    npm run dev --prefix apps/frontend
