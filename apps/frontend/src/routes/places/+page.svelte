@@ -69,8 +69,8 @@
 		<Toast message={places.error} variant="error" onclose={() => (places.error = null)} />
 	{/if}
 
-	<div class="flex min-h-0 flex-1 gap-4">
-		<div class="{showMap ? 'w-3/5' : 'w-full'} min-h-0 overflow-auto">
+	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+		<div class="{showMap ? 'md:w-3/5' : 'w-full'} min-h-0 overflow-auto">
 			<PlaceTable
 				places={places.filtered}
 				onpatch={(id, patch) => places.patch(id, patch)}
@@ -79,7 +79,7 @@
 		</div>
 
 		{#if showMap}
-			<div class="w-2/5 min-h-64 isolate overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+			<div class="h-64 md:h-auto md:w-2/5 isolate overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
 				{#if LeafletMap}
 					<LeafletMap places={places.filtered} />
 				{:else}

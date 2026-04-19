@@ -52,8 +52,8 @@
 		<Toast message={error} variant="error" onclose={() => (error = null)} />
 	{/if}
 
-	<div class="flex min-h-0 flex-1 gap-4">
-		<div class="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto">
+	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+		<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-80 md:shrink-0">
 			<TripForm places={places.filtered} {loading} onsubmit={handleSubmit} />
 
 			{#if result}
@@ -79,7 +79,7 @@
 			{/if}
 		</div>
 
-		<div class="min-h-64 flex-1 isolate overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+		<div class="h-64 flex-1 isolate overflow-hidden rounded-lg border border-zinc-200 md:h-auto dark:border-zinc-800">
 			{#if LeafletMap}
 				<LeafletMap places={result ? [] : places.filtered} steps={allSteps} />
 			{:else}

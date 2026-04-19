@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { getLocale, setLocale, locales } from '$lib/paraglide/runtime';
 
-	let currentLocale = $state(getLocale());
+	type Locale = (typeof locales)[number];
+
+	let currentLocale = $state<Locale>(getLocale());
 	const activeIndex = $derived(locales.indexOf(currentLocale));
 
-	function switchLocale(locale: string) {
+	function switchLocale(locale: Locale) {
 		setLocale(locale);
 		currentLocale = locale;
 	}
@@ -17,7 +19,7 @@
 	></div>
 	{#each locales as locale (locale)}
 		<button
-			onclick={() => switchLocale(locale)}
+			onclick={() => switchLocale(locale as Locale)}
 			class="relative z-10 flex-1 rounded px-2 py-0.5 text-xs font-semibold transition-colors {currentLocale === locale
 				? 'text-white dark:text-zinc-900'
 				: 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'}"

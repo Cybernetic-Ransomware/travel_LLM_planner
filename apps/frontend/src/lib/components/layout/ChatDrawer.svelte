@@ -7,7 +7,7 @@
 
 {#if open}
 	<div
-		class="fixed inset-y-0 right-0 z-40 flex w-96 flex-col border-l border-zinc-200 bg-white shadow-xl"
+		class="fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-zinc-200 bg-white shadow-xl sm:w-96 dark:border-zinc-800 dark:bg-zinc-900"
 	>
 		<div class="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 px-4">
 			<span class="text-sm font-semibold text-zinc-900">{m.nav_chat()}</span>
