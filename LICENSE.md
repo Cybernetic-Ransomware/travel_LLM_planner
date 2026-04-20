@@ -1,0 +1,27 @@
+European Union Public License v. 1.2
+
+Copyright (c) 2026-present Aleksander Marszałkiewicz
+
+This work is licensed under the European Union Public License v. 1.2.
+
+You may obtain a copy of the License at:
+https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+
+---
+
+## Notice
+
+This project uses external APIs:
+- Google Places API
+- Google Routes API
+
+This software may contain components licensed under third-party licenses.
+
+---
+
+## Additional Information
+
+SPDX-License-Identifier: EUPL-1.2
+
+Maintainer: Aleksander Marszałkiewicz
+Repository: [https://github.com/Cybernetic-Ransomware/travel_LLM_planner/]
