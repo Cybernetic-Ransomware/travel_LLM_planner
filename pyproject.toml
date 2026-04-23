@@ -56,6 +56,9 @@ filterwarnings = [
     "ignore:The wait_for_logs function:DeprecationWarning:testcontainers",
 ]
 
+[tool.coverage.run]
+data_file = "tests/result/.coverage"
+
 [tool.ruff]
 extend-exclude = []
 line-length = 124

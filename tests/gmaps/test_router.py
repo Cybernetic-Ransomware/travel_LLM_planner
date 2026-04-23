@@ -1,5 +1,6 @@
 """Integration tests for gmaps REST endpoints — require MongoDB testcontainer."""
 
+import pendulum
 import pytest
 from bson import ObjectId
 from pytest_httpx import HTTPXMock
@@ -177,3 +178,21 @@ class TestEnrichPlaces:
         doc = await test_db[GMAPS_COLLECTION].find_one({"name": "Wawel Castle"})
         assert doc["address"] == "Wawel 5, 31-001 Kraków"
         assert doc.get("opening_hours") is None
+
+
+@pytest.mark.integration
+class TestEnrichBackoff:
+    async def test_backoff_excluded_place_not_scanned(self, test_db, client):
+        now = pendulum.now("UTC")
+        await test_db[GMAPS_COLLECTION].insert_one({
+            "name": "Failed",
+            "gmaps_place_id": "ChIfailed",
+            "address": None,
+            "enriched_at": now.subtract(hours=1),
+            "details_status": "NOT_FOUND",
+            "lat": 52.0,
+            "lng": 21.0,
+        })
+        response = await client.post("/api/v1/core/gmaps/enrich", json={"limit": 10})
+        assert response.status_code == 200
+        assert response.json()["scanned"] == 0

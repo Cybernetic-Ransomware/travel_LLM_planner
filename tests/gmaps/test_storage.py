@@ -1,11 +1,18 @@
 """Integration tests for gmaps storage functions — require MongoDB testcontainer."""
 
 import pytest
+import pendulum
 from bson import ObjectId
 
 from src.core.db.manager import GMAPS_COLLECTION
 from src.gmaps.models import PlacePatch
-from src.gmaps.storage import delete_place, fetch_place_by_id, fetch_places, find_and_update_place
+from src.gmaps.storage import (
+    delete_place,
+    fetch_enrichment_candidates,
+    fetch_place_by_id,
+    fetch_places,
+    find_and_update_place,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -132,3 +139,107 @@ class TestDeletePlace:
     async def test_invalid_id_returns_false(self, test_db):
         deleted = await delete_place(test_db, "bad-id")
         assert deleted is False
+
+
+@pytest.mark.integration
+class TestFetchEnrichmentCandidates:
+    async def test_empty_collection(self, test_db):
+        result = await fetch_enrichment_candidates(test_db, limit=10)
+        assert result == []
+
+    async def test_never_attempted_returned_before_stale(self, test_db):
+        now = pendulum.now("UTC")
+        await test_db[GMAPS_COLLECTION].insert_many([
+            {
+                "name": "Stale", "gmaps_place_id": "ChIStale", "address": None,
+                "enriched_at": now.subtract(hours=48), "details_status": "OK",
+            },
+            {
+                "name": "Fresh", "gmaps_place_id": "ChIFresh", "address": None,
+                "enriched_at": None, "details_status": None,
+            },
+        ])
+        result = await fetch_enrichment_candidates(test_db, limit=2)
+        assert len(result) == 2
+        assert result[0]["name"] == "Fresh"
+        assert result[1]["name"] == "Stale"
+
+    async def test_recent_failure_excluded(self, test_db):
+        now = pendulum.now("UTC")
+        await test_db[GMAPS_COLLECTION].insert_many([
+            {
+                "name": "A", "gmaps_place_id": "ChIA", "address": None,
+                "enriched_at": now.subtract(hours=1), "details_status": "NOT_FOUND",
+            },
+            {
+                "name": "B", "gmaps_place_id": "ChIB", "address": None,
+                "enriched_at": now.subtract(hours=1), "details_status": "HTTP_404",
+            },
+        ])
+        result = await fetch_enrichment_candidates(test_db, limit=10)
+        assert result == []
+
+    async def test_backoff_expires_after_24h(self, test_db):
+        now = pendulum.now("UTC")
+        await test_db[GMAPS_COLLECTION].insert_one({
+            "name": "OldFail", "gmaps_place_id": "ChIOld", "address": None,
+            "enriched_at": now.subtract(hours=25), "details_status": "NOT_FOUND",
+        })
+        result = await fetch_enrichment_candidates(test_db, limit=10)
+        assert len(result) == 1
+
+    async def test_recent_ok_not_excluded(self, test_db):
+        now = pendulum.now("UTC")
+        await test_db[GMAPS_COLLECTION].insert_one({
+            "name": "OkPlace", "gmaps_place_id": "ChIOk", "address": None,
+            "enriched_at": now.subtract(hours=1), "details_status": "OK",
+        })
+        result = await fetch_enrichment_candidates(test_db, limit=10)
+        assert len(result) == 1
+
+    async def test_tier1_sorted_by_enriched_at_asc(self, test_db):
+        now = pendulum.now("UTC")
+        await test_db[GMAPS_COLLECTION].insert_many([
+            {
+                "name": "C", "gmaps_place_id": "ChIC", "address": None,
+                "enriched_at": now.subtract(hours=36), "details_status": "NOT_FOUND",
+            },
+            {
+                "name": "A", "gmaps_place_id": "ChIA", "address": None,
+                "enriched_at": now.subtract(hours=72), "details_status": "NOT_FOUND",
+            },
+            {
+                "name": "B", "gmaps_place_id": "ChIB", "address": None,
+                "enriched_at": now.subtract(hours=48), "details_status": "NOT_FOUND",
+            },
+        ])
+        result = await fetch_enrichment_candidates(test_db, limit=3)
+        assert [r["name"] for r in result] == ["A", "B", "C"]
+
+    async def test_places_with_address_excluded(self, test_db):
+        await test_db[GMAPS_COLLECTION].insert_many([
+            {"name": "HasAddress", "gmaps_place_id": "ChIHas", "address": "ul. Testowa 1",
+             "enriched_at": None},
+            {"name": "NoAddress", "gmaps_place_id": "ChINo", "address": None,
+             "enriched_at": None},
+        ])
+        result = await fetch_enrichment_candidates(test_db, limit=10)
+        assert len(result) == 1
+        assert result[0]["name"] == "NoAddress"
+
+    async def test_null_place_id_excluded(self, test_db):
+        await test_db[GMAPS_COLLECTION].insert_many([
+            {"name": "NullId", "gmaps_place_id": None, "address": None, "enriched_at": None},
+            {"name": "HasId", "gmaps_place_id": "ChIHas", "address": None, "enriched_at": None},
+        ])
+        result = await fetch_enrichment_candidates(test_db, limit=10)
+        assert len(result) == 1
+        assert result[0]["name"] == "HasId"
+
+    async def test_limit_respected(self, test_db):
+        await test_db[GMAPS_COLLECTION].insert_many([
+            {"name": f"P{i}", "gmaps_place_id": f"ChI{i}", "address": None, "enriched_at": None}
+            for i in range(5)
+        ])
+        result = await fetch_enrichment_candidates(test_db, limit=3)
+        assert len(result) == 3
