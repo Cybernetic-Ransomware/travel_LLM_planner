@@ -5,6 +5,7 @@ import pytest
 from src.core.exceptions import EndpointUnexpectedException, EndpointUnimplementedException, ErrorResponse
 
 
+@pytest.mark.unit
 class TestErrorResponse:
     def test_model_fields(self):
         response = ErrorResponse(status_code=404, error="Not Found", detail="Resource missing")
@@ -19,6 +20,7 @@ class TestErrorResponse:
         assert data["status_code"] == 500
 
 
+@pytest.mark.unit
 class TestEndpointUnimplementedException:
     def test_status_code(self):
         exc = EndpointUnimplementedException()
@@ -33,6 +35,7 @@ class TestEndpointUnimplementedException:
         assert exc.detail == "Endpoint not implemented: "
 
 
+@pytest.mark.unit
 class TestEndpointUnexpectedException:
     def test_status_code(self):
         exc = EndpointUnexpectedException()

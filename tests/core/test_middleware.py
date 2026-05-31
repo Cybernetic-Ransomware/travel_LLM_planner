@@ -56,6 +56,7 @@ async def client():
         yield ac
 
 
+@pytest.mark.unit
 class TestHTTPExceptionHandler:
     async def test_404_format(self, client):
         response = await client.get("/http-error")
@@ -82,6 +83,7 @@ class TestHTTPExceptionHandler:
         assert "something went wrong" in data["detail"]
 
 
+@pytest.mark.unit
 class TestValidationHandler:
     async def test_422_format(self, client):
         response = await client.post("/validation", json={"value": "not-an-int"})
@@ -99,6 +101,7 @@ class TestValidationHandler:
         assert response.json()["status_code"] == 422
 
 
+@pytest.mark.unit
 class TestMiddlewareCatchAll:
     async def test_unhandled_returns_500(self, client):
         response = await client.get("/unhandled")
