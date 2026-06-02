@@ -1,3 +1,5 @@
+import { authHeaders } from '$lib/auth/token.js';
+
 const API_BASE = '/api/proxy';
 
 export class ApiError extends Error {
@@ -26,6 +28,7 @@ export async function apiFetch<T>(path: string, options: FetchOptions = {}): Pro
 			signal: controller.signal,
 			headers: {
 				'Content-Type': 'application/json',
+				...authHeaders(),
 				...init.headers
 			}
 		});

@@ -52,8 +52,8 @@ The implementation resides in `src/orchestrator/checkpointer.py` and stores chec
 
 ### Challenges & Mitigation
 - **Maintenance burden**: unlike the official package, this implementation must be manually updated if `BaseCheckpointSaver` adds required abstract methods in a future LangGraph release. Mitigated by the minimal interface surface and comprehensive test coverage.
-- **Missing MongoDB index**: the `orchestrator_checkpoints` collection currently has no indexes. Queries will perform full collection scans at scale. Mitigated in the short term by the low volume of checkpoints per deployment; a compound index on `(thread_id, checkpoint_id)` should be added to `MongoDBManager.connect()` before going to production.
-- **No checkpoint TTL**: old conversations accumulate indefinitely. A TTL index or a periodic cleanup task should be added before production deployment.
+- **MongoDB index** ✅ resolved: `MongoDBManager._create_indexes` (`src/core/db/manager.py`) now creates a compound index `(thread_id, 1), (checkpoint_id, -1)` named `checkpoint_lookup` that exactly matches the `find_one({"thread_id": ...}, sort=[("checkpoint_id", -1)])` query pattern. Lookup is O(log n) instead of a full collection scan.
+- **Checkpoint TTL** ✅ resolved: `aput` writes an `expires_at` field (UTC datetime = now + `retention_days`, default 30 days). `_create_indexes` adds a TTL index on `expires_at` with `expireAfterSeconds=0` so MongoDB deletes documents automatically at the stored time. `retention_days` is configurable via `CHECKPOINT_TTL_DAYS` env var (default 30). Documents created before this change (no `expires_at` field) are not deleted by the TTL index.
 
 ## Status
-`Accepted` — effective from branch `feature/langgraph-orchestrator`. Supersedes the use of `MemorySaver` as a fallback.
+`Accepted` — effective from branch `feature/langgraph-orchestrator`. Supersedes the use of `MemorySaver` as a fallback. Index and TTL added in production-hardening PR (roadmap A2).

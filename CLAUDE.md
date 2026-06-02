@@ -30,9 +30,9 @@ All common workflows are defined in **`justfile`** (PowerShell shell). Use `just
 | `just lint`        | ruff format + ruff check + ty check + codespell    |
 | `just test`        | unit + regression tests (no Docker required)       |
 | `just test-integration` | integration tests (requires Docker Desktop)   |
-| `just up`          | build and start full Docker stack (app + mongo)    |
-| `just down`        | stop and remove containers                         |
-| `just logs`        | stream app container logs                          |
+| `just docker-up`   | build and start full Docker stack (app + mongo)    |
+| `just docker-down` | stop and remove containers                         |
+| `just docker-logs` | stream app container logs                          |
 | `just panel`       | start Streamlit location management panel          |
 | `just commit`      | run pre-commit on staged files, then Commitizen    |
 | `just bump`        | bump version on release branches                   |
@@ -50,9 +50,10 @@ Tests are organized by marker:
 - `regression` — end-to-end happy-path checks
 
 Coverage is measured by `pytest-cov` and reported automatically on every run.
-HTML report is written to `tests/result/html/`. Known uncovered areas: `src/panel/`
-(Streamlit UI, no automated tests) and `src/gmaps/scraper.py` (Playwright, requires
-a real browser). These are intentional gaps, not regressions.
+HTML report is written to `tests/result/html/`. Known uncovered areas: `src/panel/app.py`
+(Streamlit UI — `api_client.py` and `chat_client.py` have tests in `tests/panel/`) and
+`src/gmaps/scraper.py` (Playwright, requires a real browser). These are intentional gaps,
+not regressions.
 
 ### Test conventions
 
@@ -112,9 +113,9 @@ Configured in `pyproject.toml`, enforced via pre-commit and `just lint`:
 Files live in `docker/`. Copy `.env.template` to `.env` and fill in secrets before running.
 
 ```bash
-just up      # docker compose up --build -d
-just down    # docker compose down
-just logs    # docker compose logs -f app
+just docker-up      # docker compose up --build -d
+just docker-down    # docker compose down
+just docker-logs    # docker compose logs -f app
 ```
 
 Services:
@@ -152,6 +153,7 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 10 | Accepted | LLM tool pattern — closure factory, RunnableConfig scope guard, conditional interrupt |
 | 11 | Accepted | Svelte 5 + SvelteKit as frontend framework (runes mode, Tailwind v4, Paraglide) |
 | 12 | Accepted | Frontend co-location — `apps/frontend/` alongside root `src/` |
+| 13 | Accepted | JWT RS256 authentication via authlib — `get_current_user` dependency, AUTH_ENABLED flag |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.
 

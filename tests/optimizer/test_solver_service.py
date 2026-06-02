@@ -104,6 +104,52 @@ class TestParseTimeWindow:
         tw = _parse_time_window(doc, _9H, _21H, 1)
         assert tw is None
 
+    def test_split_hours_two_periods_produces_two_segments(self):
+        """Two disjoint periods on the same day → two segments in the TimeWindow."""
+        doc = {
+            "opening_hours": {
+                "periods": [
+                    {"open": {"day": 1, "hour": 9, "minute": 0}, "close": {"day": 1, "hour": 13, "minute": 0}},
+                    {"open": {"day": 1, "hour": 15, "minute": 0}, "close": {"day": 1, "hour": 18, "minute": 0}},
+                ]
+            }
+        }
+        tw = _parse_time_window(doc, _9H, _21H, 1)
+        assert tw is not None
+        assert len(tw.segments) == 2
+        assert tw.segments[0] == (9 * 3600, 13 * 3600)
+        assert tw.segments[1] == (15 * 3600, 18 * 3600)
+
+    def test_single_continuous_period_produces_one_segment(self):
+        """One period → single segment; backward-compatible behaviour."""
+        doc = {
+            "opening_hours": {
+                "periods": [{"open": {"day": 2, "hour": 10, "minute": 0}, "close": {"day": 2, "hour": 19, "minute": 0}}]
+            }
+        }
+        tw = _parse_time_window(doc, _9H, _21H, 2)
+        assert tw is not None
+        assert len(tw.segments) == 1
+        assert tw.open_s == 10 * 3600
+        assert tw.close_s == 19 * 3600
+
+    def test_split_hours_one_segment_outside_day_bounds_is_dropped(self):
+        """If one period falls outside day bounds after intersection, only valid ones survive."""
+        doc = {
+            "opening_hours": {
+                "periods": [
+                    # period 1: 06:00–08:00 → before day_start 09:00 → intersection empty → dropped
+                    {"open": {"day": 1, "hour": 6, "minute": 0}, "close": {"day": 1, "hour": 8, "minute": 0}},
+                    # period 2: 10:00–18:00 → valid
+                    {"open": {"day": 1, "hour": 10, "minute": 0}, "close": {"day": 1, "hour": 18, "minute": 0}},
+                ]
+            }
+        }
+        tw = _parse_time_window(doc, _9H, _21H, 1)
+        assert tw is not None
+        assert len(tw.segments) == 1
+        assert tw.open_s == 10 * 3600
+
 
 @pytest.mark.unit
 async def test_optimize_skips_places_without_coordinates(test_db, google_routes_manager):
@@ -246,3 +292,81 @@ async def test_optimize_past_departure_time_clamped_to_now(test_db, google_route
     departure_time = mock_get_matrix.call_args[0][4]
     assert departure_time is not None
     assert departure_time >= before_call
+
+
+@pytest.mark.regression
+async def test_split_hours_no_visit_scheduled_in_break(test_db, google_routes_manager):
+    """Regression: a place with a lunch break must not receive a visit during that break.
+
+    Place 'p2' is open 09:00–13:00 and 15:00–18:00.  The solver must schedule the
+    visit either before 13:00 or after 15:00, never between 13:00 and 15:00.
+    """
+    from src.optimizer.solver.models import TimeWindow  # noqa: PLC0415
+
+    _13H = 13 * 3600
+    _15H = 15 * 3600
+
+    docs = [
+        _place("p1", visit_min=30),  # no split hours
+        _place("p2", visit_min=30, opening_hours={
+            "periods": [
+                {"open": {"day": 1, "hour": 9, "minute": 0}, "close": {"day": 1, "hour": 13, "minute": 0}},
+                {"open": {"day": 1, "hour": 15, "minute": 0}, "close": {"day": 1, "hour": 18, "minute": 0}},
+            ]
+        }),
+    ]
+    matrix = _make_matrix(("p1", "p2", 600), ("p2", "p1", 600))
+
+    with (
+        patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+        patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+    ):
+        request = OptimizeRequest(
+            place_ids=["p1", "p2"],
+            transport_mode=TransportMode.WALK,
+            departure_date=date(2026, 1, 5),  # Monday
+        )
+        result = await optimize_route(test_db, google_routes_manager, request)
+
+    p2_steps = [s for s in result.steps if s.place_id == "p2"]
+    assert p2_steps, "p2 should be included in the route"
+    p2_step = p2_steps[0]
+    arrival_s = p2_step.arrival_time.hour * 3600 + p2_step.arrival_time.minute * 60
+    departure_s = p2_step.departure_time.hour * 3600 + p2_step.departure_time.minute * 60
+    visit_start_s = departure_s - p2_step.visit_duration_min * 60
+    assert not (_13H < visit_start_s < _15H), (
+        f"Visit started at {visit_start_s // 3600:02d}:{(visit_start_s % 3600) // 60:02d} — inside the break window"
+    )
+
+
+@pytest.mark.unit
+async def test_optimize_skip_reason_matrix_incomplete(test_db, google_routes_manager):
+    """A place with some but not all matrix edges should be reported as MATRIX_INCOMPLETE.
+
+    p3 has a 60-min window (20:00–21:00) but a 90-min visit, so no start time fits —
+    nearest_neighbor puts it in solver_skipped.  Matrix has one edge for p3 (p1→p3)
+    but not both (p3→p1 and p2→p3 are absent), so actual_edges=1 < expected=2.
+    """
+    docs = [
+        _place("p1"),
+        _place("p2"),
+        # p3: window too tight for the visit → solver skips it
+        _place("p3", visit_min=90, preferred_hour_from=20, preferred_hour_to=21),
+    ]
+    # p3 has exactly one edge (p1→p3) out of two expected — partial coverage
+    matrix = _make_matrix(
+        ("p1", "p2", 600),
+        ("p2", "p1", 600),
+        ("p1", "p3", 600),  # one direction for p3; p3→p1 and p2↔p3 absent
+    )
+
+    with (
+        patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+        patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+    ):
+        request = OptimizeRequest(place_ids=["p1", "p2", "p3"], transport_mode=TransportMode.WALK)
+        result = await optimize_route(test_db, google_routes_manager, request)
+
+    p3_skips = [s for s in result.skipped if s.place_id == "p3"]
+    assert p3_skips, "p3 should be in skipped"
+    assert p3_skips[0].reason == "MATRIX_INCOMPLETE"

@@ -49,25 +49,36 @@ def _parse_time_window(
         opening_hours = doc.get("opening_hours")
         periods: list[dict] = (opening_hours or {}).get("periods", [])
         if periods:
-            day_period = next((p for p in periods if p.get("open", {}).get("day") == google_weekday), None)
-            if day_period is None:
+            day_periods = [p for p in periods if p.get("open", {}).get("day") == google_weekday]
+            if not day_periods:
                 return None  # closed on this day of week
 
-            oh_open = day_period["open"]
-            oh_open_s = oh_open.get("hour", 0) * 3600 + oh_open.get("minute", 0) * 60
-            oh_close_data = day_period.get("close")
-            if oh_close_data is not None:
-                close_day = oh_close_data.get("day")
-                open_day = oh_open.get("day")
-                if close_day is not None and open_day is not None and close_day != open_day:
-                    # Closes past midnight — treat as open until end of planning day
-                    oh_close_s = 24 * 3600
+            segments: list[tuple[int, int]] = []
+            for day_period in day_periods:
+                oh_open = day_period["open"]
+                oh_open_s = oh_open.get("hour", 0) * 3600 + oh_open.get("minute", 0) * 60
+                oh_close_data = day_period.get("close")
+                if oh_close_data is not None:
+                    close_day = oh_close_data.get("day")
+                    open_day = oh_open.get("day")
+                    if close_day is not None and open_day is not None and close_day != open_day:
+                        # Closes past midnight — treat as open until end of planning day
+                        oh_close_s = 24 * 3600
+                    else:
+                        oh_close_s = oh_close_data.get("hour", 0) * 3600 + oh_close_data.get("minute", 0) * 60
+                    seg_open = max(open_s, oh_open_s)
+                    seg_close = min(close_s, oh_close_s)
                 else:
-                    oh_close_s = oh_close_data.get("hour", 0) * 3600 + oh_close_data.get("minute", 0) * 60
-                open_s = max(open_s, oh_open_s)
-                close_s = min(close_s, oh_close_s)
-            else:
-                open_s = max(open_s, oh_open_s)
+                    seg_open = max(open_s, oh_open_s)
+                    seg_close = close_s
+
+                if seg_close > seg_open:
+                    segments.append((seg_open, seg_close))
+
+            if not segments:
+                return None
+
+            return TimeWindow.from_segments(segments)
 
     if close_s <= open_s:
         return None
@@ -172,13 +183,19 @@ async def optimize_route(
     route, solver_skipped = nearest_neighbor(node_ids, matrix, time_windows, visit_durations_s, day_start_s, day_end_s)
     route = two_opt(route, matrix, time_windows, visit_durations_s, day_start_s, day_end_s)
 
+    expected_edges = len(node_ids) - 1
     for place_id in solver_skipped:
-        has_any_entry = any(
-            matrix.get(place_id, other) is not None or matrix.get(other, place_id) is not None
+        actual_edges = sum(
+            1
             for other in node_ids
-            if other != place_id
+            if other != place_id and (matrix.get(place_id, other) is not None or matrix.get(other, place_id) is not None)
         )
-        reason = "TIME_WINDOW_INFEASIBLE" if has_any_entry else "NO_MATRIX_ENTRY"
+        if actual_edges == 0:
+            reason = "NO_MATRIX_ENTRY"
+        elif actual_edges < expected_edges:
+            reason = "MATRIX_INCOMPLETE"
+        else:
+            reason = "TIME_WINDOW_INFEASIBLE"
         skipped.append(SkippedPlace(place_id=place_id, name=doc_map[place_id].get("name"), reason=reason))
 
     schedule = schedule_route(route, matrix, time_windows, visit_durations_s, day_start_s)
@@ -190,8 +207,8 @@ async def optimize_route(
 
     for place_id, arrival_s, departure_s, travel_s in schedule:
         doc = doc_map[place_id]
-        wait_s = max(0, time_windows[place_id].open_s - arrival_s)
         visit_s = visit_durations_s[place_id]
+        wait_s = max(0, departure_s - visit_s - arrival_s)
 
         steps.append(
             RouteStep(

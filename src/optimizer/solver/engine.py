@@ -32,19 +32,22 @@ def schedule_route(
         if idx > 0:
             prev = route[idx - 1]
             entry = matrix.get(prev, node)
-            travel_s = entry.duration_s if entry is not None else _LARGE
+            if entry is None:
+                return []  # no connection between consecutive nodes
+            travel_s = entry.duration_s
 
         arrival_s = current_s + travel_s
         tw = time_windows.get(node)
-        open_s = tw.open_s if tw is not None else day_start_s
-        close_s = tw.close_s if tw is not None else _LARGE
-
-        if arrival_s > close_s:
-            return []  # infeasible — caller must handle
-
-        effective_start_s = max(arrival_s, open_s)
         visit_s = visit_durations_s.get(node, 0)
-        departure_s = effective_start_s + visit_s
+
+        if tw is not None:
+            start_s = tw.earliest_start(arrival_s, visit_s)
+            if start_s is None:
+                return []  # infeasible — caller must handle
+        else:
+            start_s = max(arrival_s, day_start_s)
+
+        departure_s = start_s + visit_s
 
         result.append((node, arrival_s, departure_s, travel_s))
         current_s = departure_s
@@ -154,10 +157,15 @@ def _nn_from_start(
             arrival = current_s + travel
 
             tw = time_windows.get(candidate)
-            close_s = tw.close_s if tw is not None else day_end_s
-
-            if arrival > close_s:
-                continue
+            visit_s_cand = visit_durations_s.get(candidate, 0)
+            if tw is not None:
+                if tw.earliest_start(arrival, visit_s_cand) is None:
+                    continue
+                close_s = tw.close_s  # last deadline, used for EDF ordering
+            else:
+                if arrival > day_end_s:
+                    continue
+                close_s = day_end_s
 
             if close_s < best_close or (close_s == best_close and travel < best_travel):
                 best_close = close_s
@@ -167,11 +175,16 @@ def _nn_from_start(
         if best_node is None:
             break
 
-        tw = time_windows.get(best_node)
-        open_s = tw.open_s if tw is not None else day_start_s
         arrival = current_s + best_travel
-        effective_start = max(arrival, open_s)
-        next_departure = effective_start + visit_durations_s.get(best_node, 0)
+        visit_s_node = visit_durations_s.get(best_node, 0)
+        tw = time_windows.get(best_node)
+        if tw is not None:
+            effective_start = tw.earliest_start(arrival, visit_s_node)
+            if effective_start is None:
+                break
+        else:
+            effective_start = max(arrival, day_start_s)
+        next_departure = effective_start + visit_s_node
 
         if next_departure > day_end_s:
             break

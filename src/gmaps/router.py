@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pymongo import UpdateOne
 
 from src.config.conf_logger import setup_logger
+from src.core.auth import CurrentUserDep
 from src.core.db.deps import MongoDbDep
 from src.gmaps.deps import GooglePlacesDep
 from src.gmaps.models import (
@@ -31,7 +32,7 @@ logger = setup_logger(__name__, "gmaps_enrich")
 
 
 @router.post("/import", response_model=ImportResponse)
-async def import_public_list(payload: ImportRequest, db: MongoDbDep) -> ImportResponse:
+async def import_public_list(payload: ImportRequest, db: MongoDbDep, _user: CurrentUserDep) -> ImportResponse:
     scraped_at = pendulum.now("UTC")
     places, list_name = await scrape_public_list(str(payload.list_url))
     upserted = await upsert_places(
@@ -48,7 +49,9 @@ async def import_public_list(payload: ImportRequest, db: MongoDbDep) -> ImportRe
 
 
 @router.post("/enrich", response_model=EnrichResponse)
-async def enrich_places(payload: EnrichRequest, db: MongoDbDep, gp: GooglePlacesDep) -> EnrichResponse:
+async def enrich_places(
+    payload: EnrichRequest, db: MongoDbDep, gp: GooglePlacesDep, _user: CurrentUserDep
+) -> EnrichResponse:
     api_key = gp.api_key
     logger.info(
         "Enrich start: key_present=%s key_len=%s key_last4=%s",
@@ -127,7 +130,7 @@ async def get_place(place_id: str, db: MongoDbDep) -> PlaceOut:
 
 
 @router.patch("/places/{place_id}", response_model=PlaceOut)
-async def patch_place(place_id: str, payload: PlacePatch, db: MongoDbDep) -> PlaceOut:
+async def patch_place(place_id: str, payload: PlacePatch, db: MongoDbDep, _user: CurrentUserDep) -> PlaceOut:
     """Update scheduling preferences for a place."""
     doc = await find_and_update_place(db, place_id, payload)
     if doc is None:
@@ -136,7 +139,7 @@ async def patch_place(place_id: str, payload: PlacePatch, db: MongoDbDep) -> Pla
 
 
 @router.delete("/places/{place_id}", status_code=204)
-async def remove_place(place_id: str, db: MongoDbDep) -> None:
+async def remove_place(place_id: str, db: MongoDbDep, _user: CurrentUserDep) -> None:
     """Delete a place by its MongoDB ObjectId."""
     deleted = await delete_place(db, place_id)
     if not deleted:

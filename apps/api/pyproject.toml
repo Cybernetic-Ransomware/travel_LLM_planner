@@ -1,0 +1,6 @@
+[project]
+name = "travel-planner-api"
+version = "0.1.0"
+description = "Future home of the FastAPI backend (currently in src/ at the workspace root)"
+requires-python = ">=3.14"
+dependencies = []

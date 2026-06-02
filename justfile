@@ -21,15 +21,15 @@ lint:
     uv run python -m codespell_lib src/
 
 # Start full Docker stack (app + mongo) with rebuild
-up:
+docker-up:
     docker-compose -f docker/docker-compose.yml up --build -d
 
 # Stop and remove Docker stack containers
-down:
+docker-down:
     docker-compose -f docker/docker-compose.yml down
 
 # Stream Docker app logs
-logs:
+docker-logs:
     docker-compose -f docker/docker-compose.yml logs -f app
 
 # Start Streamlit location management panel (requires: just up)
@@ -45,25 +45,25 @@ test-integration:
     uv run pytest -m integration
 
 # Start SvelteKit frontend dev server
-dev-frontend:
+frontend-dev:
     npm --prefix apps/frontend run dev
 
 # Build SvelteKit frontend for production
-build-frontend:
+frontend-build:
     npm --prefix apps/frontend run build
 
 # Run svelte-check type checking on the frontend
-check-frontend:
+frontend-check:
     npm --prefix apps/frontend run check
 
 # Lint and format-check the frontend (prettier + eslint)
-lint-frontend:
+frontend-lint:
     npm --prefix apps/frontend run lint
 
 # Auto-format frontend files with prettier
-format-frontend:
+frontend-format:
     npm --prefix apps/frontend run format
 
 # Run frontend unit tests (vitest)
-test-frontend:
+frontend-test:
     npm --prefix apps/frontend run test
