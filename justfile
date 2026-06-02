@@ -45,25 +45,25 @@ test-integration:
     uv run pytest -m integration
 
 # Start SvelteKit frontend dev server
-dev-frontend:
+frontend-dev:
     npm --prefix apps/frontend run dev
 
 # Build SvelteKit frontend for production
-build-frontend:
+frontend-build:
     npm --prefix apps/frontend run build
 
 # Run svelte-check type checking on the frontend
-check-frontend:
+frontend-check:
     npm --prefix apps/frontend run check
 
 # Lint and format-check the frontend (prettier + eslint)
-lint-frontend:
+frontend-lint:
     npm --prefix apps/frontend run lint
 
 # Auto-format frontend files with prettier
-format-frontend:
+frontend-format:
     npm --prefix apps/frontend run format
 
 # Run frontend unit tests (vitest)
-test-frontend:
+frontend-test:
     npm --prefix apps/frontend run test
