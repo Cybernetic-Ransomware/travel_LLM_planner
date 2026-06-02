@@ -132,3 +132,7 @@ chore = "Chores"
 docs = "Documentation"
 refactor = "Refactors"
 test = "Tests"
+
+[tool.uv.workspace]
+members = ["apps/*"]
+exclude = ["apps/frontend"]
