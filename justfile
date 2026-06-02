@@ -21,15 +21,15 @@ lint:
     uv run python -m codespell_lib src/
 
 # Start full Docker stack (app + mongo) with rebuild
-up:
+docker-up:
     docker-compose -f docker/docker-compose.yml up --build -d
 
 # Stop and remove Docker stack containers
-down:
+docker-down:
     docker-compose -f docker/docker-compose.yml down
 
 # Stream Docker app logs
-logs:
+docker-logs:
     docker-compose -f docker/docker-compose.yml logs -f app
 
 # Start Streamlit location management panel (requires: just up)

@@ -30,9 +30,9 @@ All common workflows are defined in **`justfile`** (PowerShell shell). Use `just
 | `just lint`        | ruff format + ruff check + ty check + codespell    |
 | `just test`        | unit + regression tests (no Docker required)       |
 | `just test-integration` | integration tests (requires Docker Desktop)   |
-| `just up`          | build and start full Docker stack (app + mongo)    |
-| `just down`        | stop and remove containers                         |
-| `just logs`        | stream app container logs                          |
+| `just docker-up`   | build and start full Docker stack (app + mongo)    |
+| `just docker-down` | stop and remove containers                         |
+| `just docker-logs` | stream app container logs                          |
 | `just panel`       | start Streamlit location management panel          |
 | `just commit`      | run pre-commit on staged files, then Commitizen    |
 | `just bump`        | bump version on release branches                   |
@@ -113,9 +113,9 @@ Configured in `pyproject.toml`, enforced via pre-commit and `just lint`:
 Files live in `docker/`. Copy `.env.template` to `.env` and fill in secrets before running.
 
 ```bash
-just up      # docker compose up --build -d
-just down    # docker compose down
-just logs    # docker compose logs -f app
+just docker-up      # docker compose up --build -d
+just docker-down    # docker compose down
+just docker-logs    # docker compose logs -f app
 ```
 
 Services:
