@@ -3,6 +3,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 GMAPS_COLLECTION = "gmaps_places"
 MATRIX_COLLECTION = "distance_matrix_cache"
+CHECKPOINTS_COLLECTION = "orchestrator_checkpoints"
 
 
 class MongoDBManager:
@@ -51,3 +52,10 @@ class MongoDBManager:
             unique=True,
         )
         await matrix.create_index("computed_at")
+
+        checkpoints = db[CHECKPOINTS_COLLECTION]
+        await checkpoints.create_index(
+            [("thread_id", 1), ("checkpoint_id", -1)],
+            name="checkpoint_lookup",
+        )
+        await checkpoints.create_index("expires_at", expireAfterSeconds=0)

@@ -1,11 +1,12 @@
 from collections.abc import Iterator, Sequence
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver, Checkpoint, CheckpointMetadata, CheckpointTuple
 from pymongo.asynchronous.database import AsyncDatabase
 
-CHECKPOINTS_COLLECTION = "orchestrator_checkpoints"
+from src.core.db.manager import CHECKPOINTS_COLLECTION
 
 
 class MongoCheckpointSaver(BaseCheckpointSaver):
@@ -13,11 +14,17 @@ class MongoCheckpointSaver(BaseCheckpointSaver):
 
     Stores LangGraph conversation checkpoints in the ``orchestrator_checkpoints``
     collection, keyed by ``thread_id`` + ``checkpoint_id``.
+
+    Each document receives an ``expires_at`` field (UTC datetime) computed as
+    ``now + retention_days``.  A MongoDB TTL index on ``expires_at`` (with
+    ``expireAfterSeconds=0``) removes documents automatically at that time,
+    bounding collection growth.
     """
 
-    def __init__(self, db: AsyncDatabase) -> None:
+    def __init__(self, db: AsyncDatabase, retention_days: int = 30) -> None:
         super().__init__()
         self._collection = db[CHECKPOINTS_COLLECTION]
+        self._retention_days = retention_days
 
     async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
         """Return the latest checkpoint for the given thread, or None."""
@@ -48,6 +55,7 @@ class MongoCheckpointSaver(BaseCheckpointSaver):
         thread_id = config["configurable"]["thread_id"]
         checkpoint_id = checkpoint["id"]
 
+        expires_at = datetime.now(UTC) + timedelta(days=self._retention_days)
         await self._collection.update_one(
             {"thread_id": thread_id, "checkpoint_id": checkpoint_id},
             {
@@ -56,6 +64,7 @@ class MongoCheckpointSaver(BaseCheckpointSaver):
                     "checkpoint_id": checkpoint_id,
                     "checkpoint": checkpoint,
                     "metadata": metadata,
+                    "expires_at": expires_at,
                 }
             },
             upsert=True,
