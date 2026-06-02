@@ -271,3 +271,102 @@ class TestTwoOpt:
         tw = {n: TimeWindow(open_s=_9H, close_s=_21H) for n in "AB"}
         result = two_opt(["A", "B"], m, tw, {}, _9H, _21H)
         assert result == ["A", "B"]
+
+
+@pytest.mark.unit
+class TestTimeWindowEarliestStart:
+    def test_arrives_before_open_waits(self):
+        tw = TimeWindow(open_s=_9H, close_s=_18H)
+        assert tw.earliest_start(arrival_s=_9H - 3600, visit_s=1800) == _9H
+
+    def test_arrives_at_open_starts_immediately(self):
+        tw = TimeWindow(open_s=_9H, close_s=_18H)
+        assert tw.earliest_start(arrival_s=_9H, visit_s=1800) == _9H
+
+    def test_arrives_mid_window(self):
+        tw = TimeWindow(open_s=_9H, close_s=_18H)
+        start = tw.earliest_start(arrival_s=_9H + 1800, visit_s=1800)
+        assert start == _9H + 1800
+
+    def test_visit_does_not_fit_single_segment(self):
+        tw = TimeWindow(open_s=_9H, close_s=_9H + 1800)
+        assert tw.earliest_start(arrival_s=_9H, visit_s=3600) is None
+
+    def test_arrives_after_close(self):
+        tw = TimeWindow(open_s=_9H, close_s=_18H)
+        assert tw.earliest_start(arrival_s=_18H + 1, visit_s=0) is None
+
+    def test_split_window_arrival_in_break_jumps_to_next_segment(self):
+        _13H = 13 * 3600
+        _15H = 15 * 3600
+        tw = TimeWindow.from_segments([(_9H, _13H), (_15H, _18H)])
+        # arrival during break (13:30) → wait for 15:00
+        assert tw.earliest_start(arrival_s=_13H + 1800, visit_s=1800) == _15H
+
+    def test_split_window_arrival_before_break_fits_in_first_segment(self):
+        _13H = 13 * 3600
+        _15H = 15 * 3600
+        tw = TimeWindow.from_segments([(_9H, _13H), (_15H, _18H)])
+        assert tw.earliest_start(arrival_s=_9H, visit_s=1800) == _9H
+
+    def test_split_window_visit_too_long_for_any_segment(self):
+        _13H = 13 * 3600
+        _15H = 15 * 3600
+        tw = TimeWindow.from_segments([(_9H, _13H), (_15H, _15H + 1800)])
+        # each segment is at most 4 h / 30 min; 5h visit fits in neither
+        assert tw.earliest_start(arrival_s=_9H, visit_s=5 * 3600) is None
+
+    def test_open_s_and_close_s_properties_on_multi_segment(self):
+        _13H = 13 * 3600
+        _15H = 15 * 3600
+        tw = TimeWindow.from_segments([(_9H, _13H), (_15H, _18H)])
+        assert tw.open_s == _9H
+        assert tw.close_s == _18H
+
+
+@pytest.mark.unit
+class TestScheduleRouteSplitHours:
+    def test_arrival_in_break_shifts_departure(self):
+        """Arriving during the break should cause a wait until the next segment."""
+        _13H = 13 * 3600
+        _15H = 15 * 3600
+        m = _matrix(_entry("A", "B", 3600))  # 1 h travel
+        tw = {
+            "A": TimeWindow(open_s=_9H, close_s=_18H),
+            "B": TimeWindow.from_segments([(_9H, _13H), (_15H, _18H)]),
+        }
+        # A departs after 1h visit (9:00 + 1h = 10:00), travels 1h → arrives B at 11:00
+        result = schedule_route(["A", "B"], m, tw, {"A": 3600, "B": 1800}, _9H)
+        assert result  # feasible
+        _, _arr_b, dep_b, _ = result[1]
+        # starts at 11:00 (in first segment), visit 30 min → departs 11:30
+        assert dep_b == 11 * 3600 + 1800
+
+    def test_arrival_in_break_late_shifts_to_afternoon_segment(self):
+        """Arriving after 13:00 break start should defer visit to 15:00."""
+        _13H = 13 * 3600
+        _15H = 15 * 3600
+        m = _matrix(_entry("A", "B", 4 * 3600 + 1800))  # 4h30 travel
+        tw = {
+            "A": TimeWindow(open_s=_9H, close_s=_18H),
+            "B": TimeWindow.from_segments([(_9H, _13H), (_15H, _18H)]),
+        }
+        # A departs at 9:00, travels 4h30 → arrives B at 13:30 (mid-break)
+        result = schedule_route(["A", "B"], m, tw, {"A": 0, "B": 1800}, _9H)
+        assert result
+        _, arr_b, dep_b, _ = result[1]
+        assert arr_b == _9H + 4 * 3600 + 1800  # 13:30
+        assert dep_b == _15H + 1800  # starts at 15:00, visits 30 min
+
+    def test_visit_does_not_fit_in_any_segment_is_infeasible(self):
+        _13H = 13 * 3600
+        _15H = 15 * 3600
+        m = _matrix(_entry("A", "B", 3600))
+        tw = {
+            "A": TimeWindow(open_s=_9H, close_s=_18H),
+            "B": TimeWindow.from_segments([(_9H, _13H), (_15H, _15H + 1800)]),
+        }
+        # visit of 2h does not fit in the 30-min afternoon segment (first fits 4h, so use it)
+        # Let's make visit 5h to exceed both segments
+        result = schedule_route(["A", "B"], m, tw, {"A": 0, "B": 5 * 3600}, _9H)
+        assert result == []

@@ -12,18 +12,64 @@ _TRANSIT_MULTI_DAY_ERROR = (
 
 
 class TimeWindow:
-    """Open/close bounds for a single place, in seconds from midnight."""
+    """Open/close bounds for a place, in seconds from midnight.
 
-    __slots__ = ("open_s", "close_s")
+    Supports multiple non-overlapping segments (e.g. a lunch break splits the day into
+    two valid windows).  The single-argument constructor ``TimeWindow(open_s, close_s)``
+    creates a one-segment window and is fully backward-compatible; use
+    ``TimeWindow.from_segments`` when multiple periods exist.
+    """
+
+    __slots__ = ("_segments",)
 
     def __init__(self, open_s: int, close_s: int) -> None:
-        self.open_s = open_s
-        self.close_s = close_s
+        self._segments: list[tuple[int, int]] = [(open_s, close_s)]
+
+    @classmethod
+    def from_segments(cls, segments: list[tuple[int, int]]) -> TimeWindow:
+        """Create a multi-segment window from a list of (open_s, close_s) pairs.
+
+        Segments must be non-overlapping; they are sorted by open time.
+        """
+        obj = cls.__new__(cls)
+        obj._segments = sorted(segments)
+        return obj
+
+    @property
+    def segments(self) -> list[tuple[int, int]]:
+        """All (open_s, close_s) segments, sorted by open time."""
+        return self._segments
+
+    @property
+    def open_s(self) -> int:
+        """Start of the first segment (used as EDF open in heuristics)."""
+        return self._segments[0][0]
+
+    @property
+    def close_s(self) -> int:
+        """End of the last segment (used as EDF deadline in heuristics)."""
+        return self._segments[-1][1]
+
+    def earliest_start(self, arrival_s: int, visit_s: int) -> int | None:
+        """Return the earliest second the visit can begin, or None if it cannot fit.
+
+        The visit of ``visit_s`` seconds must fit entirely within one segment.
+        Waiting until a segment opens is allowed; arriving mid-break jumps to
+        the next segment automatically.
+        """
+        for seg_open, seg_close in self._segments:
+            start = max(arrival_s, seg_open)
+            if start + visit_s <= seg_close:
+                return start
+        return None
 
     def __repr__(self) -> str:
-        open_h, open_m = self.open_s // 3600, (self.open_s % 3600) // 60
-        close_h, close_m = self.close_s // 3600, (self.close_s % 3600) // 60
-        return f"TimeWindow({open_h:02d}:{open_m:02d}–{close_h:02d}:{close_m:02d})"
+        parts = []
+        for seg_open, seg_close in self._segments:
+            open_h, open_m = seg_open // 3600, (seg_open % 3600) // 60
+            close_h, close_m = seg_close // 3600, (seg_close % 3600) // 60
+            parts.append(f"{open_h:02d}:{open_m:02d}–{close_h:02d}:{close_m:02d}")
+        return f"TimeWindow({', '.join(parts)})"
 
 
 class OptimizeRequest(BaseModel):
@@ -69,7 +115,7 @@ class SkippedPlace(BaseModel):
 
     place_id: str
     name: str | None
-    reason: str  # NO_COORDINATES | TIME_WINDOW_INFEASIBLE | NO_MATRIX_ENTRY
+    reason: str  # NO_COORDINATES | TIME_WINDOW_INFEASIBLE | NO_MATRIX_ENTRY | MATRIX_INCOMPLETE
 
 
 class OptimizeResponse(BaseModel):
