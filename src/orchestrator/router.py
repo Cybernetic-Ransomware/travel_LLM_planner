@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from src.config.conf_logger import setup_logger
+from src.core.auth import CurrentUserDep
 from src.core.db.deps import MongoDbDep
 from src.core.exceptions import OrchestratorUnavailableError
 from src.gmaps import fetch_places_by_ids
@@ -95,7 +96,7 @@ async def _stream_sse_resume(
 
 
 @router.post("/chat")
-async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep) -> StreamingResponse:
+async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep, _user: CurrentUserDep) -> StreamingResponse:
     """Stream a chat response using the LangGraph orchestrator.
 
     Returns Server-Sent Events (text/event-stream). The first event carries

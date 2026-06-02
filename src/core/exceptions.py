@@ -36,3 +36,14 @@ class OrchestratorUnavailableError(HTTPException):
             status_code=503,
             detail=f"Orchestrator not available — configure LLM_PROVIDER and the {provider} API key.",
         )
+
+
+class AuthenticationError(HTTPException):
+    """Raised when the JWT token is missing, malformed, or fails RS256 verification."""
+
+    def __init__(self, detail: str = "Not authenticated") -> None:
+        super().__init__(
+            status_code=401,
+            detail=detail,
+            headers={"WWW-Authenticate": "Bearer"},
+        )

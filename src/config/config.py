@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     langsmith_api_key: str = Field(default="", alias="LANGSMITH_API_KEY")
     langsmith_tracing: bool = Field(default=False, alias="LANGSMITH_TRACING")
     langsmith_project: str = Field(default="travel-planner", alias="LANGSMITH_PROJECT")
+    checkpoint_ttl_days: int = Field(default=30, alias="CHECKPOINT_TTL_DAYS")
+
+    auth_enabled: bool = Field(default=False, alias="AUTH_ENABLED")
+    auth0_domain: str = Field(default="", alias="AUTH0_DOMAIN")
+    auth0_audience: str = Field(default="", alias="AUTH0_AUDIENCE")
+
+    @property
+    def auth0_issuer(self) -> str:
+        return f"https://{self.auth0_domain}/"
+
+    @property
+    def auth_active(self) -> bool:
+        return self.auth_enabled and bool(self.auth0_domain) and bool(self.auth0_audience)
 
     @property
     def logger_level(self) -> int:

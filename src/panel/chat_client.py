@@ -14,6 +14,14 @@ _API_URL = os.getenv("API_URL", "http://localhost:8080").rstrip("/")
 _ORCHESTRATOR_BASE = f"{_API_URL}/api/v1/core/orchestrator"
 
 
+def _auth_headers() -> dict[str, str]:
+    """Return Authorization header when API_TOKEN env var is set, or an empty dict."""
+    token = os.getenv("API_TOKEN", "")
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
+
+
 @dataclass
 class Message:
     role: Literal["user", "assistant"]
@@ -56,7 +64,9 @@ def stream_chat(history: ChatHistory, place_ids: list[str] | None) -> Iterator[s
         "session_id": history.session_id,
         "place_ids": place_ids or [],
     }
-    with httpx.stream("POST", f"{_ORCHESTRATOR_BASE}/chat", json=payload, timeout=60.0) as response:
+    with httpx.stream(
+        "POST", f"{_ORCHESTRATOR_BASE}/chat", json=payload, timeout=60.0, headers=_auth_headers()
+    ) as response:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError:

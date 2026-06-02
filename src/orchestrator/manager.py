@@ -34,6 +34,7 @@ class OrchestratorManager:
         langsmith_project: str,
         db: AsyncDatabase | None = None,
         places_manager: GooglePlacesManager | None = None,
+        checkpoint_ttl_days: int = 30,
     ) -> None:
         self._provider = provider
         self._api_key = api_key
@@ -43,6 +44,7 @@ class OrchestratorManager:
         self._langsmith_project = langsmith_project
         self._db = db
         self._places_manager = places_manager
+        self._checkpoint_ttl_days = checkpoint_ttl_days
         self._llm: BaseChatModel | None = None
         self._graph: CompiledStateGraph | None = None
         self._checkpointer: MongoCheckpointSaver | None = None
@@ -101,7 +103,7 @@ class OrchestratorManager:
         self._llm = self._create_llm()
 
         if self._db is not None:
-            self._checkpointer = MongoCheckpointSaver(self._db)
+            self._checkpointer = MongoCheckpointSaver(self._db, retention_days=self._checkpoint_ttl_days)
             self._graph = build_graph(
                 self._llm,
                 checkpointer=self._checkpointer,

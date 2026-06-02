@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
                     langsmith_project=settings.langsmith_project,
                     db=app.state.db,
                     places_manager=gp_manager,
+                    checkpoint_ttl_days=settings.checkpoint_ttl_days,
                 ) as orch_manager:
                     app.state.orchestrator = orch_manager
                     logger.info(
