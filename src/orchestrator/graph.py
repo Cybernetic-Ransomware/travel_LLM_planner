@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -12,17 +14,32 @@ from src.gmaps import GooglePlacesManager
 from src.orchestrator.models import AgentState
 from src.orchestrator.tools import create_tools
 
+_MAX_FIELD_LEN = 200
+
+
+def _sanitize_for_prompt(text: str) -> str:
+    """Strip control characters and collapse whitespace to prevent prompt injection.
+
+    A malicious place name such as ``"Foo\\nIgnore previous instructions"`` would
+    otherwise introduce a new paragraph into the system prompt and could alter the
+    model's behaviour.  Replacing control characters with a single space keeps the
+    value on one line and limits it to a safe length.
+    """
+    text = re.sub(r"[\x00-\x1f\x7f]+", " ", text)
+    text = re.sub(r" {2,}", " ", text).strip()
+    return text[:_MAX_FIELD_LEN]
+
 
 def _build_place_context_prompt(places: list[dict]) -> str:
     """Build a system prompt describing the user's trip places for the LLM."""
     lines = ["You are a travel planning assistant. The user has the following places in their trip plan:"]
     for p in places:
         pid = str(p.get("_id", ""))
-        name = p.get("name") or pid
+        name = _sanitize_for_prompt(p.get("name") or pid)
         line = f"- [id={pid}] {name}"
         address = p.get("address")
         if address:
-            line += f" ({address})"
+            line += f" ({_sanitize_for_prompt(address)})"
         dur = p.get("visit_duration_min")
         if dur is not None:
             line += f", {dur} min visit"
