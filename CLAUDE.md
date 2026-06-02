@@ -50,9 +50,10 @@ Tests are organized by marker:
 - `regression` — end-to-end happy-path checks
 
 Coverage is measured by `pytest-cov` and reported automatically on every run.
-HTML report is written to `tests/result/html/`. Known uncovered areas: `src/panel/`
-(Streamlit UI, no automated tests) and `src/gmaps/scraper.py` (Playwright, requires
-a real browser). These are intentional gaps, not regressions.
+HTML report is written to `tests/result/html/`. Known uncovered areas: `src/panel/app.py`
+(Streamlit UI — `api_client.py` and `chat_client.py` have tests in `tests/panel/`) and
+`src/gmaps/scraper.py` (Playwright, requires a real browser). These are intentional gaps,
+not regressions.
 
 ### Test conventions
 
@@ -152,6 +153,7 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 10 | Accepted | LLM tool pattern — closure factory, RunnableConfig scope guard, conditional interrupt |
 | 11 | Accepted | Svelte 5 + SvelteKit as frontend framework (runes mode, Tailwind v4, Paraglide) |
 | 12 | Accepted | Frontend co-location — `apps/frontend/` alongside root `src/` |
+| 13 | Accepted | JWT RS256 authentication via authlib — `get_current_user` dependency, AUTH_ENABLED flag |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.
 

@@ -1,6 +1,6 @@
 # Travel Planner — Implementation Review and Roadmap
 
-_Last updated: 2026-06-01_
+_Last updated: 2026-06-02_
 
 ---
 
@@ -25,12 +25,12 @@ Relevance to goal: ★★★ product core · ★★ supporting layer · ★ auxi
 | Place enrichment (Places API New) | `src/gmaps/manager.py`, `router.py` | Complete | ★★★ | `POST /enrich` with place_id resolution and 24 h re-enrichment backoff. |
 | Place storage / CRUD | `src/gmaps/storage.py`, `router.py` | Complete | ★★★ | Bulk upsert, enrichment-candidates aggregation pipeline, `find_one_and_update` (TOCTOU fix — ADR-06). |
 | Distance matrix + cache | `src/optimizer/matrix/` | Complete | ★★★ | Google Routes `computeRouteMatrix`, TTL 7 d / 1 h (TRANSIT), full-coverage guard before solving. |
-| TSP solver (NN + 2-opt, time windows) | `src/optimizer/solver/engine.py`, `service.py` | Complete | ★★★ | **Known bug: split opening hours** (see Part 2, item 4). |
+| TSP solver (NN + 2-opt, time windows) | `src/optimizer/solver/engine.py`, `service.py` | Complete | ★★★ | Split opening hours resolved (B1); `TimeWindow.earliest_start` enforces segment-level placement. |
 | Multi-day trip partitioning | `src/optimizer/solver/multi_day_service.py` | Complete | ★★★ | Three-tier bin-pack: pinned / flexible / auto-assigned. |
 | AI assistant (LangGraph ReAct) | `src/orchestrator/` | Complete | ★★ | 4 tools, scope guard, human-in-the-loop confirm/cancel, OpenAI/Anthropic, SSE streaming. |
-| MongoDB checkpoint saver | `src/orchestrator/checkpointer.py` | Complete | ★★ | **Missing index and TTL** (see Part 2, item 2). |
+| MongoDB checkpoint saver | `src/orchestrator/checkpointer.py` | Complete | ★★ | Index and TTL resolved (A2); compound index `checkpoint_lookup` + TTL on `expires_at` (30 d). |
 | SvelteKit frontend | `apps/frontend/` | Complete | ★★★ | 4 routes, Leaflet maps, SSE chat with HITL, i18n EN/PL (78/78 keys), Vitest component tests. |
-| Streamlit panel (legacy) | `src/panel/` | Complete | ★ (to retire) | Being replaced by SvelteKit (ADR-11). Duplicate map render block in `app.py:300-342`. |
+| Streamlit panel | `src/panel/` | Complete | ★★ | Repurposed as admin panel (replaces original retirement plan). Duplicate map render block in `app.py:300-342` deferred until conversion. |
 | Config / lifespan / DI | `src/config/`, `src/core/` | Complete | ★★★ | Graceful orchestrator degradation when no LLM key is set (returns 503). |
 | Exception handling | `src/core/middleware.py`, `exceptions.py` | Complete | ★★ | Hybrid: per-exception handlers + catch-all middleware (ADR-07). |
 
@@ -47,41 +47,41 @@ separate PR with a matching ADR.
 
 ### Critical — production blockers
 
-**1. No authentication on `/chat`**
-`POST /chat` is publicly accessible. Any caller can drive the LLM and incur API
-costs without limit. Planned solution is documented in `src/arch.md:32-40`: JWT
-(RS256) middleware, `get_current_user` via FastAPI `Depends()`, `/health` and
-`/status` remain public.
+**1. No authentication on `/chat`** ✅ resolved (ADR-13)
+`POST /chat` and all place-write endpoints now require a valid RS256 JWT (Auth0).
+`get_current_user` FastAPI dependency via `authlib`; `AUTH_ENABLED=False` (default)
+keeps the gate open for local dev and CI.  See `src/core/auth.py`.
 
-**2. `orchestrator_checkpoints` collection has no index and no TTL**
-`MongoDBManager._create_indexes` (`src/core/db/manager.py:37-53`) creates indexes
-only for `gmaps_places` and `distance_matrix_cache`. The checkpointer queries via
-`find_one({"thread_id": ...}, sort=[("checkpoint_id", -1)])`, which is a full
-collection scan. Without a TTL index the collection grows unboundedly.
+**2. `orchestrator_checkpoints` collection has no index and no TTL** ✅ resolved (ADR-09 updated)
+Compound index `(thread_id, checkpoint_id DESC)` named `checkpoint_lookup` added to
+`MongoDBManager._create_indexes`.  TTL index on `expires_at` (expireAfterSeconds=0)
+added; `aput` writes `expires_at = now + CHECKPOINT_TTL_DAYS` (default 30 days).
 
-**3. Prompt injection risk in AI assistant**
-Place names fetched from MongoDB are interpolated directly into the system prompt
-by `_build_place_context_prompt` (`src/orchestrator/graph.py`). A maliciously
-crafted place name could alter the model's behaviour (ADR-10 Challenges).
+**3. Prompt injection risk in AI assistant** ✅ resolved
+`_sanitize_for_prompt` strips control characters (including `\n`) and truncates
+place names/addresses to 200 characters before interpolation into the system prompt
+in `_build_place_context_prompt` (`src/orchestrator/graph.py`).
 
 ### High — correctness
 
-**4. Solver ignores split opening hours**
-`_parse_time_window` (`src/optimizer/solver/service.py`) takes only the first
-matching period for a given day. A place with a midday break (e.g. 13:00–15:00) is
-treated as open the whole session. The solver may schedule a visit during the
-break — the result is silently wrong, not an error (`src/arch.md:25-28`).
+**4. Solver ignores split opening hours** ✅ resolved (B1)
+`_parse_time_window` now collects all matching periods for a given day and returns a
+multi-segment `TimeWindow`.  `TimeWindow.earliest_start(arrival_s, visit_s)` enforces
+that visits fit within a single segment, correctly skipping over breaks.
+`MATRIX_INCOMPLETE` (B2) added as a third skip-reason for partial matrix coverage.
+Regression test: `test_split_hours_no_visit_scheduled_in_break`.
 
 ### Medium — technical debt / consistency
 
-**5. Two frontends coexist**
-Streamlit (`src/panel/`) is scheduled for retirement (ADR-11) but still ships.
-`apps/api/` is an empty placeholder for the future uv workspace migration (ADR-12).
+**5. Two frontends coexist** (partially resolved — C2 done)
+Streamlit (`src/panel/`) is **not being retired**; it is repurposed as an admin panel
+(richer auth and operator tooling, replacing the user-facing retirement plan).
+`apps/api/` now has a minimal workspace stub; `[tool.uv.workspace]` formalised in
+`pyproject.toml`.  Full `src/` → `apps/api/src/` migration remains deferred (see C2).
 
-**6. `regression` marker declared but never used**
-`pyproject.toml` and `CLAUDE.md` describe a `regression` marker for end-to-end
-happy-path checks, but no test file uses it. The declaration and the code are out
-of sync.
+**6. `regression` marker declared but never used** ✅ resolved (D1)
+`test_split_hours_no_visit_scheduled_in_break` in `tests/optimizer/test_solver_service.py`
+is the first test using `@pytest.mark.regression`.  Run with `uv run pytest -m regression`.
 
 **7. `src/orchestrator/` excluded from `ty`**
 Static type checking is disabled for the orchestrator package (ADR-08, intentional
@@ -90,14 +90,14 @@ compensates; keep an eye on LangGraph version upgrades that may resolve this.
 
 ### Low — cosmetic
 
-**8. Duplicate map render block in Streamlit panel**
+**8. Duplicate map render block in Streamlit panel** (deferred — panel frozen)
 `src/panel/app.py:300-342` contains two identical blocks that build and display the
-locations map (copy-paste residue). Two identical maps are rendered.
+locations map (copy-paste residue). Fix deferred until the panel is converted to the
+admin panel role; removing it prematurely is low value while the panel is in flux.
 
-**9. Minor inaccuracy in `CLAUDE.md` coverage note**
-`CLAUDE.md` states `src/panel/` has no automated tests. `api_client.py` and
-`chat_client.py` do have unit tests under `tests/panel/`. The gap is limited to
-`app.py` (Streamlit UI).
+**9. Minor inaccuracy in `CLAUDE.md` coverage note** ✅ resolved (D2)
+`CLAUDE.md` now correctly states that only `src/panel/app.py` (Streamlit UI) lacks
+automated tests. `api_client.py` and `chat_client.py` have tests in `tests/panel/`.
 
 ---
 
@@ -105,71 +105,70 @@ locations map (copy-paste residue). Two identical maps are rendered.
 
 ### Phase A — Production hardening (unblocks deployment)
 
-**A1. JWT authentication**
-Add RS256 JWT verification middleware to FastAPI (`authlib` or `python-jose` —
-confirm library choice before running `uv add`). Introduce `get_current_user`
-dependency injected on protected endpoints; keep `/`, `/api/v1/core/*/keycheck`,
-and `GET /api/v1/core/orchestrator/status` public. Protect `POST /chat` and all
-place-write endpoints. Add token attachment in the SvelteKit API client
-(`apps/frontend/lib/api/client.ts`) and in the Streamlit panel
-(`src/panel/api_client.py`, `chat_client.py`).
+**A1. JWT authentication** ✅ done
+RS256 JWT via `authlib`; `get_current_user` FastAPI dependency on all place-write
+endpoints and `POST /chat`. `AUTH_ENABLED=False` default keeps local dev and CI open.
+Token attachment added in SvelteKit client and Streamlit panel. See `src/core/auth.py`, ADR-13.
 
-**A2. Index and TTL for `orchestrator_checkpoints`**
-In `MongoDBManager._create_indexes` (`src/core/db/manager.py`) add:
-- a compound index `(thread_id, checkpoint_id DESC)` for fast checkpoint lookup,
-- a TTL index on a new `expires_at` field (e.g. 30-day retention).
+**A2. Index and TTL for `orchestrator_checkpoints`** ✅ done
+Compound index `(thread_id, checkpoint_id DESC)` named `checkpoint_lookup` in
+`MongoDBManager._create_indexes`. TTL index on `expires_at` (expireAfterSeconds=0);
+`aput` writes `expires_at = now + CHECKPOINT_TTL_DAYS` (default 30 days). ADR-09 updated.
 
-`expires_at` must be written in `MongoCheckpointSaver.aput`
-(`src/orchestrator/checkpointer.py`). Update ADR-09 to document the index strategy
-and retention policy.
-
-**A3. Prompt injection sanitisation**
-Strip or neutralise potential instruction sequences from place names before they
-reach the system prompt in `_build_place_context_prompt`
-(`src/orchestrator/graph.py`). Add a unit test that asserts a name containing
-`Ignore previous instructions` does not alter model-visible content.
+**A3. Prompt injection sanitisation** ✅ done
+`_sanitize_for_prompt` strips control characters and truncates place names/addresses
+to 200 chars before interpolation in `_build_place_context_prompt` (`src/orchestrator/graph.py`).
 
 ### Phase B — Solver correctness
 
-**B1. Split opening hours support**
-Refactor `_parse_time_window` (`src/optimizer/solver/service.py`) to return a list
-of valid time segments for a given day rather than a single window. Update
-`is_feasible` and `schedule_route` in `src/optimizer/solver/engine.py` to reject
-placement inside any break gap. Add dedicated unit tests for: (a) a single
-continuous window, (b) a window with a midday break, (c) a place open past midnight.
+**B1. Split opening hours support** ✅ done
+`_parse_time_window` now collects all periods for the day; `TimeWindow` extended with
+`segments: list[tuple[int, int]]`, `from_segments` classmethod, and `earliest_start`
+method.  Engine (`schedule_route`, `_nn_from_start`) uses `earliest_start` as the
+single placement oracle.  Missing matrix entry detected explicitly (returns `[]`)
+instead of relying on the `_LARGE` sentinel overflow.
 
-**B2. Skip reason precision**
-Clarify the `TIME_WINDOW_INFEASIBLE` vs `NO_MATRIX_ENTRY` classification when the
-distance matrix is incomplete (partial API response). Consider a third reason code
-`MATRIX_INCOMPLETE` to avoid misleading the caller.
+**B2. Skip reason precision** ✅ done
+`MATRIX_INCOMPLETE` added as a third `SkippedPlace.reason` (actual_edges > 0 but
+< expected).  Frontend `SkippedPlace` union type updated in
+`apps/frontend/src/lib/types/optimizer.ts`.
 
 ### Phase C — Frontend migration and developer experience
 
-**C1. Retire Streamlit panel**
-Once the SvelteKit frontend covers all Streamlit panel features (verify parity),
-remove `src/panel/`, related dependencies (`streamlit`, `folium`, `streamlit-folium`)
-from `pyproject.toml`, and the `just panel` recipe from `justfile`. If the panel
-stays as a transitional tool, remove the duplicate map block first (item 8 above).
+**C1. Convert Streamlit panel to admin panel** (replaces original retirement plan)
+`src/panel/` is no longer being retired. The plan is to convert it into an operator
+admin panel with richer Auth0 integration and features not covered by the user-facing
+SvelteKit frontend (bulk operations, enrichment management, etc.).
 
-**C2. Formalise uv workspace**
-Populate `apps/api/` or define the workspace structure in `pyproject.toml`
-(`[tool.uv.workspace]`). Update ADR-12 with the chosen layout.
+Known UI limitations to keep in mind during conversion:
+- `st.data_editor` `TimeColumn(step=3600)` uses a 1 h step with no +/- buttons.
+  A `step=900` (15 min snap) is possible but still lacks visible increment buttons.
+  In Svelte the recommended approach is `<input type="time" step="900">` with a
+  custom step component.
+- `st.data_editor` with `num_rows="dynamic"` does not validate duplicate rows on the
+  client side; duplicate-ID validation is delegated to the API (Pydantic).
+- `st.sidebar` is a global singleton. Filters are placed directly in the tab
+  (`st.columns`) rather than the sidebar, which is reserved for the global chat widget.
+
+Before conversion: remove the duplicate map render block (`app.py:300-342`, item 8).
+
+**C2. Formalise uv workspace** ✅ done (lightweight scaffold)
+`[tool.uv.workspace]` added to root `pyproject.toml` (`members = ["apps/*"]`,
+`exclude = ["apps/frontend"]`). `apps/api/pyproject.toml` stub created.
+Full migration of `src/` → `apps/api/src/` is deferred to a dedicated PR (involves
+updating `pyproject.toml`, Docker, `justfile`, and all import paths).
 
 **C3. Docker dev workflow**
 Add `develop.watch` (sync `src/` without rebuild, Docker Compose v2.22+) and
 `uvicorn --reload` to the Compose file, then add a `just dev` recipe. Eliminates
-`just up` on every code change during development (`src/arch.md:1-6`).
+`just up` on every code change during development.
 
 ### Phase D — Housekeeping (low effort, low risk)
 
-- **D1.** Either write at least one `@pytest.mark.regression` end-to-end test or
-  remove the marker declaration from `pyproject.toml` and `CLAUDE.md`.
-- **D2.** Fix the `CLAUDE.md` coverage note: the uncovered area is
-  `src/panel/app.py`, not all of `src/panel/`.
-- **D3.** Remove the duplicate map render block from `src/panel/app.py:300-342`
-  (if the panel is not retired first).
-- **D4.** Retire `src/arch.md` once its items are captured in this document and
-  tracked in PRs. (Most content is now superseded by the roadmap above.)
+- **D1.** ✅ `@pytest.mark.regression` first used in `test_split_hours_no_visit_scheduled_in_break`.
+- **D2.** ✅ `CLAUDE.md` coverage note updated: uncovered area is `src/panel/app.py` only.
+- **D3.** Deferred — panel is frozen pending admin panel conversion (see C1).
+- **D4.** ✅ `src/arch.md` retired: open items migrated to ROADMAP (C1 panel notes, C3 docker dev).
 
 ---
 
@@ -177,12 +176,12 @@ Add `develop.watch` (sync `src/` without rebuild, Docker Compose v2.22+) and
 
 | Phase | Files |
 |---|---|
-| A1 | new `src/core/auth.py` (or `src/core/deps_auth.py`) · `src/main.py` · protected routers · `apps/frontend/lib/api/client.ts` · `src/panel/api_client.py`, `chat_client.py` |
-| A2 | `src/core/db/manager.py` · `src/orchestrator/checkpointer.py` · `docs/09_ADR-custom-mongodb-checkpointer.md` |
-| A3 | `src/orchestrator/graph.py` · `tests/orchestrator/test_graph.py` |
-| B1 | `src/optimizer/solver/service.py` · `src/optimizer/solver/engine.py` · `tests/optimizer/test_service.py` |
-| B2 | `src/optimizer/solver/service.py` · `src/optimizer/models.py` · related tests |
-| C1 | `src/panel/` (removal) · `pyproject.toml` · `justfile` |
-| C2 | `pyproject.toml` · `docs/12_ADR-frontend-monorepo-structure.md` |
+| A1 ✅ | `src/core/auth.py` · protected routers · `apps/frontend/src/lib/api/client.ts` · `src/panel/api_client.py`, `chat_client.py` · `docs/13_ADR-jwt-authentication.md` |
+| A2 ✅ | `src/core/db/manager.py` · `src/orchestrator/checkpointer.py` · `docs/09_ADR-custom-mongodb-checkpointer.md` |
+| A3 ✅ | `src/orchestrator/graph.py` · `tests/orchestrator/test_graph.py` |
+| B1 ✅ | `src/optimizer/solver/models.py` · `src/optimizer/solver/engine.py` · `src/optimizer/solver/service.py` · `tests/optimizer/test_engine.py` · `tests/optimizer/test_solver_service.py` |
+| B2 ✅ | `src/optimizer/solver/service.py` · `src/optimizer/solver/models.py` · `apps/frontend/src/lib/types/optimizer.ts` |
+| C1 | `src/panel/` (admin panel conversion) |
+| C2 ✅ | `pyproject.toml` · `apps/api/pyproject.toml` · `docs/12_ADR-frontend-monorepo-structure.md` |
 | C3 | `docker/docker-compose.yml` · `justfile` |
-| D1–D4 | `pyproject.toml` · `CLAUDE.md` · `src/panel/app.py` · `src/arch.md` |
+| D1–D4 | `pyproject.toml` · `CLAUDE.md` · `src/panel/app.py` · ~~`src/arch.md`~~ (removed) |
