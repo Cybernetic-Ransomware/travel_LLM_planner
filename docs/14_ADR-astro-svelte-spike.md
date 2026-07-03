@@ -56,6 +56,10 @@ SvelteKit for the application and discard the spike, or (C) keep Astro only for 
 pages. It also leaves reusable groundwork either way: the dev CORS setting and the measured baseline of
 JavaScript shipped per page.
 
+Quantitative results (payload, requests, Leaflet loading, build times, error visibility, code
+ergonomics) are recorded in [spike-astro-vs-sveltekit-metrics.md](spike-astro-vs-sveltekit-metrics.md),
+reproducible via `scripts/measure_frontends.py`.
+
 Preliminary observations against the spike's evaluation questions:
 - *Did Astro simplify the frontend?* The page shells are simpler (no router, no load functions), but the
   data flow is more manual — every island fetches for itself, where SvelteKit centralises this in load
