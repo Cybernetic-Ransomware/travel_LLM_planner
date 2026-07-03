@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { Map as LMap, Marker, Polyline } from 'leaflet';
-	import type { PlaceOut, RouteStep } from '$lib/types/index.js';
+	import type { PlaceOut, RouteStep } from '../../lib/types';
 
 	let {
 		places = [],
@@ -45,7 +45,7 @@
 				}))
 			: places
 					.filter((p) => p.lat !== null && p.lng !== null)
-					.map((p, i) => ({
+					.map((p) => ({
 						id: p.id,
 						lat: p.lat!,
 						lng: p.lng!,

@@ -32,9 +32,15 @@ class Settings(BaseSettings):
     langsmith_project: str = Field(default="travel-planner", alias="LANGSMITH_PROJECT")
     checkpoint_ttl_days: int = Field(default=30, alias="CHECKPOINT_TTL_DAYS")
 
+    cors_allow_origins: str = Field(default="http://localhost:4321,http://127.0.0.1:4321", alias="CORS_ALLOW_ORIGINS")
+
     auth_enabled: bool = Field(default=False, alias="AUTH_ENABLED")
     auth0_domain: str = Field(default="", alias="AUTH0_DOMAIN")
     auth0_audience: str = Field(default="", alias="AUTH0_AUDIENCE")
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
 
     @property
     def auth0_issuer(self) -> str:
