@@ -1,0 +1,10 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHeader from '../components/ui/PageHeader.astro';
+import DashboardStats from '../components/islands/DashboardStats.svelte';
+---
+
+<BaseLayout title="Dashboard">
+	<PageHeader title="Dashboard" subtitle="Google Places data at a glance" />
+	<DashboardStats client:load />
+</BaseLayout>

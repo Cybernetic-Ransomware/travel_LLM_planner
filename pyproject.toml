@@ -135,4 +135,4 @@ test = "Tests"
 
 [tool.uv.workspace]
 members = ["apps/*"]
-exclude = ["apps/frontend"]
+exclude = ["apps/frontend", "apps/astro-frontend"]

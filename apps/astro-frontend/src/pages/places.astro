@@ -1,0 +1,10 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHeader from '../components/ui/PageHeader.astro';
+import PlacesExplorer from '../components/islands/PlacesExplorer.svelte';
+---
+
+<BaseLayout title="Places">
+	<PageHeader title="Places" subtitle="Browse, filter and map scraped places" />
+	<PlacesExplorer client:load />
+</BaseLayout>

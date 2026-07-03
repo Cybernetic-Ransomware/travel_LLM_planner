@@ -1,0 +1,32 @@
+---
+import '../styles/global.css';
+
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title} · Travel Planner</title>
+	</head>
+	<body class="min-h-screen bg-gray-50 text-gray-900">
+		<nav class="border-b border-gray-200 bg-white">
+			<div class="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
+				<span class="font-semibold">Travel Planner</span>
+				<a href="/" class="text-sm text-gray-600 hover:text-gray-900">Dashboard</a>
+				<a href="/places" class="text-sm text-gray-600 hover:text-gray-900">Places</a>
+				<a href="/health" class="text-sm text-gray-600 hover:text-gray-900">Health</a>
+			</div>
+		</nav>
+		<main class="mx-auto max-w-6xl px-4 py-8">
+			<slot />
+		</main>
+	</body>
+</html>

@@ -1,0 +1,10 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHeader from '../components/ui/PageHeader.astro';
+import HealthCheck from '../components/islands/HealthCheck.svelte';
+---
+
+<BaseLayout title="Health">
+	<PageHeader title="Health" subtitle="Backend connectivity check" />
+	<HealthCheck client:load />
+</BaseLayout>
