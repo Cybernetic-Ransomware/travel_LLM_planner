@@ -14,7 +14,9 @@ Usage:
 
 import argparse
 import io
+import os
 import shutil
+import signal
 import statistics
 import subprocess
 import sys
@@ -27,6 +29,7 @@ from pathlib import Path
 from playwright.sync_api import Page, sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -84,6 +87,7 @@ def start_preview(app: str) -> subprocess.Popen:
         cwd=config.dir,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        start_new_session=(os.name != "nt"),
     )
     wait_for_server(port)
     return proc
@@ -91,12 +95,21 @@ def start_preview(app: str) -> subprocess.Popen:
 
 def stop_preview(proc: subprocess.Popen) -> None:
     # npm spawns the actual server as a child process, so kill the whole tree.
-    subprocess.run(
-        ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return
+    # start_new_session=True in start_preview makes proc.pid the process group id.
+    os.killpg(proc.pid, signal.SIGTERM)
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=5)
 
 
 def measure_route(page: Page, base_url: str, route: str, capture_text: bool) -> RouteMetrics:
