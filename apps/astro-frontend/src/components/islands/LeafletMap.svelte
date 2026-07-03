@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { Map as LMap, Marker } from 'leaflet';
+	import type { Map as LMap, Marker, Polyline } from 'leaflet';
 	import type { PlaceOut, RouteStep } from '../../lib/types';
 
 	let {
@@ -18,6 +18,7 @@
 	let container: HTMLDivElement;
 	let map: LMap | null = null;
 	let markers: Marker[] = [];
+	let polyline: Polyline | null = null;
 	let leaflet: typeof import('leaflet') | null = null;
 
 	function center(): [number, number] {
@@ -31,6 +32,8 @@
 	function buildMarkers(L: typeof import('leaflet')): void {
 		markers.forEach((m) => m.remove());
 		markers = [];
+		polyline?.remove();
+		polyline = null;
 
 		const source = steps.length > 0
 			? steps.filter((s) => s.lat !== null && s.lng !== null).map((s, i) => ({
@@ -93,7 +96,7 @@
 			const coords = steps
 				.filter((s) => s.lat !== null && s.lng !== null)
 				.map((s): [number, number] => [s.lat!, s.lng!]);
-			L.polyline(coords, { color: '#2563eb', weight: 2, opacity: 0.6, dashArray: '6 4' }).addTo(map!);
+			polyline = L.polyline(coords, { color: '#2563eb', weight: 2, opacity: 0.6, dashArray: '6 4' }).addTo(map!);
 		}
 	}
 
