@@ -9,8 +9,12 @@ reports data only; the decision itself belongs in the ADR.
 - Measured on 2026-07-03 with `scripts/measure_frontends.py` (Playwright chromium, production
   builds served by `vite preview` / `astro preview`). Rerun with:
   `uv run python scripts/measure_frontends.py --build-runs 3`.
+- Prerequisites for a rerun: the Playwright Chromium binary (one-time
+  `uv run playwright install chromium`; the Python package is already a project dependency)
+  and a production build of both apps (`npm ci` + `npm run build` in `apps/frontend` and
+  `apps/astro-frontend`).
 - Environment: Windows 11, Node v26.3.1, Astro 7.0.6 (Vite 8), SvelteKit 2.57 (Vite 8.0.8),
-  Svelte 5.55/5.56, Tailwind v4.
+  Svelte 5.55/5.56, Tailwind v4. CI (`astro-ci.yml`) builds on the same Node major (26).
 - Backend: real Docker stack (`just docker-up`), dataset of **3 places** (places API response
   ≈ 4.1 kB). Payload numbers barely depend on dataset size, but the fetch column does.
 - Byte counts are **uncompressed** response bodies. Neither preview server compresses, so this is
