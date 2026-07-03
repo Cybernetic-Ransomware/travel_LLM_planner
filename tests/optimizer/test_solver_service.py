@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from freezegun import freeze_time
 
 from src.optimizer.matrix.models import DistanceMatrix, MatrixEntry, TransportMode
 from src.optimizer.solver.models import OptimizeRequest
@@ -228,6 +229,7 @@ async def test_optimize_two_places_happy_path(test_db, google_routes_manager):
 
 
 @pytest.mark.unit
+@freeze_time("2026-06-01")
 async def test_optimize_departure_date_forwarded_to_get_matrix(test_db, google_routes_manager):
     docs = [_place("p1"), _place("p2")]
     matrix = _make_matrix(("p1", "p2", 300), ("p2", "p1", 300))

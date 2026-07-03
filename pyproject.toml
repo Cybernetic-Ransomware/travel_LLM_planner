@@ -28,6 +28,7 @@ dependencies = [
 dev = [
     "codespell>=2.4.1",
     "commitizen>=4.13.9",
+    "freezegun>=1.5.5",
     "mcp>=1.26.0",
     "pre-commit>=4.2.0",
     "pytest>=9.0.2",
