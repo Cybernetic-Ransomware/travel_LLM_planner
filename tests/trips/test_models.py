@@ -60,6 +60,19 @@ class TestSaveTripRequest:
         with pytest.raises(ValidationError):
             SaveTripRequest(**payload)
 
+    def test_day_end_before_start_rejected(self):
+        payload = _valid_payload()
+        payload["day_start_hour"] = 20
+        payload["day_end_hour"] = 8
+        with pytest.raises(ValidationError):
+            SaveTripRequest(**payload)
+
+    def test_selected_place_ids_min_length_rejected(self):
+        payload = _valid_payload()
+        payload["selected_place_ids"] = ["only-one"]
+        with pytest.raises(ValidationError):
+            SaveTripRequest(**payload)
+
     def test_missing_optimizer_request_rejected(self):
         payload = _valid_payload()
         del payload["optimizer_request"]

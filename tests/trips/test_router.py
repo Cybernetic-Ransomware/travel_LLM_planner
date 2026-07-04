@@ -39,7 +39,7 @@ async def clean_trips(test_db):
 
 @pytest.mark.integration
 class TestSaveTrip:
-    async def test_returns_201_and_trip_out(self, client: AsyncClient):
+    async def test_returns_201_with_detail(self, client: AsyncClient):
         response = await client.post(f"{ENDPOINT}/", json=_payload())
         assert response.status_code == 201
         data = response.json()
@@ -47,10 +47,19 @@ class TestSaveTrip:
         assert data["date"] == "2026-07-04"
         assert "id" in data
         assert "created_at" in data
+        assert "optimizer_request" in data
+        assert "optimizer_response" in data
+        assert data["selected_place_ids"] == ["p1", "p2"]
 
     async def test_empty_name_returns_422(self, client: AsyncClient):
         payload = _payload()
         payload["name"] = ""
+        response = await client.post(f"{ENDPOINT}/", json=payload)
+        assert response.status_code == 422
+
+    async def test_single_place_returns_422(self, client: AsyncClient):
+        payload = _payload()
+        payload["selected_place_ids"] = ["only-one"]
         response = await client.post(f"{ENDPOINT}/", json=payload)
         assert response.status_code == 422
 
@@ -80,14 +89,24 @@ class TestListTrips:
         data = (await client.get(f"{ENDPOINT}/")).json()
         assert data[0]["name"] == "Second"
 
+    async def test_list_items_are_summary_only(self, client: AsyncClient):
+        await client.post(f"{ENDPOINT}/", json=_payload())
+        data = (await client.get(f"{ENDPOINT}/")).json()
+        assert "optimizer_request" not in data[0]
+        assert "optimizer_response" not in data[0]
+
 
 @pytest.mark.integration
 class TestGetTrip:
-    async def test_returns_trip_by_id(self, client: AsyncClient):
+    async def test_returns_detail_by_id(self, client: AsyncClient):
         created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
         response = await client.get(f"{ENDPOINT}/{created['id']}")
         assert response.status_code == 200
-        assert response.json()["id"] == created["id"]
+        data = response.json()
+        assert data["id"] == created["id"]
+        assert "optimizer_request" in data
+        assert "optimizer_response" in data
+        assert data["day_start_hour"] == 9
 
     async def test_invalid_id_returns_404(self, client: AsyncClient):
         response = await client.get(f"{ENDPOINT}/not-a-valid-objectid")
