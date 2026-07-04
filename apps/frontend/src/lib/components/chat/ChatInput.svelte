@@ -33,7 +33,7 @@
 		{disabled}
 		rows="2"
 		placeholder={m.chat_placeholder()}
-		class="flex-1 resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-zinc-50 disabled:text-zinc-400"
+		class="flex-1 resize-none rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none disabled:bg-zinc-50 disabled:text-zinc-400"
 	></textarea>
 	<button
 		onclick={submit}

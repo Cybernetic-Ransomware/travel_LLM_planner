@@ -82,11 +82,15 @@
 		</div>
 
 		{#if showMap}
-			<div class="h-64 md:h-auto md:w-2/5 isolate overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+			<div
+				class="isolate h-64 overflow-hidden rounded-lg border border-zinc-200 md:h-auto md:w-2/5 dark:border-zinc-800"
+			>
 				{#if LeafletMap}
 					<LeafletMap places={places.filtered} />
 				{:else}
-					<div class="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500">
+					<div
+						class="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500"
+					>
 						{m.map_loading()}
 					</div>
 				{/if}

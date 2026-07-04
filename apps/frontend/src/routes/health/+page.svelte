@@ -31,7 +31,9 @@
 		<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{m.page_health_subtitle()}</p>
 	</div>
 
-	<div class="max-w-md rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+	<div
+		class="max-w-md rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
+	>
 		<dl class="space-y-3 text-sm">
 			<div class="flex items-center justify-between">
 				<dt class="text-zinc-500 dark:text-zinc-400">{m.health_backend()}</dt>
@@ -39,11 +41,15 @@
 					{#if status === 'checking'}
 						<span class="text-zinc-500 dark:text-zinc-400">{m.health_checking()}</span>
 					{:else if status === 'ok'}
-						<span class="rounded-full bg-green-100 px-2 py-0.5 font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+						<span
+							class="rounded-full bg-green-100 px-2 py-0.5 font-medium text-green-700 dark:bg-green-900 dark:text-green-300"
+						>
 							{m.health_ok()}
 						</span>
 					{:else}
-						<span class="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
+						<span
+							class="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-700 dark:bg-red-900 dark:text-red-300"
+						>
 							{m.health_down()}
 						</span>
 					{/if}

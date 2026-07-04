@@ -23,7 +23,11 @@ const mockPlace = (id: string, name: string): PlaceOut => ({
 	skipped: false
 });
 
-const places = [mockPlace('p1', 'Wawel'), mockPlace('p2', 'Sukiennice'), mockPlace('p3', 'Kościół Mariacki')];
+const places = [
+	mockPlace('p1', 'Wawel'),
+	mockPlace('p2', 'Sukiennice'),
+	mockPlace('p3', 'Kościół Mariacki')
+];
 
 describe('RouteForm', () => {
 	it('renders place list', async () => {

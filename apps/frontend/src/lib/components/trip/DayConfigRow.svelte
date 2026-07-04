@@ -21,8 +21,12 @@
 	}
 </script>
 
-<div class="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
-	<span class="w-14 shrink-0 text-xs font-semibold text-zinc-500 dark:text-zinc-400">{m.day_label()} {index + 1}</span>
+<div
+	class="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+>
+	<span class="w-14 shrink-0 text-xs font-semibold text-zinc-500 dark:text-zinc-400"
+		>{m.day_label()} {index + 1}</span
+	>
 
 	<input
 		type="date"

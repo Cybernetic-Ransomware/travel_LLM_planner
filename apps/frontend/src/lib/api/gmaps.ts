@@ -1,10 +1,5 @@
 import { apiFetch } from './client.js';
-import type {
-	PlaceOut,
-	PlacePatch,
-	ImportResponse,
-	EnrichResponse
-} from '$lib/types/index.js';
+import type { PlaceOut, PlacePatch, ImportResponse, EnrichResponse } from '$lib/types/index.js';
 
 export function getPlaces(params?: { skipped?: boolean; list_name?: string }): Promise<PlaceOut[]> {
 	const query = new URLSearchParams();

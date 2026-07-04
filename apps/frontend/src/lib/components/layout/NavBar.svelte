@@ -25,9 +25,15 @@
 	}
 </script>
 
-<nav class="fixed inset-y-0 left-0 z-40 flex h-full w-56 flex-col border-r border-zinc-200 bg-white transition-transform duration-200 dark:border-zinc-800 dark:bg-zinc-900 md:static md:translate-x-0 md:transition-none {open ? 'translate-x-0' : '-translate-x-full'}">
+<nav
+	class="fixed inset-y-0 left-0 z-40 flex h-full w-56 flex-col border-r border-zinc-200 bg-white transition-transform duration-200 md:static md:translate-x-0 md:transition-none dark:border-zinc-800 dark:bg-zinc-900 {open
+		? 'translate-x-0'
+		: '-translate-x-full'}"
+>
 	<div class="flex h-14 items-center border-b border-zinc-200 px-4 dark:border-zinc-800">
-		<span class="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{m.app_name()}</span>
+		<span class="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
+			>{m.app_name()}</span
+		>
 	</div>
 
 	<ul class="flex flex-col gap-0.5 p-2 pt-3">
@@ -50,9 +56,6 @@
 </nav>
 
 {#if open}
-	<button
-		onclick={onclose}
-		class="fixed inset-0 z-30 bg-black/20 md:hidden"
-		aria-label="Close menu"
+	<button onclick={onclose} class="fixed inset-0 z-30 bg-black/20 md:hidden" aria-label="Close menu"
 	></button>
 {/if}

@@ -58,12 +58,7 @@ describe('readSSEStream', () => {
 	});
 
 	it('skips blank lines and non-data lines', async () => {
-		const response = makeResponse([
-			'',
-			': keep-alive',
-			'data: {"content":"token"}',
-			''
-		]);
+		const response = makeResponse(['', ': keep-alive', 'data: {"content":"token"}', '']);
 
 		const events = [];
 		for await (const event of readSSEStream(response)) {

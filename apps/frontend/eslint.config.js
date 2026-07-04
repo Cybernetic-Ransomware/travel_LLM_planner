@@ -37,8 +37,17 @@ export default defineConfig(
 		}
 	},
 	{
-		// Override or add rule settings here, such as:
-		// 'svelte/button-has-type': 'error'
-		rules: {}
+		rules: {
+			// Project does not use a SvelteKit base path, so raw string hrefs are safe.
+			'svelte/no-navigation-without-resolve': 'off'
+		}
+	},
+	{
+		files: ['**/*.svelte'],
+		rules: {
+			// $bindable() props in $props() destructuring are always re-assigned in effects;
+			// ESLint cannot see the Svelte 5 reactivity contract and flags them as useless.
+			'no-useless-assignment': 'off'
+		}
 	}
 );

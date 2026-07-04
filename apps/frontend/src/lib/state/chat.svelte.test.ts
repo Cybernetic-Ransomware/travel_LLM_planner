@@ -85,6 +85,7 @@ describe('ChatState', () => {
 		let resolve: () => void;
 		const blocker = new Promise<void>((r) => (resolve = r));
 		mockStreamChat.mockReturnValue(
+			// eslint-disable-next-line require-yield
 			(async function* () {
 				await blocker;
 			})()

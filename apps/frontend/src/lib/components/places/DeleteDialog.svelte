@@ -27,7 +27,9 @@
 	</p>
 
 	{#if placeNames.length > 1}
-		<ul class="mt-3 max-h-32 overflow-y-auto rounded border border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800">
+		<ul
+			class="mt-3 max-h-32 overflow-y-auto rounded border border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800"
+		>
 			{#each placeNames as name (name)}
 				<li class="py-0.5 text-xs text-zinc-700 dark:text-zinc-300">{name}</li>
 			{/each}

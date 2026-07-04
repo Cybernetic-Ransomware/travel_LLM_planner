@@ -36,7 +36,9 @@
 </script>
 
 <div class="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-	<h2 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">{m.dashboard_import_title()}</h2>
+	<h2 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+		{m.dashboard_import_title()}
+	</h2>
 	<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{m.dashboard_import_description()}</p>
 
 	<form class="mt-4 flex flex-col gap-3" onsubmit={handleSubmit}>
@@ -50,7 +52,7 @@
 				bind:value={url}
 				placeholder={m.dashboard_import_url_placeholder()}
 				disabled={loading}
-				class="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-zinc-50 disabled:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:disabled:bg-zinc-900"
+				class="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none disabled:bg-zinc-50 disabled:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:disabled:bg-zinc-900"
 			/>
 		</div>
 
@@ -68,7 +70,9 @@
 	</form>
 
 	{#if result}
-		<div class="mt-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-300">
+		<div
+			class="mt-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-300"
+		>
 			<span class="font-semibold">{result.total}</span>
 			{m.dashboard_import_result_total()},
 			<span class="font-semibold">{result.upserted}</span>
@@ -80,6 +84,10 @@
 	{/if}
 
 	{#if error}
-		<div class="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{error}</div>
+		<div
+			class="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
+		>
+			{error}
+		</div>
 	{/if}
 </div>

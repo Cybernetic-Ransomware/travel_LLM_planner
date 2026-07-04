@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { PlaceOut, PlacePatch } from '$lib/types/index.js';
-	import { formatHour } from '$lib/utils/format.js';
 
 	let {
 		place,
@@ -27,7 +26,11 @@
 	}
 </script>
 
-<tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800 {place.skipped ? 'opacity-60' : ''}">
+<tr
+	class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800 {place.skipped
+		? 'opacity-60'
+		: ''}"
+>
 	<td class="px-3 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100">
 		{place.name ?? '—'}
 	</td>
@@ -45,7 +48,7 @@
 				max="23"
 				value={place.preferred_hour_from ?? ''}
 				onchange={(e) => handleHourInput('preferred_hour_from', e.currentTarget.value)}
-				class="w-12 rounded border border-zinc-200 px-1.5 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+				class="w-12 rounded border border-zinc-200 px-1.5 py-0.5 text-center text-xs focus:ring-1 focus:ring-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 				placeholder="—"
 			/>
 			<span class="text-zinc-400">–</span>
@@ -55,7 +58,7 @@
 				max="23"
 				value={place.preferred_hour_to ?? ''}
 				onchange={(e) => handleHourInput('preferred_hour_to', e.currentTarget.value)}
-				class="w-12 rounded border border-zinc-200 px-1.5 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+				class="w-12 rounded border border-zinc-200 px-1.5 py-0.5 text-center text-xs focus:ring-1 focus:ring-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 				placeholder="—"
 			/>
 		</div>
@@ -68,7 +71,7 @@
 			step="5"
 			value={place.visit_duration_min ?? ''}
 			onchange={(e) => handleDurationInput(e.currentTarget.value)}
-			class="w-16 rounded border border-zinc-200 px-1.5 py-0.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+			class="w-16 rounded border border-zinc-200 px-1.5 py-0.5 text-center text-xs focus:ring-1 focus:ring-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 			placeholder="—"
 		/>
 	</td>

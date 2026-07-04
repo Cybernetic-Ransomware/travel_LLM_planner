@@ -35,25 +35,28 @@
 		polyline?.remove();
 		polyline = null;
 
-		const source = steps.length > 0
-			? steps.filter((s) => s.lat !== null && s.lng !== null).map((s, i) => ({
-					id: s.place_id,
-					lat: s.lat!,
-					lng: s.lng!,
-					label: String(i + 1),
-					tooltip: `${i + 1}. ${s.name ?? ''}\n${s.arrival_time.slice(0, 5)} → ${s.departure_time.slice(0, 5)}`
-				}))
-			: places
-					.filter((p) => p.lat !== null && p.lng !== null)
-					.map((p, i) => ({
-						id: p.id,
-						lat: p.lat!,
-						lng: p.lng!,
-						label: '',
-						tooltip: `${p.name ?? '—'}${p.address ? '\n' + p.address : ''}`,
-						skipped: p.skipped,
-						selected: selectedIds.has(p.id)
-					}));
+		const source =
+			steps.length > 0
+				? steps
+						.filter((s) => s.lat !== null && s.lng !== null)
+						.map((s, i) => ({
+							id: s.place_id,
+							lat: s.lat!,
+							lng: s.lng!,
+							label: String(i + 1),
+							tooltip: `${i + 1}. ${s.name ?? ''}\n${s.arrival_time.slice(0, 5)} → ${s.departure_time.slice(0, 5)}`
+						}))
+				: places
+						.filter((p) => p.lat !== null && p.lng !== null)
+						.map((p) => ({
+							id: p.id,
+							lat: p.lat!,
+							lng: p.lng!,
+							label: '',
+							tooltip: `${p.name ?? '—'}${p.address ? '\n' + p.address : ''}`,
+							skipped: p.skipped,
+							selected: selectedIds.has(p.id)
+						}));
 
 		source.forEach((item) => {
 			const isRoute = steps.length > 0;
@@ -96,7 +99,12 @@
 			const coords = steps
 				.filter((s) => s.lat !== null && s.lng !== null)
 				.map((s): [number, number] => [s.lat!, s.lng!]);
-			polyline = L.polyline(coords, { color: '#2563eb', weight: 2, opacity: 0.6, dashArray: '6 4' }).addTo(map!);
+			polyline = L.polyline(coords, {
+				color: '#2563eb',
+				weight: 2,
+				opacity: 0.6,
+				dashArray: '6 4'
+			}).addTo(map!);
 		}
 	}
 
