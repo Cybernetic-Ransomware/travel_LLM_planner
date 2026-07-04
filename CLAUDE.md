@@ -154,7 +154,8 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 11 | Accepted | Svelte 5 + SvelteKit as frontend framework (runes mode, Tailwind v4, Paraglide) |
 | 12 | Accepted | Frontend co-location — `apps/frontend/` alongside root `src/` |
 | 13 | Accepted | JWT RS256 authentication via authlib — `get_current_user` dependency, AUTH_ENABLED flag |
-| 14 | Proposed | Astro + Svelte islands spike (`apps/astro-frontend`) as alternative frontend shell |
+| 14 | Accepted | Astro + Svelte islands spike (`apps/astro-frontend`) as alternative frontend shell |
+| — | — | [Frontend split roadmap](docs/frontend-roadmap.md) — Astro/SvelteKit decision rule and upcoming PRs |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.
 
