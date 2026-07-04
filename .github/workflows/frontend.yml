@@ -34,6 +34,9 @@ jobs:
       - name: Compile Paraglide messages
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
+      - name: Create stub .env for type checking
+        run: echo "BACKEND_URL=http://localhost:8080" > .env
+
       - name: Lint (prettier + eslint)
         run: npm run lint
 
