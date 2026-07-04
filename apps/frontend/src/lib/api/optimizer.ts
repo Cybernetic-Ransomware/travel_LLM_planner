@@ -5,7 +5,7 @@ export function optimizeRoute(request: OptimizeRequest): Promise<OptimizeRespons
 	return apiFetch<OptimizeResponse>('/core/optimizer/route', {
 		method: 'POST',
 		body: JSON.stringify(request),
-		timeout: 30_000
+		timeout: 60_000
 	});
 }
 
