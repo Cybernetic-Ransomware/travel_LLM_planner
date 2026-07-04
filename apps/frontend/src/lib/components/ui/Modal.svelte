@@ -5,20 +5,27 @@
 		open = $bindable(false),
 		title,
 		children,
-		footer
+		footer,
+		onclose
 	}: {
 		open?: boolean;
 		title: string;
 		children: Snippet;
 		footer?: Snippet;
+		onclose?: () => void;
 	} = $props();
+
+	function handleClose() {
+		open = false;
+		onclose?.();
+	}
 </script>
 
 {#if open}
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
 		<button
 			class="absolute inset-0 bg-black/40"
-			onclick={() => (open = false)}
+			onclick={handleClose}
 			aria-label="Close modal"
 		></button>
 
@@ -26,7 +33,7 @@
 			<div class="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
 				<h2 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
 				<button
-					onclick={() => (open = false)}
+					onclick={handleClose}
 					class="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
 					aria-label="Close"
 				>

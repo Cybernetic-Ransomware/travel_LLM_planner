@@ -91,6 +91,7 @@ src/
 ├── core/       # Cross-cutting concerns: DB manager, exceptions, dependency injection
 │   └── db/     # MongoDBManager, FastAPI deps (get_db, mongo_session, mongo_transaction)
 ├── gmaps/      # Google Places domain: scraper, storage, router, models
+├── trips/      # Trip persistence domain: save/list/get optimized routes as named trips
 ├── panel/      # Streamlit UI + API client
 └── main.py     # App composition only — registers components via register_*(app) functions
 ```

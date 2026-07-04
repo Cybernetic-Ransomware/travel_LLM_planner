@@ -94,5 +94,14 @@
 	"trip_walk": "Pieszo",
 	"trip_drive": "Samochodem",
 	"trip_bicycle": "Rowerem",
-	"error_backend_title": "Backend niedostępny"
+	"error_backend_title": "Backend niedostępny",
+	"optimizer_save_trip": "Zapisz trasę",
+	"save_trip_title": "Zapisz trasę",
+	"save_trip_name_label": "Nazwa trasy",
+	"save_trip_name_placeholder": "np. Weekend w Krakowie",
+	"save_trip_name_required": "Nazwa jest wymagana",
+	"save_trip_date_label": "Data",
+	"save_trip_submit": "Zapisz",
+	"save_trip_cancel": "Anuluj",
+	"save_trip_success": "Trasa \"{name}\" zapisana!"
 }
