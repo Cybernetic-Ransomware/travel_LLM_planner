@@ -85,5 +85,6 @@
 	"trip_unassigned_label": "unassigned",
 	"trip_walk": "Walking",
 	"trip_drive": "Driving",
-	"trip_bicycle": "Cycling"
+	"trip_bicycle": "Cycling",
+	"error_backend_title": "Backend unavailable"
 }

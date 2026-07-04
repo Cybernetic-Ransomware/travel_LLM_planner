@@ -13,6 +13,9 @@
 
 	$effect(() => {
 		places.places = data.places;
+		places.error = data.backendError
+			? `${data.backendError.message} (${data.backendError.status})`
+			: null;
 	});
 
 	let deleteTarget = $state<string | null>(null);
