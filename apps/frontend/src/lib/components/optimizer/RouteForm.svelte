@@ -22,7 +22,13 @@
 	let dayStartHour = $state(8);
 	let dayEndHour = $state(20);
 
-	const validHours = $derived(dayStartHour < dayEndHour);
+	const validHours = $derived(
+		dayStartHour >= 0 &&
+		dayStartHour <= 23 &&
+		dayEndHour >= 1 &&
+		dayEndHour <= 24 &&
+		dayStartHour < dayEndHour
+	);
 	const canSubmit = $derived(selectedIds.length >= 2 && validHours && !loading);
 
 	const transportOptions = $derived([
