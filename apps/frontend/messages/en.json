@@ -94,5 +94,14 @@
 	"trip_walk": "Walking",
 	"trip_drive": "Driving",
 	"trip_bicycle": "Cycling",
-	"error_backend_title": "Backend unavailable"
+	"error_backend_title": "Backend unavailable",
+	"optimizer_save_trip": "Save trip",
+	"save_trip_title": "Save trip",
+	"save_trip_name_label": "Trip name",
+	"save_trip_name_placeholder": "e.g. Weekend in Kraków",
+	"save_trip_name_required": "Name is required",
+	"save_trip_date_label": "Date",
+	"save_trip_submit": "Save",
+	"save_trip_cancel": "Cancel",
+	"save_trip_success": "Trip \"{name}\" saved!"
 }
