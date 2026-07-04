@@ -124,3 +124,63 @@ SvelteKit spreads across load functions and shared state. Features that make the
 one added moves the island toward the SvelteKit number, and interactive screens like the route
 planner or chat would start near it. The measured advantage is real for mostly-static screens and
 should be expected to erode in proportion to per-screen interactivity.
+
+## Route planner preview
+
+**Question:** Does a form-input → optimizer request → map-result workflow remain a small island,
+or does it collapse into an SPA-in-one-component?
+
+`/route-preview` is the first screen with a multi-step user workflow: select places → configure
+start hour and transport mode → call the optimizer → display ordered route steps on a map. All
+state lives in a single `RoutePreview.svelte` island; `LeafletMap.svelte` is reused unchanged.
+
+Methodology: same as above (production build served by `astro preview`, network idle,
+Playwright fresh browser context). Measured 2026-07-04 on the same dataset (3 active places).
+The API fetch column is 0.0 because `astro preview` runs on port 4323, which is outside the
+backend's default `CORS_ALLOW_ORIGINS`; at a CORS-allowed port the active-places fetch adds
+~4.1 kB (same as `/places`). The "after map load" and "after optimizer result" columns require
+a working Distance Matrix API key and are left TBD.
+
+| App | Route | Requests | JS kB | CSS kB | HTML kB | API fetch kB | Total kB |
+|---|---|---|---|---|---|---|---|
+| astro | /route-preview | 7 | 51.9 | 12.9 | 6.0 | 0.0 (see note) | 70.8 |
+
+For reference, the same build's numbers for the other three routes:
+
+| App | Route | Requests | JS kB | CSS kB | HTML kB | API fetch kB | Total kB |
+|---|---|---|---|---|---|---|---|
+| astro | / | 7 | 42.7 | 12.9 | 5.9 | 0.0 | 61.5 |
+| astro | /places | 8 | 50.8 | 12.9 | 5.9 | 0.0 | 69.7 |
+| astro | /health | 6 | 42.6 | 12.9 | 6.3 | 0.0 | 61.8 |
+
+The slight increase vs the 2026-07-03 measurements (e.g. `/places` 48.3 → 50.8 kB JS) reflects
+the new `RoutePreview` island and its `SvelteSet` import expanding the shared Svelte runtime
+chunk (~38.3 → 39.9 kB).
+
+Astro client chunks on `/route-preview` (from `dist/_astro/`):
+
+| Chunk | kB |
+|---|---|
+| Svelte runtime + island client (`client.*.js`) | 38.9 |
+| `RoutePreview` island (selection + form + optimizer call + result list) | 6.9 |
+| `LeafletMap` island (markers, polyline — lazy Leaflet import) | 4.2 |
+| `leaflet-src` (lazy, only after optimizer result activates map) | 145.3 |
+
+`RoutePreview` at 6.9 kB is 1.6 kB larger than `PlacesExplorer` (5.3 kB) despite handling a
+noticeably more complex workflow. The fixed cost remains the ~39 kB Svelte runtime.
+
+LOC: **178 non-blank lines** in `RoutePreview.svelte` (vs ~145 LOC for `PlacesExplorer`).
+
+Qualitative assessment:
+
+- [x] Island state cohesive — 8 `$state` variables form a single linear flow (fetch → form →
+  request → result); no sub-state machines, no cross-island coordination.
+- [x] Leaflet still lazy-loadable — same `onMount` dynamic import pattern; Leaflet fires only
+  after the optimizer result renders `<LeafletMap>`, keeping the initial bundle at 51.9 kB.
+- [x] Error handling straightforward — a backend error (`PERMISSION_DENIED` from Distance
+  Matrix API tested live) surfaces as an explicit red banner; no silent failure.
+- **Verdict: complex-but-coherent island.** More state than `PlacesExplorer`, but all of it
+  belongs to one workflow and the framework did not fight back. The line to SPA-in-island is
+  visible: any feature requiring coordination between the map markers and the place checklist
+  (e.g. click marker → toggle selection) would need either a single larger island or a shared
+  store — neither of which Astro makes easy without a workaround.

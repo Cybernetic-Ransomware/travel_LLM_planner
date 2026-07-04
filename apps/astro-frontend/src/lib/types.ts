@@ -38,3 +38,30 @@ export interface PlaceStats {
 	enriched: number;
 	withHours: number;
 }
+
+export type TransportMode = 'WALK' | 'DRIVE' | 'BICYCLE' | 'TRANSIT';
+
+export interface SkippedPlace {
+	place_id: string;
+	name: string | null;
+	reason: string;
+}
+
+export interface OptimizeRequest {
+	place_ids: string[];
+	transport_mode?: TransportMode;
+	day_start_hour?: number;
+	day_end_hour?: number;
+	start_lat?: number;
+	start_lng?: number;
+	departure_date?: string;
+}
+
+export interface OptimizeResponse {
+	steps: RouteStep[];
+	total_travel_time_s: number;
+	total_visit_time_min: number;
+	total_wait_min: number;
+	transport_mode: TransportMode;
+	skipped: SkippedPlace[];
+}

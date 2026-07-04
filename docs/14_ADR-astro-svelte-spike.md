@@ -71,7 +71,14 @@ Preliminary observations against the spike's evaluation questions:
 - *Is SvelteKit still better for this application?* For the interactive core (route planner,
   orchestrator chat) most logic would end up inside large islands anyway, which weakens Astro's benefit
   there.
-- *Continue, stop, or scope down?* Decision pending review of the spike (options A/B/C above).
+- *Continue, stop, or scope down?* **Option C chosen (2026-07-04)**: Astro is retained for
+  public-facing, mostly-static screens (marketing, documentation, landing pages). SvelteKit
+  (`apps/frontend`) remains the shell for interactive application screens. The route-preview spike
+  on `feature/astro-route-preview` confirmed the boundary: a form-input → optimizer → map workflow
+  fits inside a coherent 178-LOC island, but any cross-component coordination (map marker ↔ place
+  checklist) would require a shared store or a single mega-island — neither of which Astro makes
+  ergonomic. The JS saving is real (51.9 kB vs ~280 kB SvelteKit `/places`), but it erodes in
+  proportion to interactivity; for screens with orchestrator chat or drag-and-drop it would vanish.
 
 ## Consequences
 ### Positive Outcomes
@@ -88,6 +95,7 @@ Preliminary observations against the spike's evaluation questions:
   time-box and this ADR recording the exit criteria.
 
 ## Status
-`Proposed` — experimental, limited to the spike in `apps/astro-frontend`. The continue/stop/scope-down
-decision (options A/B/C) will be taken after reviewing the spike; this ADR should then be updated to
-`Accepted` or `Rejected`.
+`Accepted` — option C: Astro for public/static screens, SvelteKit for the interactive application
+core. Decision taken 2026-07-04 after the route-preview spike (`feature/astro-route-preview`)
+confirmed the complexity boundary. `apps/astro-frontend` is kept; `apps/frontend` (SvelteKit)
+remains the primary application shell.
