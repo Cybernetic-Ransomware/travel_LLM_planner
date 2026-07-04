@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getPlacesContext } from '$lib/state/context.svelte.js';
+	import type { PageData } from './$types.js';
 	import { optimizeRoute } from '$lib/api/optimizer.js';
 	import { ApiError } from '$lib/api/client.js';
 	import type { OptimizeRequest, OptimizeResponse } from '$lib/types/index.js';
@@ -9,7 +9,7 @@
 
 	import * as m from '$lib/paraglide/messages.js';
 
-	const places = getPlacesContext();
+	let { data }: { data: PageData } = $props();
 
 	let selectedIds = $state<string[]>([]);
 	let result = $state<OptimizeResponse | null>(null);
@@ -27,9 +27,13 @@
 		}
 	});
 
-	const mapPlaces = $derived(result ? [] : places.filtered);
+	const mapPlaces = $derived(result ? [] : data.places);
 	const mapSteps = $derived(result?.steps ?? []);
 	const mapSelectedIds = $derived(new Set(selectedIds));
+
+	const placesLoadError = $derived(
+		data.backendError ? `${data.backendError.message} (${data.backendError.status})` : null
+	);
 
 	async function handleSubmit(request: OptimizeRequest) {
 		loading = true;
@@ -51,6 +55,10 @@
 		<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{m.page_optimizer_subtitle()}</p>
 	</div>
 
+	{#if placesLoadError}
+		<Toast message={placesLoadError} variant="error" />
+	{/if}
+
 	{#if error}
 		<Toast message={error} variant="error" onclose={() => (error = null)} />
 	{/if}
@@ -58,7 +66,7 @@
 	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
 		<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-72 md:shrink-0">
 			<RouteForm
-				places={places.filtered}
+				places={data.places}
 				bind:selectedIds
 				{loading}
 				onsubmit={handleSubmit}

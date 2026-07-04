@@ -155,4 +155,10 @@
 		{/if}
 		{m.optimizer_submit()}
 	</button>
+
+	{#if selectedIds.length < 2}
+		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">
+			{m.optimizer_min_places_hint()}
+		</p>
+	{/if}
 </form>

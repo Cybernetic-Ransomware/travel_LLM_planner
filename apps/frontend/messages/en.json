@@ -68,6 +68,7 @@
 	"optimizer_drive": "Driving",
 	"optimizer_bicycle": "Cycling",
 	"optimizer_transit": "Transit",
+	"optimizer_min_places_hint": "Select at least 2 places",
 	"results_places_unit": "places",
 	"results_travel_label": "travel",
 	"results_visits_label": "visits",

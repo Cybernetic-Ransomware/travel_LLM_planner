@@ -68,6 +68,7 @@
 	"optimizer_drive": "Samochodem",
 	"optimizer_bicycle": "Rowerem",
 	"optimizer_transit": "Komunikacją",
+	"optimizer_min_places_hint": "Zaznacz co najmniej 2 miejsca",
 	"results_places_unit": "miejsc",
 	"results_travel_label": "podróż",
 	"results_visits_label": "wizyty",
