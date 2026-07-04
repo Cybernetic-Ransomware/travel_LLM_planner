@@ -1,0 +1,13 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHeader from '../components/ui/PageHeader.astro';
+import RoutePreview from '../components/islands/RoutePreview.svelte';
+---
+
+<BaseLayout title="Route Preview">
+	<PageHeader
+		title="Route Preview"
+		subtitle="Select places, set a start time, and optimize the visit order."
+	/>
+	<RoutePreview client:load />
+</BaseLayout>

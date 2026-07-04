@@ -1,4 +1,4 @@
-import type { PlaceOut } from '../types';
+import type { PlaceOut, OptimizeRequest, OptimizeResponse } from '../types';
 
 export const API_BASE: string = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8080';
 
@@ -61,4 +61,15 @@ export function getHealth(): Promise<{ status: string }> {
 
 export function getPlaces(): Promise<PlaceOut[]> {
 	return apiFetch<PlaceOut[]>('/api/v1/core/gmaps/places');
+}
+
+export function getActivePlaces(): Promise<PlaceOut[]> {
+	return apiFetch<PlaceOut[]>('/api/v1/core/gmaps/places?skipped=false');
+}
+
+export function optimizeRoute(req: OptimizeRequest): Promise<OptimizeResponse> {
+	return apiFetch<OptimizeResponse>('/api/v1/core/optimizer/route', {
+		method: 'POST',
+		body: JSON.stringify(req)
+	});
 }
