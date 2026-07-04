@@ -11,9 +11,18 @@ export interface SaveTripRequest {
 	day_end_hour: number;
 }
 
-export interface TripOut {
+export interface TripSummaryOut {
 	id: string;
 	name: string;
 	date: string;
 	created_at: string;
+}
+
+export interface TripOut extends TripSummaryOut {
+	optimizer_request: OptimizeRequest;
+	optimizer_response: OptimizeResponse;
+	selected_place_ids: string[];
+	transport_mode: TransportMode;
+	day_start_hour: number;
+	day_end_hour: number;
 }

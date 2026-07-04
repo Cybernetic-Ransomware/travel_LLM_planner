@@ -20,7 +20,6 @@
 	let error = $state<string | null>(null);
 	let showSaveForm = $state(false);
 	let saveSuccess = $state<string | null>(null);
-	let saveError = $state<string | null>(null);
 
 	let LeafletMap: typeof import('$lib/components/map/LeafletMap.svelte').default | null =
 		$state(null);
@@ -89,10 +88,6 @@
 
 	{#if saveSuccess}
 		<Toast message={saveSuccess} variant="success" onclose={() => (saveSuccess = null)} />
-	{/if}
-
-	{#if saveError}
-		<Toast message={saveError} variant="error" onclose={() => (saveError = null)} />
 	{/if}
 
 	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">

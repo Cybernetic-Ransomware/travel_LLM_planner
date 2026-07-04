@@ -19,10 +19,16 @@
 		oncancel: () => void;
 	} = $props();
 
-	const today = new Date().toISOString().slice(0, 10);
+	function localDateString(): string {
+		const d = new Date();
+		const y = d.getFullYear();
+		const mo = String(d.getMonth() + 1).padStart(2, '0');
+		const day = String(d.getDate()).padStart(2, '0');
+		return `${y}-${mo}-${day}`;
+	}
 
 	let name = $state('');
-	let date = $state(today);
+	let date = $state(localDateString());
 	let saving = $state(false);
 	let formError = $state<string | null>(null);
 
