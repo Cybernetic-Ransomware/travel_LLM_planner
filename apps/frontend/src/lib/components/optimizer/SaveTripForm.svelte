@@ -2,7 +2,12 @@
 	import { saveTrip } from '$lib/api/trips.js';
 	import { ApiError } from '$lib/api/client.js';
 	import Modal from '$lib/components/ui/Modal.svelte';
-	import type { OptimizeRequest, OptimizeResponse, SaveTripRequest, TripOut } from '$lib/types/index.js';
+	import type {
+		OptimizeRequest,
+		OptimizeResponse,
+		SaveTripRequest,
+		TripOut
+	} from '$lib/types/index.js';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let {
@@ -39,11 +44,11 @@
 		saving = true;
 		try {
 			const payload: SaveTripRequest = {
-					name: name.trim(),
-					date,
-					optimizer_request: request,
-					optimizer_response: result
-				};
+				name: name.trim(),
+				date,
+				optimizer_request: request,
+				optimizer_response: result
+			};
 			const trip = await saveTrip(payload);
 			onsave(trip);
 		} catch (err) {
@@ -65,7 +70,7 @@
 				type="text"
 				bind:value={name}
 				placeholder={m.save_trip_name_placeholder()}
-				class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500"
+				class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500"
 			/>
 		</div>
 		<div class="flex flex-col gap-1.5">
@@ -76,7 +81,7 @@
 				id="trip-date"
 				type="date"
 				bind:value={date}
-				class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+				class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
 			/>
 		</div>
 		{#if formError}
