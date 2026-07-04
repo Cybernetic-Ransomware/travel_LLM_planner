@@ -3,9 +3,10 @@
 	import type { PageData } from './$types.js';
 	import { optimizeRoute } from '$lib/api/optimizer.js';
 	import { ApiError } from '$lib/api/client.js';
-	import type { OptimizeRequest, OptimizeResponse } from '$lib/types/index.js';
+	import type { OptimizeRequest, OptimizeResponse, TripOut } from '$lib/types/index.js';
 	import RouteForm from '$lib/components/optimizer/RouteForm.svelte';
 	import RouteResults from '$lib/components/optimizer/RouteResults.svelte';
+	import SaveTripForm from '$lib/components/optimizer/SaveTripForm.svelte';
 	import Toast from '$lib/components/ui/Toast.svelte';
 
 	import * as m from '$lib/paraglide/messages.js';
@@ -14,8 +15,12 @@
 
 	let selectedIds = $state<string[]>(untrack(() => data.places.map((p) => p.id)));
 	let result = $state<OptimizeResponse | null>(null);
+	let lastRequest = $state<OptimizeRequest | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+	let showSaveForm = $state(false);
+	let saveSuccess = $state<string | null>(null);
+	let saveError = $state<string | null>(null);
 
 	let LeafletMap: typeof import('$lib/components/map/LeafletMap.svelte').default | null =
 		$state(null);
@@ -37,9 +42,11 @@
 	);
 
 	async function handleSubmit(request: OptimizeRequest) {
+		lastRequest = request;
 		loading = true;
 		error = null;
 		result = null;
+		saveSuccess = null;
 		try {
 			result = await optimizeRoute(request);
 		} catch (err) {
@@ -59,6 +66,11 @@
 			loading = false;
 		}
 	}
+
+	function handleTripSaved(trip: TripOut) {
+		showSaveForm = false;
+		saveSuccess = m.save_trip_success({ name: trip.name });
+	}
 </script>
 
 <div class="flex h-full flex-col gap-4">
@@ -75,6 +87,14 @@
 		<Toast message={error} variant="error" onclose={() => (error = null)} />
 	{/if}
 
+	{#if saveSuccess}
+		<Toast message={saveSuccess} variant="success" onclose={() => (saveSuccess = null)} />
+	{/if}
+
+	{#if saveError}
+		<Toast message={saveError} variant="error" onclose={() => (saveError = null)} />
+	{/if}
+
 	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
 		<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-72 md:shrink-0">
 			<RouteForm
@@ -87,6 +107,13 @@
 
 			{#if result}
 				<RouteResults {result} />
+
+				<button
+					onclick={() => (showSaveForm = true)}
+					class="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+				>
+					{m.optimizer_save_trip()}
+				</button>
 			{/if}
 		</div>
 
@@ -101,3 +128,13 @@
 		</div>
 	</div>
 </div>
+
+{#if showSaveForm && result && lastRequest}
+	<SaveTripForm
+		request={lastRequest}
+		{result}
+		{selectedIds}
+		onsave={handleTripSaved}
+		oncancel={() => (showSaveForm = false)}
+	/>
+{/if}
