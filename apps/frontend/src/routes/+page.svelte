@@ -14,6 +14,16 @@
 		<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{m.page_dashboard_subtitle()}</p>
 	</div>
 
+	{#if data.backendError}
+		<div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+			<p class="font-medium">{m.error_backend_title()}</p>
+			<p class="mt-1">
+				{data.backendError.message}
+				<span class="text-red-500 dark:text-red-400">({data.backendError.status})</span>
+			</p>
+		</div>
+	{/if}
+
 	<PlaceStats {...data.stats} />
 
 	<div class="grid grid-cols-1 gap-4 md:grid-cols-2">

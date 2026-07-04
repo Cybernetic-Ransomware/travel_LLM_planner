@@ -85,5 +85,6 @@
 	"trip_unassigned_label": "bez przydziału",
 	"trip_walk": "Pieszo",
 	"trip_drive": "Samochodem",
-	"trip_bicycle": "Rowerem"
+	"trip_bicycle": "Rowerem",
+	"error_backend_title": "Backend niedostępny"
 }
