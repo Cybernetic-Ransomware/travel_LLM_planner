@@ -15,12 +15,13 @@
 		{ href: '/places', label: () => m.nav_places(), icon: '📍' },
 		{ href: '/optimizer', label: () => m.nav_optimizer(), icon: '🗺' },
 		{ href: '/trip', label: () => m.nav_trip(), icon: '📅' },
+		{ href: '/trips', label: () => m.nav_trips(), icon: '🗂' },
 		{ href: '/health', label: () => m.nav_health(), icon: '♥' }
 	] as const;
 
 	function isActive(href: string): boolean {
 		if (href === '/') return page.url.pathname === '/';
-		return page.url.pathname.startsWith(href);
+		return page.url.pathname === href || page.url.pathname.startsWith(href + '/');
 	}
 </script>
 
