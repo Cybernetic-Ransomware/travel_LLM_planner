@@ -7,10 +7,12 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from src.trips.models import SaveTripRequest, TripOut
 
+TRIPS_COLLECTION = "trips"
+
 
 class TripsManager:
     def __init__(self, db: AsyncDatabase) -> None:
-        self._collection = db["trips"]
+        self._collection = db[TRIPS_COLLECTION]
 
     async def save(self, request: SaveTripRequest) -> TripOut:
         doc = request.model_dump(mode="json")
