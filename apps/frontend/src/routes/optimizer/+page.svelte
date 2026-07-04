@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { PageData } from './$types.js';
 	import { optimizeRoute } from '$lib/api/optimizer.js';
 	import { ApiError } from '$lib/api/client.js';
@@ -11,7 +12,7 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let selectedIds = $state<string[]>([]);
+	let selectedIds = $state<string[]>(untrack(() => data.places.map((p) => p.id)));
 	let result = $state<OptimizeResponse | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
@@ -20,7 +21,7 @@
 		$state(null);
 
 	$effect(() => {
-		if (!LeafletMap) {
+		if (!LeafletMap && (data.places.length > 0 || result !== null)) {
 			import('$lib/components/map/LeafletMap.svelte').then((m) => {
 				LeafletMap = m.default;
 			});
@@ -42,7 +43,18 @@
 		try {
 			result = await optimizeRoute(request);
 		} catch (err) {
-			error = err instanceof ApiError ? err.detail : 'Optimization failed.';
+			if (err instanceof ApiError) {
+				const d = err.detail.toLowerCase();
+				if (err.status === 504 || d.includes('timed out')) {
+					error = m.optimizer_error_timeout();
+				} else if (d.includes('permission_denied') || d.includes('permission denied')) {
+					error = m.optimizer_error_api_key();
+				} else {
+					error = err.detail;
+				}
+			} else {
+				error = 'Optimization failed.';
+			}
 		} finally {
 			loading = false;
 		}
@@ -67,6 +79,7 @@
 		<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-72 md:shrink-0">
 			<RouteForm
 				places={data.places}
+				hasLoadError={data.backendError !== null}
 				bind:selectedIds
 				{loading}
 				onsubmit={handleSubmit}

@@ -6,11 +6,13 @@
 
 	let {
 		places,
+		hasLoadError = false,
 		selectedIds = $bindable<string[]>([]),
 		loading = false,
 		onsubmit
 	}: {
 		places: PlaceOut[];
+		hasLoadError?: boolean;
 		selectedIds?: string[];
 		loading?: boolean;
 		onsubmit: (request: OptimizeRequest) => void;
@@ -20,7 +22,8 @@
 	let dayStartHour = $state(8);
 	let dayEndHour = $state(20);
 
-	const canSubmit = $derived(selectedIds.length >= 2 && !loading);
+	const validHours = $derived(dayStartHour < dayEndHour);
+	const canSubmit = $derived(selectedIds.length >= 2 && validHours && !loading);
 
 	const transportOptions = $derived([
 		{ value: 'WALK', label: m.optimizer_walk() },
@@ -81,9 +84,7 @@
 		<div class="max-h-48 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-800">
 			{#each places as place (place.id)}
 				<label
-					class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 {place.skipped
-						? 'opacity-50'
-						: ''}"
+					class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700"
 				>
 					<input
 						type="checkbox"
@@ -97,7 +98,11 @@
 					{/if}
 				</label>
 			{:else}
-				<p class="px-3 py-4 text-center text-xs text-zinc-400">{m.optimizer_no_places()}</p>
+				{#if hasLoadError}
+					<p class="px-3 py-4 text-center text-xs text-zinc-400">{m.optimizer_places_load_error()}</p>
+				{:else}
+					<p class="px-3 py-4 text-center text-xs text-zinc-400">{m.optimizer_no_active_places()}</p>
+				{/if}
 			{/each}
 		</div>
 
@@ -156,9 +161,11 @@
 		{m.optimizer_submit()}
 	</button>
 
-	{#if selectedIds.length < 2}
-		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">
-			{m.optimizer_min_places_hint()}
-		</p>
+	{#if places.length === 1}
+		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">{m.optimizer_one_place()}</p>
+	{:else if selectedIds.length < 2}
+		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">{m.optimizer_min_places_hint()}</p>
+	{:else if !validHours}
+		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">{m.optimizer_invalid_hours()}</p>
 	{/if}
 </form>

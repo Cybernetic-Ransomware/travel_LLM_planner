@@ -14,7 +14,7 @@
 </script>
 
 <div class="flex flex-col gap-3">
-	<div class="grid grid-cols-3 gap-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+	<div class="grid grid-cols-4 gap-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
 		<div class="text-center">
 			<p class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{result.steps.length}</p>
 			<p class="text-xs text-zinc-500 dark:text-zinc-400">{m.results_places_unit()}</p>
@@ -28,6 +28,10 @@
 		<div class="text-center">
 			<p class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{result.total_visit_time_min} min</p>
 			<p class="text-xs text-zinc-500 dark:text-zinc-400">{m.results_visits_label()}</p>
+		</div>
+		<div class="text-center">
+			<p class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{result.total_wait_min} min</p>
+			<p class="text-xs text-zinc-500 dark:text-zinc-400">{m.results_wait_label()}</p>
 		</div>
 	</div>
 
