@@ -49,15 +49,17 @@ def _to_trip_summary_out(doc: dict) -> TripSummaryOut:
 
 
 def _to_trip_detail_out(doc: dict) -> TripDetailOut:
+    req = OptimizeRequest.model_validate(doc["optimizer_request"])
+    resp = OptimizeResponse.model_validate(doc["optimizer_response"])
     return TripDetailOut(
         id=str(doc["_id"]),
         name=doc["name"],
         date=str(doc["date"]),
         created_at=doc["created_at"].isoformat(),
-        optimizer_request=OptimizeRequest.model_validate(doc["optimizer_request"]),
-        optimizer_response=OptimizeResponse.model_validate(doc["optimizer_response"]),
-        selected_place_ids=doc["selected_place_ids"],
-        transport_mode=doc["transport_mode"],
-        day_start_hour=doc["day_start_hour"],
-        day_end_hour=doc["day_end_hour"],
+        optimizer_request=req,
+        optimizer_response=resp,
+        selected_place_ids=req.place_ids,
+        transport_mode=req.transport_mode,
+        day_start_hour=req.day_start_hour,
+        day_end_hour=req.day_end_hour,
     )

@@ -128,7 +128,6 @@
 	<SaveTripForm
 		request={lastRequest}
 		{result}
-		{selectedIds}
 		onsave={handleTripSaved}
 		oncancel={() => (showSaveForm = false)}
 	/>

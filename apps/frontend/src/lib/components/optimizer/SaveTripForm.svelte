@@ -8,13 +8,11 @@
 	let {
 		request,
 		result,
-		selectedIds,
 		onsave,
 		oncancel
 	}: {
 		request: OptimizeRequest;
 		result: OptimizeResponse;
-		selectedIds: string[];
 		onsave: (trip: TripOut) => void;
 		oncancel: () => void;
 	} = $props();
@@ -41,15 +39,11 @@
 		saving = true;
 		try {
 			const payload: SaveTripRequest = {
-				name: name.trim(),
-				date,
-				optimizer_request: request,
-				optimizer_response: result,
-				selected_place_ids: selectedIds,
-				transport_mode: request.transport_mode,
-				day_start_hour: request.day_start_hour,
-				day_end_hour: request.day_end_hour
-			};
+					name: name.trim(),
+					date,
+					optimizer_request: request,
+					optimizer_response: result
+				};
 			const trip = await saveTrip(payload);
 			onsave(trip);
 		} catch (err) {

@@ -22,10 +22,6 @@ def _valid_payload() -> dict:
             "transport_mode": "WALK",
             "skipped": [],
         },
-        "selected_place_ids": ["p1", "p2"],
-        "transport_mode": "WALK",
-        "day_start_hour": 9,
-        "day_end_hour": 21,
     }
 
 
@@ -48,33 +44,15 @@ class TestSaveTripRequest:
         with pytest.raises(ValidationError):
             SaveTripRequest(**payload)
 
-    def test_day_start_hour_above_23_rejected(self):
-        payload = _valid_payload()
-        payload["day_start_hour"] = 24
-        with pytest.raises(ValidationError):
-            SaveTripRequest(**payload)
-
-    def test_day_end_hour_zero_rejected(self):
-        payload = _valid_payload()
-        payload["day_end_hour"] = 0
-        with pytest.raises(ValidationError):
-            SaveTripRequest(**payload)
-
-    def test_day_end_before_start_rejected(self):
-        payload = _valid_payload()
-        payload["day_start_hour"] = 20
-        payload["day_end_hour"] = 8
-        with pytest.raises(ValidationError):
-            SaveTripRequest(**payload)
-
-    def test_selected_place_ids_min_length_rejected(self):
-        payload = _valid_payload()
-        payload["selected_place_ids"] = ["only-one"]
-        with pytest.raises(ValidationError):
-            SaveTripRequest(**payload)
-
     def test_missing_optimizer_request_rejected(self):
         payload = _valid_payload()
         del payload["optimizer_request"]
+        with pytest.raises(ValidationError):
+            SaveTripRequest(**payload)
+
+    def test_invalid_optimizer_request_rejected(self):
+        payload = _valid_payload()
+        payload["optimizer_request"]["day_start_hour"] = 20
+        payload["optimizer_request"]["day_end_hour"] = 8
         with pytest.raises(ValidationError):
             SaveTripRequest(**payload)

@@ -24,10 +24,6 @@ def _payload() -> dict:
             "transport_mode": "WALK",
             "skipped": [],
         },
-        "selected_place_ids": ["p1", "p2"],
-        "transport_mode": "WALK",
-        "day_start_hour": 9,
-        "day_end_hour": 21,
     }
 
 
@@ -50,6 +46,8 @@ class TestSaveTrip:
         assert "optimizer_request" in data
         assert "optimizer_response" in data
         assert data["selected_place_ids"] == ["p1", "p2"]
+        assert data["transport_mode"] == "WALK"
+        assert data["day_start_hour"] == 9
 
     async def test_empty_name_returns_422(self, client: AsyncClient):
         payload = _payload()
@@ -57,9 +55,9 @@ class TestSaveTrip:
         response = await client.post(f"{ENDPOINT}/", json=payload)
         assert response.status_code == 422
 
-    async def test_single_place_returns_422(self, client: AsyncClient):
+    async def test_single_place_in_optimizer_request_returns_422(self, client: AsyncClient):
         payload = _payload()
-        payload["selected_place_ids"] = ["only-one"]
+        payload["optimizer_request"]["place_ids"] = ["only-one"]
         response = await client.post(f"{ENDPOINT}/", json=payload)
         assert response.status_code == 422
 

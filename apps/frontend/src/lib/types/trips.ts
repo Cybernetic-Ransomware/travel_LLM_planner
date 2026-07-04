@@ -5,10 +5,6 @@ export interface SaveTripRequest {
 	date: string;
 	optimizer_request: OptimizeRequest;
 	optimizer_response: OptimizeResponse;
-	selected_place_ids: string[];
-	transport_mode: TransportMode;
-	day_start_hour: number;
-	day_end_hour: number;
 }
 
 export interface TripSummaryOut {
