@@ -20,3 +20,8 @@ export function formatHour(hour: number | null): string {
 	if (hour === null) return '—';
 	return `${String(hour).padStart(2, '0')}:00`;
 }
+
+export function formatDateTime(value: string): string {
+	const d = new Date(value);
+	return d.toISOString().replace('T', ' ').slice(0, 16);
+}

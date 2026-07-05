@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types.js';
+	import { formatDateTime } from '$lib/utils/format.js';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
@@ -35,7 +36,7 @@
 						{m.trip_date()}: {trip.date}
 					</span>
 					<span class="text-zinc-400 dark:text-zinc-500">
-						{m.trip_created_at()}: {new Date(trip.created_at).toLocaleString()}
+						{m.trip_created_at()}: {formatDateTime(trip.created_at)}
 					</span>
 				</a>
 			{/each}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types.js';
 	import RouteResults from '$lib/components/optimizer/RouteResults.svelte';
-	import { formatDurationSeconds } from '$lib/utils/format.js';
+	import { formatDurationSeconds, formatDateTime } from '$lib/utils/format.js';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
@@ -31,7 +31,7 @@
 			<p class="text-sm text-zinc-500 dark:text-zinc-400">
 				{m.trip_date()}: {data.trip.date}
 				&nbsp;·&nbsp;
-				{m.trip_created_at()}: {new Date(data.trip.created_at).toLocaleString()}
+				{m.trip_created_at()}: {formatDateTime(data.trip.created_at)}
 			</p>
 		{/if}
 	</div>
