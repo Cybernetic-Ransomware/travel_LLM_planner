@@ -34,6 +34,11 @@ describe('trips API', () => {
 			mockFetch([]);
 			expect(await getTrips()).toEqual([]);
 		});
+
+		it('throws ApiError on 500', async () => {
+			mockFetch({ detail: 'Internal error' }, 500);
+			await expect(getTrips()).rejects.toMatchObject({ status: 500 });
+		});
 	});
 
 	describe('getTrip', () => {
@@ -57,9 +62,9 @@ describe('trips API', () => {
 				transport_mode: 'WALK',
 				day_start_hour: 9,
 				day_end_hour: 21,
-				selected_place_ids: ['p1'],
+				selected_place_ids: ['p1', 'p2'],
 				optimizer_request: {
-					place_ids: ['p1'],
+					place_ids: ['p1', 'p2'],
 					transport_mode: 'WALK',
 					day_start_hour: 9,
 					day_end_hour: 21
@@ -117,6 +122,29 @@ describe('trips API', () => {
 				'/api/proxy/core/trips',
 				expect.objectContaining({ method: 'POST', body: JSON.stringify(request) })
 			);
+		});
+
+		it('throws ApiError on 422', async () => {
+			mockFetch({ detail: 'Unprocessable entity' }, 422);
+			const req: SaveTripRequest = {
+				name: 'x',
+				date: '2025-06-01',
+				optimizer_request: {
+					place_ids: ['p1', 'p2'],
+					transport_mode: 'WALK',
+					day_start_hour: 9,
+					day_end_hour: 21
+				},
+				optimizer_response: {
+					steps: [],
+					total_travel_time_s: 0,
+					total_visit_time_min: 0,
+					total_wait_min: 0,
+					transport_mode: 'WALK',
+					skipped: []
+				}
+			};
+			await expect(saveTrip(req)).rejects.toMatchObject({ status: 422 });
 		});
 	});
 });

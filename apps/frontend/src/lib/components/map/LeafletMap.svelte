@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { Map as LMap, Marker, Polyline } from 'leaflet';
 	import type { PlaceOut, RouteStep } from '$lib/types/index.js';
+	import { getMapCenter } from './mapUtils.js';
 
 	let {
 		places = [],
@@ -20,17 +21,6 @@
 	let markers: Marker[] = [];
 	let polyline: Polyline | null = null;
 	let leaflet: typeof import('leaflet') | null = null;
-
-	function center(): [number, number] {
-		const source =
-			steps.length > 0
-				? steps.filter((s) => s.lat !== null && s.lng !== null)
-				: places.filter((p) => p.lat !== null && p.lng !== null);
-		if (source.length === 0) return [52.23, 21.01];
-		const lat = source.reduce((s, item) => s + item.lat!, 0) / source.length;
-		const lng = source.reduce((s, item) => s + item.lng!, 0) / source.length;
-		return [lat, lng];
-	}
 
 	function buildMarkers(L: typeof import('leaflet')): void {
 		markers.forEach((m) => m.remove());
@@ -117,7 +107,10 @@
 			await import('leaflet/dist/leaflet.css');
 
 			leaflet = L;
-			map = L.map(container).setView(center(), places.length > 0 || steps.length > 0 ? 13 : 6);
+			map = L.map(container).setView(
+				getMapCenter(places, steps),
+				places.length > 0 || steps.length > 0 ? 13 : 6
+			);
 			L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 				attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 			}).addTo(map);
