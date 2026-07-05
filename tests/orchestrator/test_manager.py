@@ -93,9 +93,11 @@ class TestOrchestratorManagerLifecycle:
             langsmith_tracing=True,
             langsmith_project="my-project",
         )
-        with patch("src.orchestrator.manager.build_graph", return_value=MagicMock()):
-            with patch.object(manager, "_create_llm", return_value=MagicMock()):
-                await manager.connect()
+        with (
+            patch("src.orchestrator.manager.build_graph", return_value=MagicMock()),
+            patch.object(manager, "_create_llm", return_value=MagicMock()),
+        ):
+            await manager.connect()
 
         assert os.environ.get("LANGSMITH_API_KEY") == "ls-key"
         assert os.environ.get("LANGCHAIN_TRACING_V2") == "true"
@@ -108,12 +110,148 @@ class TestOrchestratorManagerLifecycle:
     async def test_langsmith_env_vars_not_set_when_tracing_disabled(self, monkeypatch):
         monkeypatch.delenv("LANGCHAIN_TRACING_V2", raising=False)
         manager = _make_manager(langsmith_tracing=False)
-        with patch("src.orchestrator.manager.build_graph", return_value=MagicMock()):
-            with patch.object(manager, "_create_llm", return_value=MagicMock()):
-                await manager.connect()
+        with (
+            patch("src.orchestrator.manager.build_graph", return_value=MagicMock()),
+            patch.object(manager, "_create_llm", return_value=MagicMock()),
+        ):
+            await manager.connect()
 
         assert os.environ.get("LANGCHAIN_TRACING_V2") is None
         await manager.disconnect()
+
+
+@pytest.mark.unit
+class TestOrchestratorManagerAcancelPendingTools:
+    async def test_noop_when_not_connected(self):
+        manager = _make_manager()
+        await manager.acancel_pending_tools("thread-1")
+
+    async def test_noop_when_no_checkpointer(self):
+        manager = _make_manager()
+        manager._graph = MagicMock()
+        manager._graph.aget_state = AsyncMock()
+        await manager.acancel_pending_tools("thread-1")
+        manager._graph.aget_state.assert_not_awaited()
+
+    async def test_noop_when_thread_has_no_messages(self):
+        manager = _make_manager()
+        graph_state = MagicMock()
+        graph_state.values = {"messages": []}
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=graph_state)
+        mock_graph.aupdate_state = AsyncMock()
+        manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
+
+        await manager.acancel_pending_tools("thread-1")
+
+        mock_graph.aupdate_state.assert_not_awaited()
+
+    async def test_noop_when_no_message_has_tool_calls(self):
+        from langchain_core.messages import AIMessage
+
+        manager = _make_manager()
+        graph_state = MagicMock()
+        graph_state.values = {"messages": [AIMessage(id="msg-1", content="Plain answer.")]}
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=graph_state)
+        mock_graph.aupdate_state = AsyncMock()
+        manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
+
+        await manager.acancel_pending_tools("thread-1")
+
+        mock_graph.aupdate_state.assert_not_awaited()
+
+    async def test_noop_when_tool_calls_are_answered(self):
+        from langchain_core.messages import AIMessage, ToolCall, ToolMessage
+
+        manager = _make_manager()
+        tool_call = ToolCall(name="list_saved_trips", args={}, id="call_1")
+        graph_state = MagicMock()
+        graph_state.values = {
+            "messages": [
+                AIMessage(id="msg-1", content="", tool_calls=[tool_call]),
+                ToolMessage(content="Saved trips: ...", tool_call_id="call_1"),
+            ]
+        }
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=graph_state)
+        mock_graph.aupdate_state = AsyncMock()
+        manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
+
+        await manager.acancel_pending_tools("thread-1")
+
+        mock_graph.aupdate_state.assert_not_awaited()
+
+    async def test_strips_tool_calls_from_interrupted_message(self):
+        from langchain_core.messages import AIMessage, ToolCall
+
+        manager = _make_manager()
+        tool_call = ToolCall(name="list_saved_trips", args={}, id="call_1")
+        interrupted_msg = AIMessage(id="msg-1", content="", tool_calls=[tool_call])
+        graph_state = MagicMock()
+        graph_state.values = {"messages": [interrupted_msg]}
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=graph_state)
+        mock_graph.aupdate_state = AsyncMock()
+        manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
+
+        await manager.acancel_pending_tools("thread-1")
+
+        mock_graph.aupdate_state.assert_awaited_once()
+        update_arg = mock_graph.aupdate_state.call_args[0][1]
+        cancelled_msg = update_arg["messages"][0]
+        assert cancelled_msg.id == "msg-1"
+        assert cancelled_msg.tool_calls == []
+
+    async def test_strips_dangling_tool_calls_not_in_last_position(self):
+        from langchain_core.messages import AIMessage, HumanMessage, ToolCall
+
+        manager = _make_manager()
+        tool_call = ToolCall(name="list_saved_trips", args={}, id="call_1")
+        graph_state = MagicMock()
+        graph_state.values = {
+            "messages": [
+                HumanMessage(content="Do you have my trips?"),
+                AIMessage(id="msg-1", content="", tool_calls=[tool_call]),
+                HumanMessage(content="Do you have my trips?"),
+            ]
+        }
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=graph_state)
+        mock_graph.aupdate_state = AsyncMock()
+        manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
+
+        await manager.acancel_pending_tools("thread-1")
+
+        mock_graph.aupdate_state.assert_awaited_once()
+        update_arg = mock_graph.aupdate_state.call_args[0][1]
+        assert update_arg["messages"][0].id == "msg-1"
+        assert update_arg["messages"][0].tool_calls == []
+
+    async def test_appends_user_message_when_provided(self):
+        from langchain_core.messages import AIMessage, ToolCall
+
+        manager = _make_manager()
+        tool_call = ToolCall(name="list_saved_trips", args={}, id="call_1")
+        interrupted_msg = AIMessage(id="msg-1", content="", tool_calls=[tool_call])
+        graph_state = MagicMock()
+        graph_state.values = {"messages": [interrupted_msg]}
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=graph_state)
+        mock_graph.aupdate_state = AsyncMock()
+        manager._graph = mock_graph
+        manager._checkpointer = MagicMock()
+
+        await manager.acancel_pending_tools("thread-1", user_message="Never mind")
+
+        update_arg = mock_graph.aupdate_state.call_args[0][1]
+        assert len(update_arg["messages"]) == 2
+        assert update_arg["messages"][1].content == "Never mind"
 
 
 @pytest.mark.unit
@@ -235,11 +373,11 @@ class TestOrchestratorManagerAstreamResume:
         assert len(update_arg["messages"]) == 2
         assert update_arg["messages"][1].content == "No, cancel it"
 
-    async def test_cancelled_skips_update_when_no_pending_interrupt(self):
+    async def test_cancelled_skips_update_when_no_dangling_tool_calls(self):
         manager = _make_manager()
 
         graph_state = MagicMock()
-        graph_state.next = ()
+        graph_state.values = {"messages": []}
 
         async def _fake_events(*args, **kwargs):
             yield {"event": "on_chain_end", "data": {}}

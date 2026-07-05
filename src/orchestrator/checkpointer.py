@@ -39,8 +39,8 @@ class MongoCheckpointSaver(BaseCheckpointSaver):
         if doc is None:
             return None
 
-        checkpoint: Checkpoint = doc["checkpoint"]
-        metadata: CheckpointMetadata = doc.get("metadata", {})
+        checkpoint: Checkpoint = self.serde.loads_typed((doc["checkpoint_type"], bytes(doc["checkpoint"])))
+        metadata: CheckpointMetadata = self.serde.loads_typed((doc["metadata_type"], bytes(doc["metadata"])))
         saved_config: RunnableConfig = {"configurable": {"thread_id": thread_id, "checkpoint_id": doc["checkpoint_id"]}}
         return CheckpointTuple(config=saved_config, checkpoint=checkpoint, metadata=metadata)
 
@@ -55,6 +55,9 @@ class MongoCheckpointSaver(BaseCheckpointSaver):
         thread_id = config["configurable"]["thread_id"]
         checkpoint_id = checkpoint["id"]
 
+        checkpoint_type, checkpoint_bytes = self.serde.dumps_typed(checkpoint)
+        metadata_type, metadata_bytes = self.serde.dumps_typed(metadata)
+
         expires_at = datetime.now(UTC) + timedelta(days=self._retention_days)
         await self._collection.update_one(
             {"thread_id": thread_id, "checkpoint_id": checkpoint_id},
@@ -62,8 +65,10 @@ class MongoCheckpointSaver(BaseCheckpointSaver):
                 "$set": {
                     "thread_id": thread_id,
                     "checkpoint_id": checkpoint_id,
-                    "checkpoint": checkpoint,
-                    "metadata": metadata,
+                    "checkpoint": checkpoint_bytes,
+                    "checkpoint_type": checkpoint_type,
+                    "metadata": metadata_bytes,
+                    "metadata_type": metadata_type,
                     "expires_at": expires_at,
                 }
             },

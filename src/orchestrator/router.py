@@ -127,12 +127,22 @@ async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep, _use
     session_id = payload.session_id or str(uuid.uuid4())
 
     if payload.resume_confirmed is not None:
-        user_message = payload.messages[-1].content if payload.messages else None
+        # The client history is already checkpointed in the thread — re-sending
+        # its last message as user_message would insert a duplicate between the
+        # interrupted AIMessage(tool_calls) and the future ToolMessage, which
+        # both invalidates the history for the LLM provider and reroutes the
+        # resumed graph to END before the tool executes.
         logger.info("chat resume — session_id=%s confirmed=%s", session_id, payload.resume_confirmed)
         return StreamingResponse(
-            _stream_sse_resume(orch, session_id, payload.resume_confirmed, user_message),
+            _stream_sse_resume(orch, session_id, payload.resume_confirmed, user_message=None),
             media_type="text/event-stream",
         )
+
+    # A new message on an existing session implicitly abandons any pending tool
+    # proposal. The dangling tool_calls must be stripped from the checkpointed
+    # thread, otherwise the LLM provider rejects the conversation history.
+    if payload.session_id and orch.has_checkpointer:
+        await orch.acancel_pending_tools(session_id)
 
     place_context = await fetch_places_by_ids(db, payload.place_ids) if payload.place_ids else []
     allowed_place_ids = [str(p["_id"]) for p in place_context]
