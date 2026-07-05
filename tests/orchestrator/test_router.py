@@ -530,3 +530,41 @@ class TestStatusEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["ready"] is False
+
+
+@pytest.mark.unit
+class TestClassifyLlmError:
+    def test_openai_rate_limit(self):
+        class RateLimitError(Exception):
+            pass
+
+        RateLimitError.__module__ = "openai"
+        exc = RateLimitError("quota exceeded")
+        assert _router_mod._classify_llm_error(exc) == "OpenAI quota exceeded — check your billing."
+
+    def test_anthropic_rate_limit(self):
+        class RateLimitError(Exception):
+            pass
+
+        RateLimitError.__module__ = "anthropic"
+        exc = RateLimitError("rate limited")
+        assert _router_mod._classify_llm_error(exc) == "Anthropic rate limit exceeded — try again shortly."
+
+    def test_unknown_rate_limit(self):
+        class RateLimitError(Exception):
+            pass
+
+        RateLimitError.__module__ = "some_other_llm"
+        exc = RateLimitError("rate limited")
+        assert _router_mod._classify_llm_error(exc) == "LLM rate limit exceeded — try again shortly."
+
+    def test_authentication_error(self):
+        class AuthenticationError(Exception):
+            pass
+
+        exc = AuthenticationError("bad key")
+        assert _router_mod._classify_llm_error(exc) == "Invalid API key — check your LLM provider configuration."
+
+    def test_generic_exception(self):
+        exc = RuntimeError("graph exploded")
+        assert _router_mod._classify_llm_error(exc) == "Stream interrupted"

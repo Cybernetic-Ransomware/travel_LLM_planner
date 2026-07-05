@@ -21,6 +21,20 @@ logger = setup_logger(__name__, "orchestrator")
 _ROLE_TO_LC = {"user": HumanMessage, "assistant": AIMessage, "system": SystemMessage}
 
 
+def _classify_llm_error(exc: Exception) -> str:
+    type_name = type(exc).__name__
+    module = type(exc).__module__ or ""
+    if "RateLimitError" in type_name:
+        if "openai" in module:
+            return "OpenAI quota exceeded — check your billing."
+        if "anthropic" in module:
+            return "Anthropic rate limit exceeded — try again shortly."
+        return "LLM rate limit exceeded — try again shortly."
+    if "AuthenticationError" in type_name:
+        return "Invalid API key — check your LLM provider configuration."
+    return "Stream interrupted"
+
+
 def _to_lc_messages(messages: list[ChatMessage]) -> list:
     """Convert Pydantic ChatMessage list to LangChain message objects."""
     return [_ROLE_TO_LC[msg.role](content=msg.content) for msg in messages]
@@ -47,9 +61,9 @@ async def _stream_sse(
                 content = chunk.content if hasattr(chunk, "content") else chunk.get("content", "")
                 if content:
                     yield f"data: {json.dumps({'content': content})}\n\n"
-    except Exception:
+    except Exception as exc:
         logger.exception("Error during orchestrator SSE stream thread_id=%s", thread_id)
-        yield f"data: {json.dumps({'error': 'Stream interrupted'})}\n\n"
+        yield f"data: {json.dumps({'error': _classify_llm_error(exc)})}\n\n"
         stream_error = True
 
     # A second aget_state() call is required because the interrupt fires *after* the stream ends —
@@ -88,9 +102,9 @@ async def _stream_sse_resume(
                 content = chunk.content if hasattr(chunk, "content") else chunk.get("content", "")
                 if content:
                     yield f"data: {json.dumps({'content': content})}\n\n"
-    except Exception:
+    except Exception as exc:
         logger.exception("Error during orchestrator SSE resume thread_id=%s", thread_id)
-        yield f"data: {json.dumps({'error': 'Stream interrupted'})}\n\n"
+        yield f"data: {json.dumps({'error': _classify_llm_error(exc)})}\n\n"
     finally:
         yield "data: [DONE]\n\n"
 
