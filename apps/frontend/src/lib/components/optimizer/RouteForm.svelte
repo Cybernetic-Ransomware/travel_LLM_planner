@@ -24,10 +24,10 @@
 
 	const validHours = $derived(
 		dayStartHour >= 0 &&
-		dayStartHour <= 23 &&
-		dayEndHour >= 1 &&
-		dayEndHour <= 24 &&
-		dayStartHour < dayEndHour
+			dayStartHour <= 23 &&
+			dayEndHour >= 1 &&
+			dayEndHour <= 24 &&
+			dayStartHour < dayEndHour
 	);
 	const canSubmit = $derived(selectedIds.length >= 2 && validHours && !loading);
 
@@ -76,7 +76,9 @@
 >
 	<div class="flex flex-col gap-1">
 		<div class="flex items-center justify-between">
-			<span class="text-xs font-medium text-zinc-700 dark:text-zinc-300">{m.optimizer_places()}</span>
+			<span class="text-xs font-medium text-zinc-700 dark:text-zinc-300"
+				>{m.optimizer_places()}</span
+			>
 			<button
 				type="button"
 				onclick={toggleAll}
@@ -87,7 +89,9 @@
 			</button>
 		</div>
 
-		<div class="max-h-48 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-800">
+		<div
+			class="max-h-48 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-800"
+		>
 			{#each places as place (place.id)}
 				<label
 					class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700"
@@ -105,9 +109,13 @@
 				</label>
 			{:else}
 				{#if hasLoadError}
-					<p class="px-3 py-4 text-center text-xs text-zinc-400">{m.optimizer_places_load_error()}</p>
+					<p class="px-3 py-4 text-center text-xs text-zinc-400">
+						{m.optimizer_places_load_error()}
+					</p>
 				{:else}
-					<p class="px-3 py-4 text-center text-xs text-zinc-400">{m.optimizer_no_active_places()}</p>
+					<p class="px-3 py-4 text-center text-xs text-zinc-400">
+						{m.optimizer_no_active_places()}
+					</p>
 				{/if}
 			{/each}
 		</div>
@@ -136,7 +144,7 @@
 				max="23"
 				bind:value={dayStartHour}
 				disabled={loading}
-				class="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+				class="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 			/>
 		</div>
 		<div class="flex flex-col gap-1">
@@ -150,7 +158,7 @@
 				max="24"
 				bind:value={dayEndHour}
 				disabled={loading}
-				class="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+				class="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 			/>
 		</div>
 	</div>
@@ -170,8 +178,12 @@
 	{#if places.length === 1}
 		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">{m.optimizer_one_place()}</p>
 	{:else if selectedIds.length < 2}
-		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">{m.optimizer_min_places_hint()}</p>
+		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">
+			{m.optimizer_min_places_hint()}
+		</p>
 	{:else if !validHours}
-		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">{m.optimizer_invalid_hours()}</p>
+		<p class="text-center text-xs text-zinc-400 dark:text-zinc-500">
+			{m.optimizer_invalid_hours()}
+		</p>
 	{/if}
 </form>

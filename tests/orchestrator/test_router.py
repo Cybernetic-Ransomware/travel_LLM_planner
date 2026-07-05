@@ -1,3 +1,4 @@
+import contextlib
 import importlib
 import json
 from unittest.mock import AsyncMock, MagicMock
@@ -13,13 +14,14 @@ def _make_mock_orchestrator(events: list | None = None) -> MagicMock:
     """Create a mock OrchestratorManager that streams the given events."""
 
     async def _astream(*args, **kwargs):
-        for event in (events or []):
+        for event in events or []:
             yield event
 
     mock = MagicMock()
     mock.astream = _astream
     mock.is_ready = True
     mock.has_checkpointer = False
+    mock.acancel_pending_tools = AsyncMock()
     mock.provider = "openai"
     mock.model_name = "gpt-4o-mini"
     return mock
@@ -30,13 +32,11 @@ def _parse_sse(content: bytes) -> list[dict]:
     result = []
     for line in content.decode().splitlines():
         if line.startswith("data: "):
-            payload = line[len("data: "):]
+            payload = line[len("data: ") :]
             if payload.strip() == "[DONE]":
                 continue
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 result.append(json.loads(payload))
-            except json.JSONDecodeError:
-                pass
     return result
 
 
@@ -116,6 +116,78 @@ class TestChatEndpointUnit:
             app.state.orchestrator = None
 
         assert received_thread_ids == ["my-session-123"]
+
+
+@pytest.mark.unit
+class TestChatEndpointPendingToolCleanup:
+    async def test_existing_session_with_checkpointer_cancels_pending_tools(self, client):
+        mock_orch = _make_mock_orchestrator([{"event": "on_chain_end", "data": {}}])
+        mock_orch.has_checkpointer = True
+        app.state.orchestrator = mock_orch
+        try:
+            await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "session_id": "existing-session",
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        mock_orch.acancel_pending_tools.assert_awaited_once_with("existing-session")
+
+    async def test_new_session_skips_pending_tool_cleanup(self, client):
+        mock_orch = _make_mock_orchestrator([{"event": "on_chain_end", "data": {}}])
+        mock_orch.has_checkpointer = True
+        app.state.orchestrator = mock_orch
+        try:
+            await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={"messages": [{"role": "user", "content": "Hi"}]},
+            )
+        finally:
+            app.state.orchestrator = None
+
+        mock_orch.acancel_pending_tools.assert_not_awaited()
+
+    async def test_no_checkpointer_skips_pending_tool_cleanup(self, client):
+        mock_orch = _make_mock_orchestrator([{"event": "on_chain_end", "data": {}}])
+        app.state.orchestrator = mock_orch
+        try:
+            await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "session_id": "existing-session",
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        mock_orch.acancel_pending_tools.assert_not_awaited()
+
+    async def test_resume_flow_skips_pending_tool_cleanup(self, client):
+        async def _astream_resume(thread_id, confirmed, user_message=None):
+            yield {"event": "on_chain_end", "data": {}}
+
+        mock_orch = _make_mock_orchestrator()
+        mock_orch.has_checkpointer = True
+        mock_orch.astream_resume = _astream_resume
+        app.state.orchestrator = mock_orch
+        try:
+            await client.post(
+                "/api/v1/core/orchestrator/chat",
+                json={
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "session_id": "existing-session",
+                    "resume_confirmed": True,
+                },
+            )
+        finally:
+            app.state.orchestrator = None
+
+        mock_orch.acancel_pending_tools.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -314,7 +386,11 @@ class TestChatEndpointResume:
         contents = [p["content"] for p in parsed if "content" in p]
         assert "Updated!" in contents
 
-    async def test_resume_passes_last_message_as_user_message(self, client):
+    async def test_resume_does_not_pass_user_message(self, client):
+        """Client history is already checkpointed — re-sending its last message
+        would insert a duplicate between the interrupted AIMessage(tool_calls)
+        and the ToolMessage, breaking the provider history and rerouting the
+        resumed graph to END before the tool executes."""
         captured = []
 
         async def _astream_resume(thread_id, confirmed, user_message=None):
@@ -336,7 +412,7 @@ class TestChatEndpointResume:
         finally:
             app.state.orchestrator = None
 
-        assert captured == ["Yes please"]
+        assert captured == [None]
 
     async def test_resume_skips_astream_and_calls_astream_resume(self, client):
         astream_called = []
@@ -398,7 +474,9 @@ class TestChatEndpointToolProposal:
     async def test_tool_proposal_emitted_on_pending_interrupt(self, client):
         from langchain_core.messages import AIMessage
 
-        tool_calls = [{"name": "update_visit_hours", "args": {"place_id": "abc123", "preferred_hour_from": 9}, "id": "call_1"}]
+        tool_calls = [
+            {"name": "update_visit_hours", "args": {"place_id": "abc123", "preferred_hour_from": 9}, "id": "call_1"}
+        ]
         interrupted_msg = AIMessage(id="msg-1", content="Let me update that.", tool_calls=tool_calls)
 
         graph_state = MagicMock()
@@ -530,3 +608,41 @@ class TestStatusEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["ready"] is False
+
+
+@pytest.mark.unit
+class TestClassifyLlmError:
+    def test_openai_rate_limit(self):
+        class RateLimitError(Exception):
+            pass
+
+        RateLimitError.__module__ = "openai"
+        exc = RateLimitError("quota exceeded")
+        assert _router_mod._classify_llm_error(exc) == "OpenAI quota exceeded — check your billing."
+
+    def test_anthropic_rate_limit(self):
+        class RateLimitError(Exception):
+            pass
+
+        RateLimitError.__module__ = "anthropic"
+        exc = RateLimitError("rate limited")
+        assert _router_mod._classify_llm_error(exc) == "Anthropic rate limit exceeded — try again shortly."
+
+    def test_unknown_rate_limit(self):
+        class RateLimitError(Exception):
+            pass
+
+        RateLimitError.__module__ = "some_other_llm"
+        exc = RateLimitError("rate limited")
+        assert _router_mod._classify_llm_error(exc) == "LLM rate limit exceeded — try again shortly."
+
+    def test_authentication_error(self):
+        class AuthenticationError(Exception):
+            pass
+
+        exc = AuthenticationError("bad key")
+        assert _router_mod._classify_llm_error(exc) == "Invalid API key — check your LLM provider configuration."
+
+    def test_generic_exception(self):
+        exc = RuntimeError("graph exploded")
+        assert _router_mod._classify_llm_error(exc) == "Stream interrupted"

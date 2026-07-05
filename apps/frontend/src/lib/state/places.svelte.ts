@@ -17,6 +17,7 @@ export class PlacesState {
 	);
 
 	readonly listNames = $derived(
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		[...new Set(this.places.map((p) => p.list_name).filter((n): n is string => n !== null))].sort()
 	);
 

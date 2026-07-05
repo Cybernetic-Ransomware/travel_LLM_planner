@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 from pymongo.asynchronous.database import AsyncDatabase
@@ -165,6 +165,44 @@ class OrchestratorManager:
         async for event in self._graph.astream_events(state, config=config, version="v2"):
             yield event
 
+    async def acancel_pending_tools(self, thread_id: str, user_message: str | None = None) -> None:
+        """Cancel dangling tool calls on a checkpointed thread.
+
+        Replaces every AIMessage whose ``tool_calls`` have no matching
+        ToolMessage responses with a version that has no ``tool_calls``, so
+        the conversation history stays valid for the LLM provider (OpenAI
+        rejects an assistant message with ``tool_calls`` that is not followed
+        by tool result messages). Applies both to threads paused at the tools
+        interrupt and to threads that ended with unanswered tool_calls in
+        history. The optional ``user_message`` is appended after the cleaned
+        messages.
+
+        No-op when the history has no dangling tool_calls or no checkpointer
+        is configured.
+        """
+        if self._graph is None or self._checkpointer is None:
+            return
+
+        config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+        graph_state = await self._graph.aget_state(config)
+        if not graph_state:
+            return
+        messages = (graph_state.values or {}).get("messages", [])
+
+        answered_ids = {m.tool_call_id for m in messages if isinstance(m, ToolMessage)}
+        cleaned = [
+            AIMessage(id=m.id, content=m.content or "")
+            for m in messages
+            if isinstance(m, AIMessage) and m.tool_calls and any(tc["id"] not in answered_ids for tc in m.tool_calls)
+        ]
+        if not cleaned:
+            return
+
+        update: dict = {"messages": cleaned}
+        if user_message:
+            update["messages"].append(HumanMessage(content=user_message))
+        await self._graph.aupdate_state(config, update)
+
     async def astream_resume(
         self,
         thread_id: str,
@@ -190,16 +228,7 @@ class OrchestratorManager:
         config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
         if not confirmed:
-            graph_state = await self._graph.aget_state(config)
-            if graph_state and graph_state.next:
-                messages = graph_state.values.get("messages", [])
-                last = messages[-1] if messages else None
-                if last is not None and isinstance(last, AIMessage) and last.tool_calls:
-                    cancelled = AIMessage(id=last.id, content=last.content or "")
-                    update: dict = {"messages": [cancelled]}
-                    if user_message:
-                        update["messages"].append(HumanMessage(content=user_message))
-                    await self._graph.aupdate_state(config, update)
+            await self.acancel_pending_tools(thread_id, user_message)
         elif user_message:
             await self._graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message)]})
 

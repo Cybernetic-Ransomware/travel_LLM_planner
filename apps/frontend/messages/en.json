@@ -103,5 +103,13 @@
 	"save_trip_date_label": "Date",
 	"save_trip_submit": "Save",
 	"save_trip_cancel": "Cancel",
-	"save_trip_success": "Trip \"{name}\" saved!"
+	"save_trip_success": "Trip \"{name}\" saved!",
+	"nav_trips": "Saved Trips",
+	"page_trips_title": "Saved Trips",
+	"page_trips_subtitle": "Browse your saved optimized routes.",
+	"trips_empty": "No saved trips yet.",
+	"trip_created_at": "Created",
+	"trip_date": "Date",
+	"trip_time_window": "Day window",
+	"trip_saved_route": "Saved route"
 }

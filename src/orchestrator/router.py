@@ -21,6 +21,20 @@ logger = setup_logger(__name__, "orchestrator")
 _ROLE_TO_LC = {"user": HumanMessage, "assistant": AIMessage, "system": SystemMessage}
 
 
+def _classify_llm_error(exc: Exception) -> str:
+    type_name = type(exc).__name__
+    module = type(exc).__module__ or ""
+    if "RateLimitError" in type_name:
+        if "openai" in module:
+            return "OpenAI quota exceeded — check your billing."
+        if "anthropic" in module:
+            return "Anthropic rate limit exceeded — try again shortly."
+        return "LLM rate limit exceeded — try again shortly."
+    if "AuthenticationError" in type_name:
+        return "Invalid API key — check your LLM provider configuration."
+    return "Stream interrupted"
+
+
 def _to_lc_messages(messages: list[ChatMessage]) -> list:
     """Convert Pydantic ChatMessage list to LangChain message objects."""
     return [_ROLE_TO_LC[msg.role](content=msg.content) for msg in messages]
@@ -47,9 +61,9 @@ async def _stream_sse(
                 content = chunk.content if hasattr(chunk, "content") else chunk.get("content", "")
                 if content:
                     yield f"data: {json.dumps({'content': content})}\n\n"
-    except Exception:
+    except Exception as exc:
         logger.exception("Error during orchestrator SSE stream thread_id=%s", thread_id)
-        yield f"data: {json.dumps({'error': 'Stream interrupted'})}\n\n"
+        yield f"data: {json.dumps({'error': _classify_llm_error(exc)})}\n\n"
         stream_error = True
 
     # A second aget_state() call is required because the interrupt fires *after* the stream ends —
@@ -88,9 +102,9 @@ async def _stream_sse_resume(
                 content = chunk.content if hasattr(chunk, "content") else chunk.get("content", "")
                 if content:
                     yield f"data: {json.dumps({'content': content})}\n\n"
-    except Exception:
+    except Exception as exc:
         logger.exception("Error during orchestrator SSE resume thread_id=%s", thread_id)
-        yield f"data: {json.dumps({'error': 'Stream interrupted'})}\n\n"
+        yield f"data: {json.dumps({'error': _classify_llm_error(exc)})}\n\n"
     finally:
         yield "data: [DONE]\n\n"
 
@@ -113,12 +127,22 @@ async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep, _use
     session_id = payload.session_id or str(uuid.uuid4())
 
     if payload.resume_confirmed is not None:
-        user_message = payload.messages[-1].content if payload.messages else None
+        # The client history is already checkpointed in the thread — re-sending
+        # its last message as user_message would insert a duplicate between the
+        # interrupted AIMessage(tool_calls) and the future ToolMessage, which
+        # both invalidates the history for the LLM provider and reroutes the
+        # resumed graph to END before the tool executes.
         logger.info("chat resume — session_id=%s confirmed=%s", session_id, payload.resume_confirmed)
         return StreamingResponse(
-            _stream_sse_resume(orch, session_id, payload.resume_confirmed, user_message),
+            _stream_sse_resume(orch, session_id, payload.resume_confirmed, user_message=None),
             media_type="text/event-stream",
         )
+
+    # A new message on an existing session implicitly abandons any pending tool
+    # proposal. The dangling tool_calls must be stripped from the checkpointed
+    # thread, otherwise the LLM provider rejects the conversation history.
+    if payload.session_id and orch.has_checkpointer:
+        await orch.acancel_pending_tools(session_id)
 
     place_context = await fetch_places_by_ids(db, payload.place_ids) if payload.place_ids else []
     allowed_place_ids = [str(p["_id"]) for p in place_context]

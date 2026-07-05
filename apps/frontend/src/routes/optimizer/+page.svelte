@@ -74,7 +74,9 @@
 
 <div class="flex h-full flex-col gap-4">
 	<div>
-		<h1 class="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{m.page_optimizer_title()}</h1>
+		<h1 class="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
+			{m.page_optimizer_title()}
+		</h1>
 		<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{m.page_optimizer_subtitle()}</p>
 	</div>
 
@@ -112,11 +114,15 @@
 			{/if}
 		</div>
 
-		<div class="h-64 flex-1 isolate overflow-hidden rounded-lg border border-zinc-200 md:h-auto dark:border-zinc-800">
+		<div
+			class="isolate h-64 flex-1 overflow-hidden rounded-lg border border-zinc-200 md:h-auto dark:border-zinc-800"
+		>
 			{#if LeafletMap}
 				<LeafletMap places={mapPlaces} steps={mapSteps} selectedIds={mapSelectedIds} />
 			{:else}
-				<div class="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500">
+				<div
+					class="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500"
+				>
 					{m.map_loading()}
 				</div>
 			{/if}

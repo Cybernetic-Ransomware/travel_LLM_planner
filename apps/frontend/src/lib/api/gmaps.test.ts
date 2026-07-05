@@ -2,10 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getPlaces, getPlace, patchPlace, deletePlace, importList, enrichPlaces } from './gmaps.js';
 
 function mockFetch(body: unknown, status = 200) {
-	vi.stubGlobal(
-		'fetch',
-		vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status }))
-	);
+	vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status })));
 }
 
 describe('gmaps API', () => {
@@ -18,10 +15,7 @@ describe('gmaps API', () => {
 
 			await getPlaces();
 
-			expect(mockFn).toHaveBeenCalledWith(
-				'/api/proxy/core/gmaps/places',
-				expect.any(Object)
-			);
+			expect(mockFn).toHaveBeenCalledWith('/api/proxy/core/gmaps/places', expect.any(Object));
 		});
 
 		it('appends skipped=true query param', async () => {
@@ -59,9 +53,11 @@ describe('gmaps API', () => {
 
 	describe('patchPlace', () => {
 		it('calls PATCH with JSON body', async () => {
-			const mockFn = vi.fn().mockResolvedValue(
-				new Response(JSON.stringify({ id: 'abc', skipped: true }), { status: 200 })
-			);
+			const mockFn = vi
+				.fn()
+				.mockResolvedValue(
+					new Response(JSON.stringify({ id: 'abc', skipped: true }), { status: 200 })
+				);
 			vi.stubGlobal('fetch', mockFn);
 
 			await patchPlace('abc', { skipped: true });
@@ -83,9 +79,11 @@ describe('gmaps API', () => {
 
 	describe('importList', () => {
 		it('calls POST /import with list_url', async () => {
-			const mockFn = vi.fn().mockResolvedValue(
-				new Response(JSON.stringify({ total: 5, upserted: 3 }), { status: 200 })
-			);
+			const mockFn = vi
+				.fn()
+				.mockResolvedValue(
+					new Response(JSON.stringify({ total: 5, upserted: 3 }), { status: 200 })
+				);
 			vi.stubGlobal('fetch', mockFn);
 
 			await importList('https://maps.google.com/list/abc');
@@ -102,9 +100,11 @@ describe('gmaps API', () => {
 
 	describe('enrichPlaces', () => {
 		it('calls POST /enrich with limit', async () => {
-			const mockFn = vi.fn().mockResolvedValue(
-				new Response(JSON.stringify({ scanned: 20, updated: 5 }), { status: 200 })
-			);
+			const mockFn = vi
+				.fn()
+				.mockResolvedValue(
+					new Response(JSON.stringify({ scanned: 20, updated: 5 }), { status: 200 })
+				);
 			vi.stubGlobal('fetch', mockFn);
 
 			await enrichPlaces(20);

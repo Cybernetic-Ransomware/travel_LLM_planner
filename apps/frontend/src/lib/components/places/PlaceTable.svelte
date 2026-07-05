@@ -14,14 +14,18 @@
 	} = $props();
 </script>
 
-<div class="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+<div
+	class="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+>
 	{#if places.length === 0}
 		<div class="px-6 py-12 text-center text-sm text-zinc-400">{m.places_empty()}</div>
 	{:else}
 		<div class="overflow-x-auto">
 			<table class="w-full text-left">
 				<thead>
-					<tr class="border-b border-zinc-200 bg-zinc-50 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400">
+					<tr
+						class="border-b border-zinc-200 bg-zinc-50 text-xs font-medium tracking-wide text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400"
+					>
 						<th class="px-3 py-2.5">{m.places_col_name()}</th>
 						<th class="px-3 py-2.5">{m.places_col_address()}</th>
 						<th class="px-3 py-2.5">{m.places_col_list()}</th>
@@ -43,7 +47,8 @@
 			</table>
 		</div>
 		<div class="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-400 dark:border-zinc-800">
-			{places.length} {m.places_footer_unit()}
+			{places.length}
+			{m.places_footer_unit()}
 		</div>
 	{/if}
 </div>

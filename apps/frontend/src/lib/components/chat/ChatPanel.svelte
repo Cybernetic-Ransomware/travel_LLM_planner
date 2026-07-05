@@ -11,8 +11,7 @@
 	let messagesEl: HTMLDivElement;
 
 	$effect(() => {
-		// Track message count to scroll on new messages
-		const _ = chat.messages.length;
+		void chat.messages.length;
 		messagesEl?.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
 	});
 </script>

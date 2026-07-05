@@ -21,8 +21,9 @@ export class ChatState {
 		await this._stream(true);
 	}
 
-	cancelProposal(): void {
+	async cancelProposal(): Promise<void> {
 		this.pendingProposal = null;
+		await this._stream(false);
 	}
 
 	clear(): void {

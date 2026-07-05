@@ -39,3 +39,18 @@ repos:
         entry: uv run python -m codespell_lib
         language: system
         types_or: [python, markdown, yaml, rst]
+
+      - id: frontend-prettier
+        name: frontend prettier
+        entry: npm --prefix apps/frontend run format
+        language: system
+        files: ^apps/frontend/
+        types_or: [ts, javascript, svelte, json, css, html, markdown]
+        pass_filenames: false
+
+      - id: frontend-check
+        name: frontend svelte-check
+        entry: npm --prefix apps/frontend run check
+        language: system
+        files: ^apps/frontend/src/
+        pass_filenames: false

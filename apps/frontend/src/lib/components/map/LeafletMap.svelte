@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { Map as LMap, Marker, Polyline } from 'leaflet';
 	import type { PlaceOut, RouteStep } from '$lib/types/index.js';
+	import { getMapCenter } from './mapUtils.js';
 
 	let {
 		places = [],
@@ -21,39 +22,34 @@
 	let polyline: Polyline | null = null;
 	let leaflet: typeof import('leaflet') | null = null;
 
-	function center(): [number, number] {
-		const withCoords = places.filter((p) => p.lat !== null && p.lng !== null);
-		if (withCoords.length === 0) return [52.23, 21.01];
-		const lat = withCoords.reduce((s, p) => s + p.lat!, 0) / withCoords.length;
-		const lng = withCoords.reduce((s, p) => s + p.lng!, 0) / withCoords.length;
-		return [lat, lng];
-	}
-
 	function buildMarkers(L: typeof import('leaflet')): void {
 		markers.forEach((m) => m.remove());
 		markers = [];
 		polyline?.remove();
 		polyline = null;
 
-		const source = steps.length > 0
-			? steps.filter((s) => s.lat !== null && s.lng !== null).map((s, i) => ({
-					id: s.place_id,
-					lat: s.lat!,
-					lng: s.lng!,
-					label: String(i + 1),
-					tooltip: `${i + 1}. ${s.name ?? ''}\n${s.arrival_time.slice(0, 5)} → ${s.departure_time.slice(0, 5)}`
-				}))
-			: places
-					.filter((p) => p.lat !== null && p.lng !== null)
-					.map((p, i) => ({
-						id: p.id,
-						lat: p.lat!,
-						lng: p.lng!,
-						label: '',
-						tooltip: `${p.name ?? '—'}${p.address ? '\n' + p.address : ''}`,
-						skipped: p.skipped,
-						selected: selectedIds.has(p.id)
-					}));
+		const source =
+			steps.length > 0
+				? steps
+						.filter((s) => s.lat !== null && s.lng !== null)
+						.map((s, i) => ({
+							id: s.place_id,
+							lat: s.lat!,
+							lng: s.lng!,
+							label: String(i + 1),
+							tooltip: `${i + 1}. ${s.name ?? ''}\n${s.arrival_time.slice(0, 5)} → ${s.departure_time.slice(0, 5)}`
+						}))
+				: places
+						.filter((p) => p.lat !== null && p.lng !== null)
+						.map((p) => ({
+							id: p.id,
+							lat: p.lat!,
+							lng: p.lng!,
+							label: '',
+							tooltip: `${p.name ?? '—'}${p.address ? '\n' + p.address : ''}`,
+							skipped: p.skipped,
+							selected: selectedIds.has(p.id)
+						}));
 
 		source.forEach((item) => {
 			const isRoute = steps.length > 0;
@@ -96,7 +92,12 @@
 			const coords = steps
 				.filter((s) => s.lat !== null && s.lng !== null)
 				.map((s): [number, number] => [s.lat!, s.lng!]);
-			polyline = L.polyline(coords, { color: '#2563eb', weight: 2, opacity: 0.6, dashArray: '6 4' }).addTo(map!);
+			polyline = L.polyline(coords, {
+				color: '#2563eb',
+				weight: 2,
+				opacity: 0.6,
+				dashArray: '6 4'
+			}).addTo(map!);
 		}
 	}
 
@@ -106,7 +107,10 @@
 			await import('leaflet/dist/leaflet.css');
 
 			leaflet = L;
-			map = L.map(container).setView(center(), places.length > 0 ? 13 : 6);
+			map = L.map(container).setView(
+				getMapCenter(places, steps),
+				places.length > 0 || steps.length > 0 ? 13 : 6
+			);
 			L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 				attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 			}).addTo(map);

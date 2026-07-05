@@ -68,8 +68,31 @@ describe('ChatState', () => {
 		const proposal = { tool: 'import_list', args: {} };
 		mockStreamChat.mockReturnValue(makeStream([{ tool_proposal: proposal }]));
 		await chat.send('Import');
-		chat.cancelProposal();
+		mockStreamChat.mockReturnValue(makeStream([]));
+		await chat.cancelProposal();
 		expect(chat.pendingProposal).toBeNull();
+	});
+
+	it('cancelProposal notifies backend with resume_confirmed false', async () => {
+		const proposal = { tool: 'import_list', args: {} };
+		mockStreamChat.mockReturnValue(makeStream([{ tool_proposal: proposal }]));
+		await chat.send('Import');
+		mockStreamChat.mockReturnValue(makeStream([{ content: 'Cancelled.' }]));
+		await chat.cancelProposal();
+		expect(mockStreamChat).toHaveBeenLastCalledWith(
+			expect.objectContaining({ resume_confirmed: false })
+		);
+	});
+
+	it('confirmProposal notifies backend with resume_confirmed true', async () => {
+		const proposal = { tool: 'import_list', args: {} };
+		mockStreamChat.mockReturnValue(makeStream([{ tool_proposal: proposal }]));
+		await chat.send('Import');
+		mockStreamChat.mockReturnValue(makeStream([{ content: 'Done.' }]));
+		await chat.confirmProposal();
+		expect(mockStreamChat).toHaveBeenLastCalledWith(
+			expect.objectContaining({ resume_confirmed: true })
+		);
 	});
 
 	it('clear resets all state', async () => {
@@ -85,6 +108,7 @@ describe('ChatState', () => {
 		let resolve: () => void;
 		const blocker = new Promise<void>((r) => (resolve = r));
 		mockStreamChat.mockReturnValue(
+			// eslint-disable-next-line require-yield
 			(async function* () {
 				await blocker;
 			})()

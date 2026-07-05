@@ -19,11 +19,15 @@
 	} = $props();
 </script>
 
-<div class="max-h-64 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-800">
+<div
+	class="max-h-64 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-800"
+>
 	{#each places as place (place.id)}
 		{@const selected = selectedIds.includes(place.id)}
 		<div
-			class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 {place.skipped ? 'opacity-50' : ''}"
+			class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 {place.skipped
+				? 'opacity-50'
+				: ''}"
 		>
 			<input
 				type="checkbox"
@@ -31,7 +35,9 @@
 				onchange={() => ontoggle(place.id)}
 				class="accent-blue-600"
 			/>
-			<span class="min-w-0 flex-1 truncate text-zinc-800 dark:text-zinc-200">{place.name ?? place.id}</span>
+			<span class="min-w-0 flex-1 truncate text-zinc-800 dark:text-zinc-200"
+				>{place.name ?? place.id}</span
+			>
 
 			{#if selected && days.length > 1}
 				<select

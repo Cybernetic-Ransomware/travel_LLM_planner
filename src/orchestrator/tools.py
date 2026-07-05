@@ -5,6 +5,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from src.config.conf_logger import setup_logger
 from src.gmaps import GooglePlacesManager, PlaceCreate, PlacePatch, find_and_update_place, insert_place
+from src.trips.manager import TripsManager
 
 logger = setup_logger(__name__, "orchestrator")
 
@@ -172,6 +173,80 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
         return f"Added '{name}' to the plan (id={new_id})."
 
     tools: list = [update_visit_hours, skip_place, add_place]
+
+    trips_manager = TripsManager(db)
+
+    @tool
+    async def list_saved_trips() -> str:
+        """List all saved trips by name and date.
+
+        Use this tool when the user asks what trips they have saved, wants to browse
+        their saved trips, or mentions a trip by name and you need to find its ID.
+        Returns trip IDs that can be passed to get_trip_details.
+        """
+        try:
+            trips = await trips_manager.list_all()
+        except Exception as exc:
+            return f"Failed to retrieve trips: {exc}"
+        if not trips:
+            return "No saved trips found."
+        lines = [f"- id={t.id}, name='{t.name}', date={t.date}" for t in trips]
+        return "Saved trips:\n" + "\n".join(lines)
+
+    @tool
+    async def get_trip_details(trip_id: str) -> str:
+        """Get the full details of a saved trip including all places and route.
+
+        Use this tool to retrieve complete information about a specific trip:
+        transport mode, time window, ordered place list with arrival/departure times,
+        visit durations, and any skipped places.
+
+        Args:
+            trip_id: MongoDB ObjectId string of the trip (from list_saved_trips).
+        """
+        try:
+            trip = await trips_manager.find_by_id(trip_id)
+        except Exception as exc:
+            return f"Failed to retrieve trip: {exc}"
+        if trip is None:
+            return f"Trip '{trip_id}' not found."
+
+        header = (
+            f"Trip '{trip.name}' ({trip.date})\n"
+            f"Transport: {trip.transport_mode.value}, window: "
+            f"{trip.day_start_hour}:00–{trip.day_end_hour}:00\n"
+        )
+
+        steps = trip.optimizer_response.steps
+        if not steps:
+            return header + "No places in route."
+
+        place_lines = []
+        for i, step in enumerate(steps, 1):
+            travel = f", {step.travel_from_previous_s // 60} min travel" if step.travel_from_previous_s else ""
+            place_lines.append(
+                f"{i}. {step.name or step.place_id} — "
+                f"arrive {step.arrival_time.strftime('%H:%M')}, "
+                f"depart {step.departure_time.strftime('%H:%M')}, "
+                f"{step.visit_duration_min} min visit{travel}"
+            )
+
+        resp = trip.optimizer_response
+        skipped_section = "Skipped: none"
+        if resp.skipped:
+            names = [s.name or s.place_id for s in resp.skipped]
+            skipped_section = "Skipped: " + ", ".join(names)
+
+        summary = (
+            f"Total: {resp.total_travel_time_s // 60} min travel, "
+            f"{resp.total_visit_time_min} min visits, "
+            f"{resp.total_wait_min} min wait"
+        )
+
+        return header + "\n".join(place_lines) + "\n" + summary + "\n" + skipped_section
+
+    tools.append(list_saved_trips)
+    tools.append(get_trip_details)
 
     if places_manager is not None:
 

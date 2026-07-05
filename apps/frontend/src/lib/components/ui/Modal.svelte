@@ -23,14 +23,15 @@
 
 {#if open}
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-		<button
-			class="absolute inset-0 bg-black/40"
-			onclick={handleClose}
-			aria-label="Close modal"
+		<button class="absolute inset-0 bg-black/40" onclick={handleClose} aria-label="Close modal"
 		></button>
 
-		<div class="relative z-10 w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-			<div class="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+		<div
+			class="relative z-10 w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+		>
+			<div
+				class="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800"
+			>
 				<h2 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
 				<button
 					onclick={handleClose}

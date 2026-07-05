@@ -103,5 +103,13 @@
 	"save_trip_date_label": "Data",
 	"save_trip_submit": "Zapisz",
 	"save_trip_cancel": "Anuluj",
-	"save_trip_success": "Trasa \"{name}\" zapisana!"
+	"save_trip_success": "Trasa \"{name}\" zapisana!",
+	"nav_trips": "Zapisane trasy",
+	"page_trips_title": "Zapisane trasy",
+	"page_trips_subtitle": "Przeglądaj zapisane zoptymalizowane trasy.",
+	"trips_empty": "Nie masz jeszcze zapisanych tras.",
+	"trip_created_at": "Utworzono",
+	"trip_date": "Data trasy",
+	"trip_time_window": "Okno dnia",
+	"trip_saved_route": "Zapisana trasa"
 }

@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, call
+from datetime import UTC, datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -21,7 +21,15 @@ def _make_config(thread_id: str = "t-1", checkpoint_id: str = "cp-1") -> dict:
 
 
 def _make_checkpoint(checkpoint_id: str = "cp-1") -> dict:
-    return {"id": checkpoint_id, "v": 1, "ts": "2024-01-01T00:00:00Z", "channel_values": {}, "channel_versions": {}, "versions_seen": {}, "pending_sends": []}
+    return {
+        "id": checkpoint_id,
+        "v": 1,
+        "ts": "2024-01-01T00:00:00Z",
+        "channel_values": {},
+        "channel_versions": {},
+        "versions_seen": {},
+        "pending_sends": [],
+    }
 
 
 @pytest.mark.unit
@@ -59,11 +67,11 @@ class TestMongoCheckpointSaverAput:
 
     async def test_aput_includes_expires_at_field(self):
         saver, mock_collection = _make_saver(retention_days=30)
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
 
         await saver.aput(_make_config(), _make_checkpoint(), {}, {})
 
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
         call_kwargs = mock_collection.update_one.call_args
         set_doc = call_kwargs[0][1]["$set"]
         assert "expires_at" in set_doc
@@ -74,11 +82,11 @@ class TestMongoCheckpointSaverAput:
 
     async def test_aput_expires_at_respects_retention_days(self):
         saver, mock_collection = _make_saver(retention_days=7)
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
 
         await saver.aput(_make_config(), _make_checkpoint(), {}, {})
 
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
         set_doc = mock_collection.update_one.call_args[0][1]["$set"]
         expires_at: datetime = set_doc["expires_at"]
         assert before + timedelta(days=7) <= expires_at <= after + timedelta(days=7)
@@ -93,7 +101,11 @@ class TestMongoCheckpointSaverAput:
         set_doc = mock_collection.update_one.call_args[0][1]["$set"]
         assert set_doc["thread_id"] == "my-thread"
         assert set_doc["checkpoint_id"] == "my-cp"
-        assert set_doc["metadata"] == {"meta": "data"}
+        assert isinstance(set_doc["checkpoint"], bytes)
+        assert isinstance(set_doc["checkpoint_type"], str)
+        assert isinstance(set_doc["metadata"], bytes)
+        assert isinstance(set_doc["metadata_type"], str)
+        assert saver.serde.loads_typed((set_doc["metadata_type"], set_doc["metadata"])) == {"meta": "data"}
 
     async def test_aput_uses_upsert(self):
         saver, mock_collection = _make_saver()
@@ -145,9 +157,7 @@ class TestMongoCheckpointSaverIndexes:
 
         info = await test_db[CHECKPOINTS_COLLECTION].index_information()
         ttl_indexes = [
-            idx
-            for idx in info.values()
-            if "expireAfterSeconds" in idx and any(k == "expires_at" for k, _ in idx["key"])
+            idx for idx in info.values() if "expireAfterSeconds" in idx and any(k == "expires_at" for k, _ in idx["key"])
         ]
         assert ttl_indexes, "TTL index on 'expires_at' is missing"
         assert ttl_indexes[0]["expireAfterSeconds"] == 0

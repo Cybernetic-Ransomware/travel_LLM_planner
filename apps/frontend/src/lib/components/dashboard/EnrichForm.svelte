@@ -34,7 +34,9 @@
 </script>
 
 <div class="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-	<h2 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">{m.dashboard_enrich_title()}</h2>
+	<h2 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+		{m.dashboard_enrich_title()}
+	</h2>
 	<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{m.dashboard_enrich_description()}</p>
 
 	<form class="mt-4 flex flex-col gap-3" onsubmit={handleSubmit}>
@@ -74,7 +76,9 @@
 	</form>
 
 	{#if result}
-		<div class="mt-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-300">
+		<div
+			class="mt-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-300"
+		>
 			<span class="font-semibold">{result.scanned}</span>
 			{m.dashboard_enrich_result_scanned()},
 			<span class="font-semibold">{result.updated}</span>
@@ -83,6 +87,10 @@
 	{/if}
 
 	{#if error}
-		<div class="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{error}</div>
+		<div
+			class="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
+		>
+			{error}
+		</div>
 	{/if}
 </div>

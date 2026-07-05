@@ -169,3 +169,4 @@ cython_debug/
 
 /.claude/
 /.mcp.json
+/.playwright-mcp/
