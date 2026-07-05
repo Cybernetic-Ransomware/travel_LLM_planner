@@ -9,6 +9,81 @@ from src.trips.manager import TripsManager
 
 logger = setup_logger(__name__, "orchestrator")
 
+# Pricing fields bill under the same Places API Enterprise SKU tier as the
+# already-used rating/regularOpeningHours fields in the default field mask.
+PRICING_FIELD_MASK = (
+    "id,displayName,websiteUri,editorialSummary,priceLevel,priceRange,"
+    "servesBreakfast,servesLunch,servesDinner,servesBrunch,servesCoffee,"
+    "servesDessert,servesVegetarianFood,servesBeer,servesWine,servesCocktails"
+)
+
+_PRICE_LEVEL_LABELS = {
+    "PRICE_LEVEL_FREE": "free",
+    "PRICE_LEVEL_INEXPENSIVE": "inexpensive ($)",
+    "PRICE_LEVEL_MODERATE": "moderate ($$)",
+    "PRICE_LEVEL_EXPENSIVE": "expensive ($$$)",
+    "PRICE_LEVEL_VERY_EXPENSIVE": "very expensive ($$$$)",
+}
+
+_SERVES_ATTRIBUTES = (
+    ("servesBreakfast", "breakfast"),
+    ("servesBrunch", "brunch"),
+    ("servesLunch", "lunch"),
+    ("servesDinner", "dinner"),
+    ("servesCoffee", "coffee"),
+    ("servesDessert", "dessert"),
+    ("servesVegetarianFood", "vegetarian food"),
+    ("servesBeer", "beer"),
+    ("servesWine", "wine"),
+    ("servesCocktails", "cocktails"),
+)
+
+
+def _format_money(money: dict) -> str | None:
+    units = money.get("units")
+    if units is None:
+        return None
+    currency = money.get("currencyCode", "")
+    return f"{units} {currency}".strip()
+
+
+def _format_pricing(payload: dict, label: str) -> str:
+    lines: list[str] = []
+
+    level = payload.get("priceLevel")
+    level_label = _PRICE_LEVEL_LABELS.get(level) if level else None
+    if level_label:
+        lines.append(f"Price level: {level_label}")
+
+    price_range = payload.get("priceRange") or {}
+    start = _format_money(price_range.get("startPrice") or {})
+    end = _format_money(price_range.get("endPrice") or {})
+    if start and end:
+        lines.append(f"Typical range: {start}–{end}")
+    elif start:
+        lines.append(f"Typical range: from {start}")
+
+    serves = [name for key, name in _SERVES_ATTRIBUTES if payload.get(key) is True]
+    if serves:
+        lines.append(f"Serves: {', '.join(serves)}")
+
+    summary = (payload.get("editorialSummary") or {}).get("text")
+    if summary:
+        lines.append(f"About: {summary}")
+
+    website = payload.get("websiteUri")
+    if not lines:
+        message = f"Google has no pricing data for '{label}'."
+        if website:
+            message += f" Try their website: {website}"
+        return message
+
+    lines.insert(0, f"Pricing info for '{label}':")
+    if website:
+        lines.append(f"Website: {website}")
+        lines.append("Google does not provide menus — check the website for the full price list.")
+    return "\n".join(lines)
+
 
 def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None = None) -> list:
     """Return the list of LLM-callable tools with the database connection closure-bound.
@@ -17,7 +92,9 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
     enforce that only places belonging to the current session can be modified.
 
     When ``places_manager`` is provided, a ``search_place`` tool is included that
-    resolves place names via the Google Places API without writing to the database.
+    resolves place names via the Google Places API without writing to the database,
+    and a ``get_place_pricing`` tool that fetches price level, price range, and
+    food/drink attributes for a place.
     """
 
     def _extract_allowed(config: RunnableConfig | None) -> list[str]:
@@ -295,5 +372,53 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
             return ", ".join(parts) + "."
 
         tools.append(search_place)
+
+        @tool
+        async def get_place_pricing(
+            gmaps_place_id: str | None = None,
+            query: str | None = None,
+            lat: float | None = None,
+            lng: float | None = None,
+        ) -> str:
+            """Get pricing information for a place from the Google Places API.
+
+            Use this tool when the user asks about prices, price level, menu, or
+            food/drink offerings of a place. Google does not expose full menus;
+            this returns price level, typical price range, served food/drink
+            categories, and the place website. Prefer gmaps_place_id when it is
+            already known (e.g. from search_place output); otherwise pass the
+            place name as query. Does not modify the database.
+
+            Args:
+                gmaps_place_id: Google Place ID, if already known.
+                query: Name or description of the place, used when no ID is given.
+                lat: Optional latitude for location bias when resolving by name.
+                lng: Optional longitude for location bias when resolving by name.
+            """
+            if not gmaps_place_id and not query:
+                return "Provide either gmaps_place_id or a place name query."
+
+            place_id = gmaps_place_id
+            if not place_id:
+                place_id, status, error = await places_manager.search_place_id(query, lat, lng)
+                if status == "MISSING_API_KEY":
+                    return "Google Places is not available: API key not configured."
+                if status == "NOT_FOUND":
+                    return f"No place found matching '{query}'."
+                if status != "OK" or not place_id:
+                    return f"Search failed: {error or status}."
+
+            payload, detail_status, detail_error = await places_manager.fetch_place_details(
+                place_id, fields=PRICING_FIELD_MASK
+            )
+            if detail_status == "MISSING_API_KEY":
+                return "Google Places is not available: API key not configured."
+            if detail_status != "OK" or payload is None:
+                return f"Could not retrieve pricing details: {detail_error or detail_status}."
+
+            label = (payload.get("displayName") or {}).get("text") or query or place_id
+            return _format_pricing(payload, label)
+
+        tools.append(get_place_pricing)
 
     return tools
