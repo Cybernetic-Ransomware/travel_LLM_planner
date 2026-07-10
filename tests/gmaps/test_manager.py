@@ -90,6 +90,19 @@ async def test_fetch_place_details_success(httpx_mock, manager):
 
 
 @pytest.mark.unit
+async def test_fetch_place_details_fields_override(httpx_mock, manager):
+    fake_payload = {"id": "ChIxyz", "priceLevel": "PRICE_LEVEL_MODERATE"}
+    httpx_mock.add_response(url=_PLACE_URL, json=fake_payload)
+
+    payload, status, error = await manager.fetch_place_details("ChIxyz", fields="id,priceLevel")
+
+    assert payload == fake_payload
+    assert status == "OK"
+    request = httpx_mock.get_requests()[0]
+    assert request.headers["X-Goog-FieldMask"] == "id,priceLevel"
+
+
+@pytest.mark.unit
 async def test_fetch_place_details_http_error(httpx_mock, manager):
     error_body = {"error": {"status": "NOT_FOUND", "message": "Place not found"}}
     httpx_mock.add_response(url=_PLACE_URL, status_code=404, json=error_body)

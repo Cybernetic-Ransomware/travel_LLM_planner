@@ -45,9 +45,12 @@ class GooglePlacesManager:
     async def __aexit__(self, *args: object) -> None:
         await self.disconnect()
 
-    async def fetch_place_details(self, place_id: str) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    async def fetch_place_details(
+        self, place_id: str, fields: str | None = None
+    ) -> tuple[dict[str, Any] | None, str | None, str | None]:
         """Fetch full place details by Place ID from the Places API (New).
 
+        Optional per-request field mask overrides the client default.
         Returns (payload, status, error_message).
         """
         if not self._api_key:
@@ -56,7 +59,7 @@ class GooglePlacesManager:
         url = f"{self._BASE_URL}/{place_id}"
         headers = {
             "X-Goog-Api-Key": self._api_key,
-            "X-Goog-FieldMask": self._fields,
+            "X-Goog-FieldMask": fields or self._fields,
         }
         response = await self.client.get(url, headers=headers)
         if response.status_code != 200:

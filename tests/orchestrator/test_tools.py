@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.orchestrator.tools import create_tools
+from src.orchestrator.tools import PRICING_FIELD_MASK, create_tools
 
 
 def _make_tool(db=None):
@@ -28,9 +28,9 @@ class TestToolMetadata:
         tools = create_tools(MagicMock())
         assert len(tools) == 5
 
-    def test_create_tools_returns_six_tools_with_places_manager(self):
+    def test_create_tools_returns_seven_tools_with_places_manager(self):
         tools = create_tools(MagicMock(), MagicMock())
-        assert len(tools) == 6
+        assert len(tools) == 7
 
     def test_tool_has_expected_name(self):
         tool = _make_tool()
@@ -527,6 +527,205 @@ class TestSearchPlaceSuccess:
 
         assert "Search failed" in result
         assert "API key invalid" in result
+
+
+def _make_pricing_manager(payload=None, search_result=("ChIabc123", "OK", None)):
+    places_manager = MagicMock()
+    places_manager.search_place_id = AsyncMock(return_value=search_result)
+    places_manager.fetch_place_details = AsyncMock(return_value=(payload, "OK" if payload else "NOT_FOUND", None))
+    return places_manager
+
+
+@pytest.mark.unit
+class TestGetPlacePricingConditional:
+    def test_not_in_tools_without_places_manager(self):
+        tools = create_tools(MagicMock())
+        names = [t.name for t in tools]
+        assert "get_place_pricing" not in names
+
+    def test_in_tools_with_places_manager(self):
+        tools = create_tools(MagicMock(), MagicMock())
+        names = [t.name for t in tools]
+        assert "get_place_pricing" in names
+
+
+@pytest.mark.unit
+class TestGetPlacePricingMetadata:
+    def test_tool_has_expected_name(self):
+        tool = _tool_by_name("get_place_pricing", places_manager=MagicMock())
+        assert tool.name == "get_place_pricing"
+
+    def test_tool_has_non_empty_description(self):
+        tool = _tool_by_name("get_place_pricing", places_manager=MagicMock())
+        assert tool.description and len(tool.description) > 10
+
+    def test_tool_schema_has_id_and_query_fields(self):
+        tool = _tool_by_name("get_place_pricing", places_manager=MagicMock())
+        props = tool.args_schema.model_json_schema()["properties"]
+        assert "gmaps_place_id" in props
+        assert "query" in props
+        assert "lat" in props
+        assert "lng" in props
+
+
+@pytest.mark.unit
+class TestGetPlacePricingSuccess:
+    async def test_direct_place_id_skips_search(self):
+        payload = {"displayName": {"text": "Magia Cafe"}, "priceLevel": "PRICE_LEVEL_MODERATE"}
+        places_manager = _make_pricing_manager(payload)
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"gmaps_place_id": "ChIabc123"}
+        )
+
+        places_manager.search_place_id.assert_not_called()
+        places_manager.fetch_place_details.assert_called_once_with("ChIabc123", fields=PRICING_FIELD_MASK)
+        assert "Magia Cafe" in result
+
+    async def test_query_resolves_via_search(self):
+        payload = {"displayName": {"text": "Magia Cafe"}, "priceLevel": "PRICE_LEVEL_INEXPENSIVE"}
+        places_manager = _make_pricing_manager(payload)
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"query": "Magia Cafe Krakow"}
+        )
+
+        places_manager.search_place_id.assert_called_once_with("Magia Cafe Krakow", None, None)
+        places_manager.fetch_place_details.assert_called_once_with("ChIabc123", fields=PRICING_FIELD_MASK)
+        assert "inexpensive" in result
+
+    async def test_full_payload_formats_all_sections(self):
+        payload = {
+            "displayName": {"text": "Magia Cafe"},
+            "priceLevel": "PRICE_LEVEL_MODERATE",
+            "priceRange": {
+                "startPrice": {"units": "20", "currencyCode": "PLN"},
+                "endPrice": {"units": "40", "currencyCode": "PLN"},
+            },
+            "websiteUri": "https://magiacafe.pl",
+            "editorialSummary": {"text": "Cozy cafe near the main square."},
+            "servesCoffee": True,
+            "servesBreakfast": True,
+            "servesBeer": False,
+        }
+        places_manager = _make_pricing_manager(payload)
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"gmaps_place_id": "ChIabc123"}
+        )
+
+        assert "moderate" in result
+        assert "$$" in result
+        assert "20 PLN" in result
+        assert "40 PLN" in result
+        assert "https://magiacafe.pl" in result
+        assert "Cozy cafe near the main square." in result
+        assert "coffee" in result
+        assert "breakfast" in result
+        assert "beer" not in result
+
+    async def test_price_range_without_end_price(self):
+        payload = {
+            "displayName": {"text": "Magia Cafe"},
+            "priceRange": {"startPrice": {"units": "20", "currencyCode": "PLN"}},
+        }
+        places_manager = _make_pricing_manager(payload)
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"gmaps_place_id": "ChIabc123"}
+        )
+
+        assert "from 20 PLN" in result
+
+    async def test_price_range_with_fractional_nanos(self):
+        payload = {
+            "displayName": {"text": "Magia Cafe"},
+            "priceRange": {
+                "startPrice": {"units": "20", "nanos": 500000000, "currencyCode": "PLN"},
+                "endPrice": {"units": "40", "currencyCode": "PLN"},
+            },
+        }
+        places_manager = _make_pricing_manager(payload)
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"gmaps_place_id": "ChIabc123"}
+        )
+
+        assert "20.5 PLN–40 PLN" in result
+
+    async def test_no_pricing_data_with_website_suggests_website(self):
+        payload = {"displayName": {"text": "Magia Cafe"}, "websiteUri": "https://magiacafe.pl"}
+        places_manager = _make_pricing_manager(payload)
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"gmaps_place_id": "ChIabc123"}
+        )
+
+        assert "no pricing data" in result
+        assert "https://magiacafe.pl" in result
+
+    async def test_no_pricing_data_without_website(self):
+        payload = {"displayName": {"text": "Magia Cafe"}}
+        places_manager = _make_pricing_manager(payload)
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"gmaps_place_id": "ChIabc123"}
+        )
+
+        assert "no pricing data" in result
+        assert "Magia Cafe" in result
+
+
+@pytest.mark.unit
+class TestGetPlacePricingErrors:
+    async def test_no_id_and_no_query_returns_guidance(self):
+        places_manager = _make_pricing_manager()
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke({})
+
+        assert "Provide either" in result
+        places_manager.search_place_id.assert_not_called()
+        places_manager.fetch_place_details.assert_not_called()
+
+    async def test_search_not_found_returns_message(self):
+        places_manager = _make_pricing_manager(search_result=(None, "NOT_FOUND", None))
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"query": "Nonexistent Place XYZ"}
+        )
+
+        assert "No place found" in result
+
+    async def test_missing_api_key_returns_message(self):
+        places_manager = _make_pricing_manager(search_result=(None, "MISSING_API_KEY", None))
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"query": "Magia Cafe"}
+        )
+
+        assert "API key not configured" in result
+
+    async def test_search_api_error_returns_error_string(self):
+        places_manager = _make_pricing_manager(search_result=(None, "REQUEST_DENIED", "API key invalid"))
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"query": "Magia Cafe"}
+        )
+
+        assert "Search failed" in result
+        assert "API key invalid" in result
+
+    async def test_fetch_details_failure_returns_error_string(self):
+        places_manager = MagicMock()
+        places_manager.search_place_id = AsyncMock(return_value=("ChIabc123", "OK", None))
+        places_manager.fetch_place_details = AsyncMock(return_value=(None, "HTTP_500", "boom"))
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"query": "Magia Cafe"}
+        )
+
+        assert "Could not retrieve pricing details" in result
+        assert "boom" in result
 
 
 def _make_trip_summary(id_="abc123", name="Test Krakow", date="2026-07-05"):

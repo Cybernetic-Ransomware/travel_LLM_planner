@@ -10,6 +10,7 @@ export default defineConfig({
 		sveltekit(),
 		paraglideVitePlugin({ project: './project.inlang', outdir: './src/lib/paraglide' })
 	],
+	optimizeDeps: { include: ['leaflet'] },
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

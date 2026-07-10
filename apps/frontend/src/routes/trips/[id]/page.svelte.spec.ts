@@ -57,10 +57,11 @@ describe('/trips/[id] page', () => {
 		expect(getByText('9:00 – 21:00')).toBeTruthy();
 	});
 
-	it('renders visit and wait metrics', async () => {
+	it('renders travel, visit and wait metrics', async () => {
 		const { getByText } = render(Page, {
 			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
 		});
+		expect(getByText('30m')).toBeTruthy();
 		expect(getByText('90 min')).toBeTruthy();
 		expect(getByText('15 min')).toBeTruthy();
 	});

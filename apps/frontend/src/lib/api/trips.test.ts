@@ -88,6 +88,18 @@ describe('trips API', () => {
 
 			await expect(getTrip('missing')).rejects.toMatchObject({ status: 404 });
 		});
+
+		it('throws ApiError on 502', async () => {
+			mockFetch({ detail: 'Bad gateway' }, 502);
+
+			await expect(getTrip('abc')).rejects.toMatchObject({ status: 502 });
+		});
+
+		it('throws ApiError on 504', async () => {
+			mockFetch({ detail: 'Gateway timeout' }, 504);
+
+			await expect(getTrip('abc')).rejects.toMatchObject({ status: 504 });
+		});
 	});
 
 	describe('saveTrip', () => {
