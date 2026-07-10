@@ -11,6 +11,13 @@ const mockTrip: TripSummaryOut = {
 };
 
 describe('/trips page', () => {
+	it('renders the page title', async () => {
+		const { getByRole } = render(Page, {
+			props: { data: { orchestratorReady: true, trips: [], backendError: null } }
+		});
+		expect(getByRole('heading', { name: 'Zapisane trasy' })).toBeTruthy();
+	});
+
 	it('renders empty state when no trips', async () => {
 		const { getByText } = render(Page, {
 			props: { data: { orchestratorReady: true, trips: [], backendError: null } }
