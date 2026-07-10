@@ -9,8 +9,9 @@ from src.trips.manager import TripsManager
 
 logger = setup_logger(__name__, "orchestrator")
 
-# Pricing fields bill under the same Places API Enterprise SKU tier as the
-# already-used rating/regularOpeningHours fields in the default field mask.
+# priceLevel and priceRange are Places API Enterprise fields; the serves* food/drink
+# attributes and editorialSummary bill under Enterprise + Atmosphere.
+# Keep this mask explicit so pricing-related requests do not expand the default details payload.
 PRICING_FIELD_MASK = (
     "id,displayName,websiteUri,editorialSummary,priceLevel,priceRange,"
     "servesBreakfast,servesLunch,servesDinner,servesBrunch,servesCoffee,"
@@ -40,11 +41,14 @@ _SERVES_ATTRIBUTES = (
 
 
 def _format_money(money: dict) -> str | None:
-    units = money.get("units")
-    if units is None:
+    units = int(money.get("units") or 0)
+    nanos = int(money.get("nanos") or 0)
+    if not units and not nanos:
         return None
     currency = money.get("currencyCode", "")
-    return f"{units} {currency}".strip()
+    amount = units + nanos / 1_000_000_000
+    text = f"{amount:.2f}".rstrip("0").rstrip(".")
+    return f"{text} {currency}".strip()
 
 
 def _format_pricing(payload: dict, label: str) -> str:

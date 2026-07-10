@@ -637,6 +637,22 @@ class TestGetPlacePricingSuccess:
 
         assert "from 20 PLN" in result
 
+    async def test_price_range_with_fractional_nanos(self):
+        payload = {
+            "displayName": {"text": "Magia Cafe"},
+            "priceRange": {
+                "startPrice": {"units": "20", "nanos": 500000000, "currencyCode": "PLN"},
+                "endPrice": {"units": "40", "currencyCode": "PLN"},
+            },
+        }
+        places_manager = _make_pricing_manager(payload)
+
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
+            {"gmaps_place_id": "ChIabc123"}
+        )
+
+        assert "20.5 PLN–40 PLN" in result
+
     async def test_no_pricing_data_with_website_suggests_website(self):
         payload = {"displayName": {"text": "Magia Cafe"}, "websiteUri": "https://magiacafe.pl"}
         places_manager = _make_pricing_manager(payload)
