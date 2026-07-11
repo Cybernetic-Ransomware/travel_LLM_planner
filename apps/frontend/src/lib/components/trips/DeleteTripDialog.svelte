@@ -22,7 +22,9 @@
 	</p>
 
 	{#snippet footer()}
-		<Button variant="secondary" onclick={() => (open = false)}>{m.trip_delete_cancel()}</Button>
+		<Button variant="secondary" disabled={loading} onclick={() => (open = false)}>
+			{m.trip_delete_cancel()}
+		</Button>
 		<Button variant="danger" {loading} onclick={onconfirm}>{m.trip_delete_submit()}</Button>
 	{/snippet}
 </Modal>

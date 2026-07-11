@@ -32,6 +32,7 @@
 		)
 	);
 	let prefillFailed = $state(untrack(() => data.prefillFailed));
+	let prefillMissingCount = $state(untrack(() => data.missingPrefillPlaceCount));
 
 	let LeafletMap: typeof import('$lib/components/map/LeafletMap.svelte').default | null =
 		$state(null);
@@ -106,6 +107,14 @@
 
 	{#if prefillNotice}
 		<Toast message={prefillNotice} variant="info" onclose={() => (prefillNotice = null)} />
+	{/if}
+
+	{#if prefillMissingCount > 0}
+		<Toast
+			message={m.optimizer_prefill_missing_places({ count: prefillMissingCount })}
+			variant="warning"
+			onclose={() => (prefillMissingCount = 0)}
+		/>
 	{/if}
 
 	{#if error}

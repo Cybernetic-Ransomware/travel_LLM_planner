@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getTrips, getTrip, saveTrip } from './trips.js';
+import { getTrips, getTrip, saveTrip, deleteTrip } from './trips.js';
 import type { SaveTripRequest } from '$lib/types/index.js';
 
 function mockFetch(body: unknown, status = 200) {
@@ -157,6 +157,38 @@ describe('trips API', () => {
 				}
 			};
 			await expect(saveTrip(req)).rejects.toMatchObject({ status: 422 });
+		});
+	});
+
+	describe('deleteTrip', () => {
+		it('calls DELETE /core/trips/:id', async () => {
+			const mockFn = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+			vi.stubGlobal('fetch', mockFn);
+
+			await deleteTrip('abc');
+
+			expect(mockFn).toHaveBeenCalledWith(
+				'/api/proxy/core/trips/abc',
+				expect.objectContaining({ method: 'DELETE' })
+			);
+		});
+
+		it('resolves to undefined on 204', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+
+			await expect(deleteTrip('abc')).resolves.toBeUndefined();
+		});
+
+		it('throws ApiError on 404', async () => {
+			mockFetch({ detail: 'Not found' }, 404);
+
+			await expect(deleteTrip('missing')).rejects.toMatchObject({ status: 404 });
+		});
+
+		it('throws ApiError on 500', async () => {
+			mockFetch({ detail: 'Internal error' }, 500);
+
+			await expect(deleteTrip('abc')).rejects.toMatchObject({ status: 500 });
 		});
 	});
 });

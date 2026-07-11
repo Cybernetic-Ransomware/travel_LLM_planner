@@ -46,4 +46,12 @@ describe('DeleteTripDialog', () => {
 		const btn = getByRole('button', { name: 'Usuń', exact: true }).element() as HTMLButtonElement;
 		expect(btn.disabled).toBe(true);
 	});
+
+	it('loading disables the cancel button', async () => {
+		const { getByRole } = render(DeleteTripDialog, {
+			props: { open: true, tripName: 'Weekend in Kraków', loading: true }
+		});
+		const btn = getByRole('button', { name: 'Anuluj' }).element() as HTMLButtonElement;
+		expect(btn.disabled).toBe(true);
+	});
 });

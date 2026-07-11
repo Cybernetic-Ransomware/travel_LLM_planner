@@ -123,6 +123,7 @@
 	"trips_empty_cta": "Plan your first route",
 	"optimizer_prefill_notice": "Loaded settings from trip \"{name}\".",
 	"optimizer_prefill_failed": "Could not load the saved trip — starting with defaults.",
+	"optimizer_prefill_missing_places": "Some places from the saved trip are no longer active and were not loaded: {count}.",
 	"error_page_not_found": "Page not found",
 	"error_page_generic": "Something went wrong",
 	"error_page_back_trips": "Back to saved trips",

@@ -35,8 +35,25 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 	}
 
 	if (!placesResult.ok) {
-		return { places: [] as PlaceOut[], backendError: placesResult.error, prefill, prefillFailed };
+		return {
+			places: [] as PlaceOut[],
+			backendError: placesResult.error,
+			prefill,
+			prefillFailed,
+			missingPrefillPlaceCount: 0
+		};
 	}
 
-	return { places: placesResult.data, backendError: null, prefill, prefillFailed };
+	const activeIds = new Set(placesResult.data.map((p) => p.id));
+	const missingPrefillPlaceCount = prefill
+		? prefill.selectedPlaceIds.filter((id) => !activeIds.has(id)).length
+		: 0;
+
+	return {
+		places: placesResult.data,
+		backendError: null,
+		prefill,
+		prefillFailed,
+		missingPrefillPlaceCount
+	};
 };

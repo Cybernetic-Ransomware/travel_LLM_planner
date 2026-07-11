@@ -123,6 +123,7 @@
 	"trips_empty_cta": "Zaplanuj pierwszą trasę",
 	"optimizer_prefill_notice": "Wczytano ustawienia z trasy \"{name}\".",
 	"optimizer_prefill_failed": "Nie udało się wczytać zapisanej trasy — zaczynamy od ustawień domyślnych.",
+	"optimizer_prefill_missing_places": "Niektóre miejsca z zapisanej trasy są już nieaktywne i nie zostały wczytane: {count}.",
 	"error_page_not_found": "Nie znaleziono strony",
 	"error_page_generic": "Coś poszło nie tak",
 	"error_page_back_trips": "Wróć do zapisanych tras",
