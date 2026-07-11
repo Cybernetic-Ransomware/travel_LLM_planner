@@ -121,6 +121,7 @@ class TestUpdateTrip:
         payload = _payload()
         payload["name"] = "Updated name"
         payload["optimizer_request"]["place_ids"] = ["p3", "p4"]
+        payload["optimizer_response"]["total_wait_min"] = 123
         return payload
 
     async def test_returns_200_with_updated_detail(self, client: AsyncClient):
@@ -131,6 +132,7 @@ class TestUpdateTrip:
         assert data["id"] == created["id"]
         assert data["name"] == "Updated name"
         assert data["selected_place_ids"] == ["p3", "p4"]
+        assert data["optimizer_response"]["total_wait_min"] == 123
 
     async def test_created_at_unchanged(self, client: AsyncClient):
         created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()

@@ -207,6 +207,12 @@ describe('trips API', () => {
 			await expect(updateTrip('missing', request)).rejects.toMatchObject({ status: 404 });
 		});
 
+		it('throws ApiError on 422', async () => {
+			mockFetch({ detail: 'Unprocessable entity' }, 422);
+
+			await expect(updateTrip('abc', request)).rejects.toMatchObject({ status: 422 });
+		});
+
 		it('throws ApiError on 500', async () => {
 			mockFetch({ detail: 'Internal error' }, 500);
 
