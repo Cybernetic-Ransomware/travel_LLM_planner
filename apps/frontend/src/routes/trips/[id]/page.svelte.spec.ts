@@ -1,7 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { userEvent } from 'vitest/browser';
 import Page from './+page.svelte';
+import { deleteTrip } from '$lib/api/trips.js';
+import { goto } from '$app/navigation';
 import type { TripOut } from '$lib/types/index.js';
+
+vi.mock('$lib/api/trips.js', () => ({
+	deleteTrip: vi.fn().mockResolvedValue(undefined)
+}));
+
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn().mockResolvedValue(undefined)
+}));
 
 const mockTrip: TripOut = {
 	id: 'abc',
@@ -29,6 +40,10 @@ const mockTrip: TripOut = {
 };
 
 describe('/trips/[id] page', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
 	it('renders trip name in heading', async () => {
 		const { getByText } = render(Page, {
 			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
@@ -86,5 +101,56 @@ describe('/trips/[id] page', () => {
 		});
 		const backLink = getByRole('link', { name: /Zapisane trasy/ }).element();
 		expect(backLink.getAttribute('href')).toBe('/trips');
+	});
+
+	it('renders open-in-optimizer link with trip id', async () => {
+		const { getByRole } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+		});
+		const link = getByRole('link', { name: 'Otwórz w planerze trasy' }).element();
+		expect(link.getAttribute('href')).toBe('/optimizer?from=abc');
+	});
+
+	it('delete button opens confirm dialog with trip name', async () => {
+		const { getByRole, getByText } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+		});
+		await userEvent.click(getByRole('button', { name: 'Usuń trasę' }));
+		expect(
+			getByText(
+				'Czy na pewno chcesz usunąć trasę "Weekend in Kraków"? Tej operacji nie można cofnąć.'
+			)
+		).toBeTruthy();
+	});
+
+	it('confirm calls deleteTrip and navigates to /trips with deleted param', async () => {
+		const { getByRole } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+		});
+		await userEvent.click(getByRole('button', { name: 'Usuń trasę' }));
+		await userEvent.click(getByRole('button', { name: 'Usuń', exact: true }));
+		expect(deleteTrip).toHaveBeenCalledWith('abc');
+		expect(goto).toHaveBeenCalledWith(`/trips?deleted=${encodeURIComponent('Weekend in Kraków')}`);
+	});
+
+	it('cancel closes dialog without calling the API', async () => {
+		const { getByRole, getByText } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+		});
+		await userEvent.click(getByRole('button', { name: 'Usuń trasę' }));
+		await userEvent.click(getByRole('button', { name: 'Anuluj' }));
+		expect(deleteTrip).not.toHaveBeenCalled();
+		expect(getByText('Usuwanie trasy').query()).toBeNull();
+	});
+
+	it('shows error toast when delete fails', async () => {
+		vi.mocked(deleteTrip).mockRejectedValueOnce(new Error('boom'));
+		const { getByRole, getByText } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+		});
+		await userEvent.click(getByRole('button', { name: 'Usuń trasę' }));
+		await userEvent.click(getByRole('button', { name: 'Usuń', exact: true }));
+		expect(getByText('Nie udało się usunąć trasy. Spróbuj ponownie.')).toBeTruthy();
+		expect(goto).not.toHaveBeenCalled();
 	});
 });

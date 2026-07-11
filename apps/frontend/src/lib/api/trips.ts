@@ -16,3 +16,7 @@ export function saveTrip(request: SaveTripRequest): Promise<TripOut> {
 		timeout: 30_000
 	});
 }
+
+export function deleteTrip(id: string): Promise<void> {
+	return apiFetch<void>(`/core/trips/${id}`, { method: 'DELETE' });
+}

@@ -113,3 +113,46 @@ class TestGetTrip:
     async def test_unknown_valid_objectid_returns_404(self, client: AsyncClient):
         response = await client.get(f"{ENDPOINT}/000000000000000000000000")
         assert response.status_code == 404
+
+
+@pytest.mark.integration
+class TestDeleteTrip:
+    async def test_deletes_and_returns_204(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        response = await client.delete(f"{ENDPOINT}/{created['id']}")
+        assert response.status_code == 204
+        assert response.content == b""
+
+    async def test_trip_removed_from_db(self, client: AsyncClient, test_db):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        await client.delete(f"{ENDPOINT}/{created['id']}")
+        count = await test_db[TRIPS_COLLECTION].count_documents({})
+        assert count == 0
+
+    async def test_get_after_delete_returns_404(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        await client.delete(f"{ENDPOINT}/{created['id']}")
+        response = await client.get(f"{ENDPOINT}/{created['id']}")
+        assert response.status_code == 404
+
+    async def test_second_delete_returns_404(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        await client.delete(f"{ENDPOINT}/{created['id']}")
+        response = await client.delete(f"{ENDPOINT}/{created['id']}")
+        assert response.status_code == 404
+
+    async def test_invalid_id_returns_404(self, client: AsyncClient):
+        response = await client.delete(f"{ENDPOINT}/not-a-valid-objectid")
+        assert response.status_code == 404
+
+    async def test_unknown_valid_objectid_returns_404(self, client: AsyncClient):
+        response = await client.delete(f"{ENDPOINT}/000000000000000000000000")
+        assert response.status_code == 404
+
+    async def test_only_targeted_trip_deleted(self, client: AsyncClient):
+        first = (await client.post(f"{ENDPOINT}/", json={**_payload(), "name": "First"})).json()
+        await client.post(f"{ENDPOINT}/", json={**_payload(), "name": "Second"})
+        await client.delete(f"{ENDPOINT}/{first['id']}")
+        data = (await client.get(f"{ENDPOINT}/")).json()
+        assert len(data) == 1
+        assert data[0]["name"] == "Second"

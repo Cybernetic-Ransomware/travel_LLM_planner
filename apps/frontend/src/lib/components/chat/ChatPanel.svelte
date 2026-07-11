@@ -19,7 +19,18 @@
 <div class="flex flex-1 flex-col overflow-hidden">
 	<div bind:this={messagesEl} class="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
 		{#if chat.messages.length === 0}
-			<p class="mt-8 text-center text-sm text-zinc-400">{m.chat_empty()}</p>
+			<div class="mt-8 flex flex-col items-center gap-3">
+				<p class="text-center text-sm text-zinc-400">{m.chat_empty()}</p>
+				<p class="text-center text-xs text-zinc-400">{m.chat_pricing_hint()}</p>
+				<button
+					onclick={() => chat.send(m.chat_pricing_example())}
+					disabled={chat.streaming}
+					data-testid="pricing-hint-chip"
+					class="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					{m.chat_pricing_example()}
+				</button>
+			</div>
 		{/if}
 
 		{#each chat.messages as message (message)}

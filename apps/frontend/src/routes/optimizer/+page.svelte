@@ -13,13 +13,25 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let selectedIds = $state<string[]>(untrack(() => data.places.map((p) => p.id)));
+	let selectedIds = $state<string[]>(
+		untrack(() =>
+			data.prefill
+				? data.prefill.selectedPlaceIds.filter((id) => data.places.some((p) => p.id === id))
+				: data.places.map((p) => p.id)
+		)
+	);
 	let result = $state<OptimizeResponse | null>(null);
 	let lastRequest = $state<OptimizeRequest | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let showSaveForm = $state(false);
 	let saveSuccess = $state<string | null>(null);
+	let prefillNotice = $state<string | null>(
+		untrack(() =>
+			data.prefill ? m.optimizer_prefill_notice({ name: data.prefill.tripName }) : null
+		)
+	);
+	let prefillFailed = $state(untrack(() => data.prefillFailed));
 
 	let LeafletMap: typeof import('$lib/components/map/LeafletMap.svelte').default | null =
 		$state(null);
@@ -84,6 +96,18 @@
 		<Toast message={placesLoadError} variant="error" />
 	{/if}
 
+	{#if prefillFailed}
+		<Toast
+			message={m.optimizer_prefill_failed()}
+			variant="error"
+			onclose={() => (prefillFailed = false)}
+		/>
+	{/if}
+
+	{#if prefillNotice}
+		<Toast message={prefillNotice} variant="info" onclose={() => (prefillNotice = null)} />
+	{/if}
+
 	{#if error}
 		<Toast message={error} variant="error" onclose={() => (error = null)} />
 	{/if}
@@ -99,6 +123,9 @@
 				hasLoadError={data.backendError !== null}
 				bind:selectedIds
 				{loading}
+				initialTransportMode={data.prefill?.transportMode}
+				initialDayStartHour={data.prefill?.dayStartHour}
+				initialDayEndHour={data.prefill?.dayEndHour}
 				onsubmit={handleSubmit}
 			/>
 

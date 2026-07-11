@@ -76,4 +76,25 @@ describe('RouteForm', () => {
 		});
 		expect(getByText('0 of 3 selected')).toBeTruthy();
 	});
+
+	it('initial props flow into the submitted payload', async () => {
+		const onsubmit = vi.fn();
+		const { getByTestId } = render(RouteForm, {
+			props: {
+				places,
+				selectedIds: ['p1', 'p2'],
+				initialTransportMode: 'DRIVE',
+				initialDayStartHour: 9,
+				initialDayEndHour: 21,
+				onsubmit
+			}
+		});
+		await userEvent.click(getByTestId('optimize-submit'));
+		expect(onsubmit).toHaveBeenCalledOnce();
+		const req = onsubmit.mock.calls[0][0];
+		expect(req.place_ids).toEqual(['p1', 'p2']);
+		expect(req.transport_mode).toBe('DRIVE');
+		expect(req.day_start_hour).toBe(9);
+		expect(req.day_end_hour).toBe(21);
+	});
 });

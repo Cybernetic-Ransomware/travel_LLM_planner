@@ -111,5 +111,22 @@
 	"trip_created_at": "Created",
 	"trip_date": "Date",
 	"trip_time_window": "Day window",
-	"trip_saved_route": "Saved route"
+	"trip_saved_route": "Saved route",
+	"trip_open_in_optimizer": "Open in route planner",
+	"trip_delete": "Delete trip",
+	"trip_delete_title": "Delete trip",
+	"trip_delete_confirm": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+	"trip_delete_cancel": "Cancel",
+	"trip_delete_submit": "Delete",
+	"trip_delete_success": "Trip \"{name}\" deleted.",
+	"trip_delete_error": "Failed to delete the trip. Please try again.",
+	"trips_empty_cta": "Plan your first route",
+	"optimizer_prefill_notice": "Loaded settings from trip \"{name}\".",
+	"optimizer_prefill_failed": "Could not load the saved trip — starting with defaults.",
+	"error_page_not_found": "Page not found",
+	"error_page_generic": "Something went wrong",
+	"error_page_back_trips": "Back to saved trips",
+	"error_page_home": "Go to home page",
+	"chat_pricing_hint": "New: ask about ticket prices for your places",
+	"chat_pricing_example": "How much is admission to Wawel Castle?"
 }
