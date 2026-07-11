@@ -116,6 +116,69 @@ class TestGetTrip:
 
 
 @pytest.mark.integration
+class TestUpdateTrip:
+    def _updated_payload(self) -> dict:
+        payload = _payload()
+        payload["name"] = "Updated name"
+        payload["optimizer_request"]["place_ids"] = ["p3", "p4"]
+        payload["optimizer_response"]["total_wait_min"] = 123
+        return payload
+
+    async def test_returns_200_with_updated_detail(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        response = await client.put(f"{ENDPOINT}/{created['id']}", json=self._updated_payload())
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == created["id"]
+        assert data["name"] == "Updated name"
+        assert data["selected_place_ids"] == ["p3", "p4"]
+        assert data["optimizer_response"]["total_wait_min"] == 123
+
+    async def test_created_at_unchanged(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        before = (await client.get(f"{ENDPOINT}/{created['id']}")).json()
+        await client.put(f"{ENDPOINT}/{created['id']}", json=self._updated_payload())
+        after = (await client.get(f"{ENDPOINT}/{created['id']}")).json()
+        assert after["created_at"] == before["created_at"]
+
+    async def test_sets_updated_at(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        assert created["updated_at"] is None
+        data = (await client.put(f"{ENDPOINT}/{created['id']}", json=self._updated_payload())).json()
+        assert data["updated_at"]
+
+    async def test_get_after_update_returns_new_data(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        await client.put(f"{ENDPOINT}/{created['id']}", json=self._updated_payload())
+        data = (await client.get(f"{ENDPOINT}/{created['id']}")).json()
+        assert data["name"] == "Updated name"
+        assert data["optimizer_request"]["place_ids"] == ["p3", "p4"]
+
+    async def test_invalid_id_returns_404(self, client: AsyncClient):
+        response = await client.put(f"{ENDPOINT}/not-a-valid-objectid", json=self._updated_payload())
+        assert response.status_code == 404
+
+    async def test_unknown_valid_objectid_returns_404(self, client: AsyncClient):
+        response = await client.put(f"{ENDPOINT}/000000000000000000000000", json=self._updated_payload())
+        assert response.status_code == 404
+
+    async def test_empty_name_returns_422(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        payload = self._updated_payload()
+        payload["name"] = ""
+        response = await client.put(f"{ENDPOINT}/{created['id']}", json=payload)
+        assert response.status_code == 422
+
+    async def test_only_targeted_trip_updated(self, client: AsyncClient):
+        first = (await client.post(f"{ENDPOINT}/", json={**_payload(), "name": "First"})).json()
+        await client.post(f"{ENDPOINT}/", json={**_payload(), "name": "Second"})
+        await client.put(f"{ENDPOINT}/{first['id']}", json=self._updated_payload())
+        data = (await client.get(f"{ENDPOINT}/")).json()
+        names = {trip["name"] for trip in data}
+        assert names == {"Updated name", "Second"}
+
+
+@pytest.mark.integration
 class TestDeleteTrip:
     async def test_deletes_and_returns_204(self, client: AsyncClient):
         created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()

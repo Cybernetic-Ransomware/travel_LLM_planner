@@ -23,6 +23,7 @@ class TripSummaryOut(BaseModel):
 
 
 class TripDetailOut(TripSummaryOut):
+    updated_at: str | None = None
     optimizer_request: OptimizeRequest
     optimizer_response: OptimizeResponse
     selected_place_ids: list[str]

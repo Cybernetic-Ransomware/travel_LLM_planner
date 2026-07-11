@@ -27,6 +27,15 @@ async def get_trip(trip_id: str, trips: TripsDep) -> TripDetailOut:
     return trip
 
 
+@router.put("/{trip_id}", response_model=TripDetailOut)
+async def update_trip(trip_id: str, body: SaveTripRequest, trips: TripsDep) -> TripDetailOut:
+    """Replace a saved trip's name, date and optimizer data."""
+    trip = await trips.update(trip_id, body)
+    if trip is None:
+        raise HTTPException(status_code=404, detail=f"Trip {trip_id!r} not found")
+    return trip
+
+
 @router.delete("/{trip_id}", status_code=204)
 async def delete_trip(trip_id: str, trips: TripsDep) -> None:
     """Delete a saved trip by its MongoDB id."""
