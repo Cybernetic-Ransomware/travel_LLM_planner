@@ -17,6 +17,14 @@ export function saveTrip(request: SaveTripRequest): Promise<TripOut> {
 	});
 }
 
+export function updateTrip(id: string, request: SaveTripRequest): Promise<TripOut> {
+	return apiFetch<TripOut>(`/core/trips/${id}`, {
+		method: 'PUT',
+		body: JSON.stringify(request),
+		timeout: 30_000
+	});
+}
+
 export function deleteTrip(id: string): Promise<void> {
 	return apiFetch<void>(`/core/trips/${id}`, { method: 'DELETE' });
 }

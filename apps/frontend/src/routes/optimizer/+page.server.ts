@@ -3,7 +3,9 @@ import type { PlaceOut, TransportMode, TripOut } from '$lib/types/index.js';
 import { backendFetch } from '$lib/server/backend.js';
 
 export interface OptimizerPrefill {
+	tripId: string;
 	tripName: string;
+	tripDate: string;
 	selectedPlaceIds: string[];
 	transportMode: TransportMode;
 	dayStartHour: number;
@@ -20,10 +22,12 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 
 	let prefill: OptimizerPrefill | null = null;
 	let prefillFailed = false;
-	if (tripResult) {
+	if (tripResult && fromTripId) {
 		if (tripResult.ok) {
 			prefill = {
+				tripId: fromTripId,
 				tripName: tripResult.data.name,
+				tripDate: tripResult.data.date,
 				selectedPlaceIds: tripResult.data.selected_place_ids,
 				transportMode: tripResult.data.transport_mode,
 				dayStartHour: tripResult.data.day_start_hour,

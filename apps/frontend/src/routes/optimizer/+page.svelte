@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import type { PageData } from './$types.js';
 	import { optimizeRoute } from '$lib/api/optimizer.js';
+	import { updateTrip } from '$lib/api/trips.js';
 	import { ApiError } from '$lib/api/client.js';
 	import type { OptimizeRequest, OptimizeResponse, TripOut } from '$lib/types/index.js';
 	import RouteForm from '$lib/components/optimizer/RouteForm.svelte';
@@ -26,6 +27,7 @@
 	let error = $state<string | null>(null);
 	let showSaveForm = $state(false);
 	let saveSuccess = $state<string | null>(null);
+	let updating = $state(false);
 	let prefillNotice = $state<string | null>(
 		untrack(() =>
 			data.prefill ? m.optimizer_prefill_notice({ name: data.prefill.tripName }) : null
@@ -82,6 +84,26 @@
 	function handleTripSaved(trip: TripOut) {
 		showSaveForm = false;
 		saveSuccess = m.save_trip_success({ name: trip.name });
+	}
+
+	async function handleUpdateTrip() {
+		if (!data.prefill || !result || !lastRequest) return;
+		updating = true;
+		error = null;
+		saveSuccess = null;
+		try {
+			const trip = await updateTrip(data.prefill.tripId, {
+				name: data.prefill.tripName,
+				date: data.prefill.tripDate,
+				optimizer_request: lastRequest,
+				optimizer_response: result
+			});
+			saveSuccess = m.update_trip_success({ name: trip.name });
+		} catch (err) {
+			error = err instanceof ApiError ? err.detail : m.update_trip_failed();
+		} finally {
+			updating = false;
+		}
 	}
 </script>
 
@@ -141,11 +163,21 @@
 			{#if result}
 				<RouteResults {result} />
 
+				{#if data.prefill}
+					<button
+						onclick={handleUpdateTrip}
+						disabled={updating}
+						class="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+					>
+						{updating ? '…' : m.optimizer_update_trip()}
+					</button>
+				{/if}
+
 				<button
 					onclick={() => (showSaveForm = true)}
 					class="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
 				>
-					{m.optimizer_save_trip()}
+					{data.prefill ? m.optimizer_save_as_new() : m.optimizer_save_trip()}
 				</button>
 			{/if}
 		</div>

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from bson import ObjectId
+from pymongo import ReturnDocument
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.optimizer.solver.models import OptimizeRequest, OptimizeResponse
@@ -38,6 +39,20 @@ class TripsManager:
             return None
         return _to_trip_detail_out(doc)
 
+    async def update(self, trip_id: str, request: SaveTripRequest) -> TripDetailOut | None:
+        try:
+            oid = ObjectId(trip_id)
+        except Exception:
+            return None
+        update = request.model_dump(mode="json")
+        update["updated_at"] = datetime.now(UTC)
+        doc = await self._collection.find_one_and_update(
+            {"_id": oid}, {"$set": update}, return_document=ReturnDocument.AFTER
+        )
+        if doc is None:
+            return None
+        return _to_trip_detail_out(doc)
+
     async def delete(self, trip_id: str) -> bool:
         try:
             oid = ObjectId(trip_id)
@@ -64,6 +79,7 @@ def _to_trip_detail_out(doc: dict) -> TripDetailOut:
         name=doc["name"],
         date=str(doc["date"]),
         created_at=doc["created_at"].isoformat(),
+        updated_at=doc["updated_at"].isoformat() if doc.get("updated_at") else None,
         optimizer_request=req,
         optimizer_response=resp,
         selected_place_ids=req.place_ids,

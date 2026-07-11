@@ -15,6 +15,7 @@ export interface TripSummaryOut {
 }
 
 export interface TripOut extends TripSummaryOut {
+	updated_at?: string | null;
 	optimizer_request: OptimizeRequest;
 	optimizer_response: OptimizeResponse;
 	selected_place_ids: string[];

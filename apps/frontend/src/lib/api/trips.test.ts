@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getTrips, getTrip, saveTrip, deleteTrip } from './trips.js';
+import { getTrips, getTrip, saveTrip, updateTrip, deleteTrip } from './trips.js';
 import type { SaveTripRequest } from '$lib/types/index.js';
 
 function mockFetch(body: unknown, status = 200) {
@@ -157,6 +157,60 @@ describe('trips API', () => {
 				}
 			};
 			await expect(saveTrip(req)).rejects.toMatchObject({ status: 422 });
+		});
+	});
+
+	describe('updateTrip', () => {
+		const request: SaveTripRequest = {
+			name: 'Updated name',
+			date: '2025-06-02',
+			optimizer_request: {
+				place_ids: ['p3', 'p4'],
+				transport_mode: 'WALK',
+				day_start_hour: 9,
+				day_end_hour: 21
+			},
+			optimizer_response: {
+				steps: [],
+				total_travel_time_s: 0,
+				total_visit_time_min: 0,
+				total_wait_min: 0,
+				transport_mode: 'WALK',
+				skipped: []
+			}
+		};
+
+		it('calls PUT /core/trips/:id with JSON body', async () => {
+			const mockFn = vi
+				.fn()
+				.mockResolvedValue(new Response(JSON.stringify({ id: 'abc' }), { status: 200 }));
+			vi.stubGlobal('fetch', mockFn);
+
+			await updateTrip('abc', request);
+
+			expect(mockFn).toHaveBeenCalledWith(
+				'/api/proxy/core/trips/abc',
+				expect.objectContaining({ method: 'PUT', body: JSON.stringify(request) })
+			);
+		});
+
+		it('returns the updated trip', async () => {
+			const updated = { id: 'abc', name: 'Updated name', updated_at: '2025-06-02T10:00:00Z' };
+			mockFetch(updated);
+
+			expect(await updateTrip('abc', request)).toEqual(updated);
+		});
+
+		it('throws ApiError on 404', async () => {
+			mockFetch({ detail: 'Not found' }, 404);
+
+			await expect(updateTrip('missing', request)).rejects.toMatchObject({ status: 404 });
+		});
+
+		it('throws ApiError on 500', async () => {
+			mockFetch({ detail: 'Internal error' }, 500);
+
+			await expect(updateTrip('abc', request)).rejects.toMatchObject({ status: 500 });
 		});
 	});
 
