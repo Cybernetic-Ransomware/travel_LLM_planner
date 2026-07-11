@@ -1,7 +1,9 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
+
+PlacePriority = Literal["must_see", "normal", "optional"]
 
 
 class ImportRequest(BaseModel):
@@ -49,11 +51,16 @@ class EnrichResponse(BaseModel):
 
 
 class PlacePatch(BaseModel):
-    """Partial update for scheduling preferences. Only provided fields are applied."""
+    """Partial update for scheduling preferences.
+
+    Omitted fields are left unchanged; an explicit null clears the stored value
+    (except ``skipped``, which must always be a boolean).
+    """
 
     preferred_hour_from: int | None = None  # local hour 0–23
     preferred_hour_to: int | None = None  # local hour 0–23
     visit_duration_min: int | None = None  # estimated minutes to spend at the place
+    priority: PlacePriority | None = None  # null clears the field — reads back as "normal"
     skipped: bool | None = None  # soft-exclude from current route planning
 
     @field_validator("preferred_hour_from", "preferred_hour_to")
@@ -80,6 +87,12 @@ class PlacePatch(BaseModel):
             raise ValueError("preferred_hour_from must be less than preferred_hour_to")
         return self
 
+    @model_validator(mode="after")
+    def validate_skipped_not_null(self) -> PlacePatch:
+        if "skipped" in self.model_fields_set and self.skipped is None:
+            raise ValueError("skipped cannot be null; use true or false")
+        return self
+
 
 class PlaceCreate(BaseModel):
     """Input model for creating a new place via the LLM tool."""
@@ -91,6 +104,7 @@ class PlaceCreate(BaseModel):
     visit_duration_min: int | None = None
     preferred_hour_from: int | None = None
     preferred_hour_to: int | None = None
+    priority: PlacePriority | None = None
 
     @field_validator("preferred_hour_from", "preferred_hour_to")
     @classmethod
@@ -139,6 +153,7 @@ class PlaceOut(BaseModel):
     preferred_hour_from: int | None = None
     preferred_hour_to: int | None = None
     visit_duration_min: int | None = None
+    priority: PlacePriority = "normal"
     skipped: bool = False
 
     @field_validator("id", mode="before")

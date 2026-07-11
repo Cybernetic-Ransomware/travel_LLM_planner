@@ -211,6 +211,77 @@ class TestNearestNeighbor:
 
 
 @pytest.mark.unit
+class TestNearestNeighborWeights:
+    """Priority-weighted route selection in nearest_neighbor."""
+
+    @staticmethod
+    def _tight_day_setup() -> tuple[DistanceMatrix, dict[str, TimeWindow], dict[str, int]]:
+        """One heavy node (H) and two light ones (L1, L2) competing for a 1-hour day.
+
+        Visiting H (3000s) leaves no room for anything else; L1+L2 fit together
+        (1200 + 300 + 1200 = 2700s). Unweighted NN prefers the 2-node route.
+        """
+        entries: list[MatrixEntry] = []
+        for a, b in [("H", "L1"), ("H", "L2"), ("L1", "L2")]:
+            entries.append(_entry(a, b, 300))
+            entries.append(_entry(b, a, 300))
+        matrix = _matrix(*entries)
+        tw = {n: TimeWindow(open_s=_9H, close_s=_9H + 3600) for n in ["H", "L1", "L2"]}
+        durations = {"H": 3000, "L1": 1200, "L2": 1200}
+        return matrix, tw, durations
+
+    def test_without_weights_prefers_more_nodes(self):
+        matrix, tw, durations = self._tight_day_setup()
+        route, skipped = nearest_neighbor(["H", "L1", "L2"], matrix, tw, durations, _9H, _9H + 3600)
+        assert sorted(route) == ["L1", "L2"]
+        assert skipped == ["H"]
+
+    def test_heavy_weight_beats_node_count(self):
+        matrix, tw, durations = self._tight_day_setup()
+        weights = {"H": 1_000_000, "L1": 1, "L2": 1}
+        route, skipped = nearest_neighbor(["H", "L1", "L2"], matrix, tw, durations, _9H, _9H + 3600, weights)
+        assert route == ["H"]
+        assert sorted(skipped) == ["L1", "L2"]
+
+    def test_infeasible_start_node_cannot_hijack_route(self):
+        """A heavily weighted node whose visit cannot fit its window must not win as a start."""
+        matrix, tw, durations = self._tight_day_setup()
+        # H's window is shorter than its visit — physically infeasible
+        tw["H"] = TimeWindow(open_s=_9H, close_s=_9H + 1800)
+        weights = {"H": 1_000_000, "L1": 1, "L2": 1}
+        route, skipped = nearest_neighbor(["H", "L1", "L2"], matrix, tw, durations, _9H, _9H + 3600, weights)
+        assert sorted(route) == ["L1", "L2"]
+        assert skipped == ["H"]
+
+    def test_uniform_weights_match_unweighted_behavior(self):
+        m = _matrix(
+            _entry("A", "B", 100),
+            _entry("B", "C", 100),
+            _entry("C", "A", 100),
+            _entry("A", "C", 900),
+            _entry("C", "B", 900),
+            _entry("B", "A", 900),
+        )
+        unweighted_route, _ = nearest_neighbor(["A", "B", "C"], m, {}, {}, _9H, _21H)
+        weighted_route, skipped = nearest_neighbor(["A", "B", "C"], m, {}, {}, _9H, _21H, {"A": 5, "B": 5, "C": 5})
+        assert skipped == []
+        assert weighted_route == unweighted_route
+
+    def test_score_tie_prefers_shorter_travel(self):
+        """Two disconnected pairs with equal total weight — the faster pair wins."""
+        m = _matrix(
+            _entry("A", "B", 100),
+            _entry("B", "A", 100),
+            _entry("C", "D", 900),
+            _entry("D", "C", 900),
+        )
+        weights = {"A": 10, "B": 10, "C": 10, "D": 10}
+        route, skipped = nearest_neighbor(["A", "B", "C", "D"], m, {}, {}, _9H, _21H, weights)
+        assert sorted(route) == ["A", "B"]
+        assert sorted(skipped) == ["C", "D"]
+
+
+@pytest.mark.unit
 class TestTwoOpt:
     def test_improves_suboptimal_route(self):
         """A→C→B→D is suboptimal; 2-opt should produce A→B→C→D (shorter)."""

@@ -31,6 +31,7 @@
 						<th class="px-3 py-2.5">{m.places_col_list()}</th>
 						<th class="px-3 py-2.5">{m.places_col_hours()}</th>
 						<th class="px-3 py-2.5">{m.places_col_duration()}</th>
+						<th class="px-3 py-2.5">{m.places_col_priority()}</th>
 						<th class="px-3 py-2.5 text-center">{m.places_col_skip()}</th>
 						<th class="px-3 py-2.5 text-center">{m.places_col_del()}</th>
 					</tr>

@@ -67,6 +67,28 @@ describe('gmaps API', () => {
 				expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ skipped: true }) })
 			);
 		});
+
+		it('sends priority in JSON body', async () => {
+			mockFetch({ id: 'abc', priority: 'must_see' });
+
+			await patchPlace('abc', { priority: 'must_see' });
+
+			expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+				'/api/proxy/core/gmaps/places/abc',
+				expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ priority: 'must_see' }) })
+			);
+		});
+
+		it('preserves explicit null in JSON body when clearing a preference', async () => {
+			mockFetch({ id: 'abc', preferred_hour_from: null });
+
+			await patchPlace('abc', { preferred_hour_from: null });
+
+			expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+				'/api/proxy/core/gmaps/places/abc',
+				expect.objectContaining({ method: 'PATCH', body: '{"preferred_hour_from":null}' })
+			);
+		});
 	});
 
 	describe('deletePlace', () => {

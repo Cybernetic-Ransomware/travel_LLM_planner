@@ -40,9 +40,9 @@ export class PlacesState {
 		}
 	}
 
-	async patch(id: string, patch: PlacePatch): Promise<void> {
+	async patch(id: string, patch: PlacePatch): Promise<boolean> {
 		const index = this.places.findIndex((p) => p.id === id);
-		if (index === -1) return;
+		if (index === -1) return false;
 
 		const previous = this.places[index];
 		this.places[index] = { ...previous, ...patch } as PlaceOut;
@@ -50,9 +50,11 @@ export class PlacesState {
 		try {
 			const updated = await patchPlace(id, patch);
 			this.places[index] = updated;
+			return true;
 		} catch (err) {
 			this.places[index] = previous;
 			this.error = (err as Error).message;
+			return false;
 		}
 	}
 

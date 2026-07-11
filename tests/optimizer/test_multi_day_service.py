@@ -147,6 +147,58 @@ class TestPlacePartitioning:
         assert "p2" in buckets[1]
 
 
+@pytest.mark.unit
+class TestPartitionPriorityOrder:
+    """Priority-ordered packing: must_see claims the roomiest day before lower priorities."""
+
+    # day 0: 9-13 → 240 min capacity; day 1: 9-12 → 180 min capacity
+    _configs = [
+        DayConfig(date=date(2026, 6, 1), day_start_hour=9, day_end_hour=13),
+        DayConfig(date=date(2026, 6, 2), day_start_hour=9, day_end_hour=12),
+    ]
+
+    def test_auto_must_see_claims_roomiest_day_before_optional(self):
+        # 150-min visits: whoever packs first takes day 0 (240), the other gets day 1 (180)
+        places = [_pref("o1"), _pref("m1")]  # optional listed first — sorting must reorder
+        doc_map = {
+            "o1": _place("o1", visit_min=150, priority="optional"),
+            "m1": _place("m1", visit_min=150, priority="must_see"),
+        }
+
+        buckets = _partition_places(places, 2, self._configs, doc_map)
+
+        assert "m1" in buckets[0]
+        assert "o1" in buckets[1]
+
+    def test_flexible_must_see_claims_roomiest_day_before_optional(self):
+        places = [
+            _pref_flexible("o1", DaySlot(day_index=0), DaySlot(day_index=1)),
+            _pref_flexible("m1", DaySlot(day_index=0), DaySlot(day_index=1)),
+        ]
+        doc_map = {
+            "o1": _place("o1", visit_min=150, priority="optional"),
+            "m1": _place("m1", visit_min=150, priority="must_see"),
+        }
+
+        buckets = _partition_places(places, 2, self._configs, doc_map)
+
+        assert "m1" in buckets[0]
+        assert "o1" in buckets[1]
+
+    def test_equal_priorities_preserve_input_order(self):
+        """Regression: docs without priority partition exactly as before (stable sort)."""
+        places = [_pref("p1"), _pref("p2")]
+        doc_map = {
+            "p1": _place("p1", visit_min=150),
+            "p2": _place("p2", visit_min=150),
+        }
+
+        buckets = _partition_places(places, 2, self._configs, doc_map)
+
+        assert "p1" in buckets[0]
+        assert "p2" in buckets[1]
+
+
 def _opening_hours(*google_days: int) -> dict:
     """Build a minimal opening_hours dict with periods for the given Google weekday numbers."""
     return {

@@ -135,12 +135,24 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
         if allowed and place_id not in allowed:
             return f"Cannot update place '{place_id}': it is not part of the current trip plan."
 
-        try:
-            patch = PlacePatch(
-                preferred_hour_from=preferred_hour_from,
-                preferred_hour_to=preferred_hour_to,
-                visit_duration_min=visit_duration_min,
+        # Build the patch only from provided arguments — PlacePatch treats an explicit
+        # None as "clear the field", and this tool must never clear omitted fields.
+        patch_kwargs = {
+            key: value
+            for key, value in {
+                "preferred_hour_from": preferred_hour_from,
+                "preferred_hour_to": preferred_hour_to,
+                "visit_duration_min": visit_duration_min,
+            }.items()
+            if value is not None
+        }
+        if not patch_kwargs:
+            return (
+                "No fields to update — provide at least one of preferred_hour_from, preferred_hour_to, visit_duration_min."
             )
+
+        try:
+            patch = PlacePatch(**patch_kwargs)
         except ValidationError as exc:
             first_error = exc.errors()[0]["msg"] if exc.errors() else str(exc)
             return f"Invalid visit hours: {first_error}"

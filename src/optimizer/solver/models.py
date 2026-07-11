@@ -115,7 +115,7 @@ class SkippedPlace(BaseModel):
 
     place_id: str
     name: str | None
-    reason: str  # NO_COORDINATES | TIME_WINDOW_INFEASIBLE | NO_MATRIX_ENTRY | MATRIX_INCOMPLETE
+    reason: str  # NO_COORDINATES | TIME_WINDOW_INFEASIBLE | NO_MATRIX_ENTRY | MATRIX_INCOMPLETE | DROPPED_LOW_PRIORITY
 
 
 class OptimizeResponse(BaseModel):

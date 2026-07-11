@@ -21,6 +21,7 @@ function mockPlace(lat: number | null, lng: number | null): PlaceOut {
 		preferred_hour_from: null,
 		preferred_hour_to: null,
 		visit_duration_min: null,
+		priority: 'normal',
 		skipped: false
 	};
 }

@@ -82,18 +82,29 @@ async def fetch_places_by_ids(db: AsyncDatabase, place_ids: list[str]) -> list[d
 
 
 async def find_and_update_place(db: AsyncDatabase, place_id: str, patch: PlacePatch) -> dict | None:
-    """Atomically apply patch and return the updated document, or None if not found or invalid id."""
+    """Atomically apply patch and return the updated document, or None if not found or invalid id.
+
+    Fields omitted from the patch are left unchanged; fields explicitly set to None are removed
+    from the document ($unset), so cleared preferences read back as their model defaults.
+    """
     try:
         oid = ObjectId(place_id)
     except InvalidId:
         return None
-    fields = patch.model_dump(exclude_none=True)
+    fields = patch.model_dump(exclude_unset=True)
+    set_fields = {k: v for k, v in fields.items() if v is not None}
+    unset_fields = {k: "" for k, v in fields.items() if v is None}
+    update: dict = {}
+    if set_fields:
+        update["$set"] = set_fields
+    if unset_fields:
+        update["$unset"] = unset_fields
     collection = db[GMAPS_COLLECTION]
-    if not fields:
+    if not update:
         return await collection.find_one({"_id": oid})
     return await collection.find_one_and_update(
         {"_id": oid},
-        {"$set": fields},
+        update,
         return_document=ReturnDocument.AFTER,
     )
 

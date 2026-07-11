@@ -37,6 +37,15 @@ def _open_day_indices(doc: dict, day_configs: list[DayConfig]) -> list[int]:
     return result if result else list(range(len(day_configs)))
 
 
+_PRIORITY_ORDER = {"must_see": 0, "normal": 1, "optional": 2}
+
+
+def _priority_rank(place_id: str, doc_map: dict[str, dict]) -> int:
+    """Packing rank for a place: must_see first, optional last. Unknown values rank as normal."""
+    priority = (doc_map.get(place_id) or {}).get("priority") or "normal"
+    return _PRIORITY_ORDER.get(priority, 1)
+
+
 def _partition_places(
     places: list[PlaceDayPreference],
     num_days: int,
@@ -48,6 +57,9 @@ def _partition_places(
     Tier 1 — pinned (1 DaySlot):   assigned to that exact day.
     Tier 2 — flexible (>1 DaySlots): assigned to the candidate day with the most remaining capacity.
     Tier 3 — auto (0 DaySlots):    greedy bin-pack to whichever day has the most remaining capacity.
+
+    Within tiers 2 and 3 places are packed in priority order (must_see → normal → optional),
+    so higher-priority places claim the roomiest days before lower-priority ones.
     """
     buckets: dict[int, list[str]] = {i: [] for i in range(num_days)}
     fill: dict[int, int] = {i: 0 for i in range(num_days)}
@@ -56,6 +68,8 @@ def _partition_places(
     pinned = [p for p in places if len(p.day_preferences) == 1]
     flexible = [p for p in places if len(p.day_preferences) > 1]
     auto = [p for p in places if len(p.day_preferences) == 0]
+    flexible.sort(key=lambda p: _priority_rank(p.place_id, doc_map))
+    auto.sort(key=lambda p: _priority_rank(p.place_id, doc_map))
 
     for pref in pinned:
         day_idx = pref.day_preferences[0].day_index
