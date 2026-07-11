@@ -38,6 +38,14 @@ class TripsManager:
             return None
         return _to_trip_detail_out(doc)
 
+    async def delete(self, trip_id: str) -> bool:
+        try:
+            oid = ObjectId(trip_id)
+        except Exception:
+            return False
+        result = await self._collection.delete_one({"_id": oid})
+        return result.deleted_count > 0
+
 
 def _to_trip_summary_out(doc: dict) -> TripSummaryOut:
     return TripSummaryOut(

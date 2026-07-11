@@ -25,3 +25,11 @@ async def get_trip(trip_id: str, trips: TripsDep) -> TripDetailOut:
     if trip is None:
         raise HTTPException(status_code=404, detail=f"Trip {trip_id!r} not found")
     return trip
+
+
+@router.delete("/{trip_id}", status_code=204)
+async def delete_trip(trip_id: str, trips: TripsDep) -> None:
+    """Delete a saved trip by its MongoDB id."""
+    deleted = await trips.delete(trip_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Trip {trip_id!r} not found")

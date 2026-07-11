@@ -1,10 +1,19 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { PageData } from './$types.js';
 	import RouteResults from '$lib/components/optimizer/RouteResults.svelte';
+	import DeleteTripDialog from '$lib/components/trips/DeleteTripDialog.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import Toast from '$lib/components/ui/Toast.svelte';
+	import { deleteTrip } from '$lib/api/trips.js';
 	import { formatDurationSeconds, formatDateTime } from '$lib/utils/format.js';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
+
+	let showDeleteDialog = $state(false);
+	let deleting = $state(false);
+	let deleteError = $state<string | null>(null);
 
 	let LeafletMap: typeof import('$lib/components/map/LeafletMap.svelte').default | null =
 		$state(null);
@@ -16,6 +25,21 @@
 			});
 		}
 	});
+
+	async function confirmDelete() {
+		if (!data.trip) return;
+		deleting = true;
+		deleteError = null;
+		try {
+			await deleteTrip(data.trip.id);
+			await goto(`/trips?deleted=${encodeURIComponent(data.trip.name)}`);
+		} catch {
+			showDeleteDialog = false;
+			deleteError = m.trip_delete_error();
+		} finally {
+			deleting = false;
+		}
+	}
 </script>
 
 <div class="flex h-full flex-col gap-4">
@@ -27,14 +51,33 @@
 			← {m.nav_trips()}
 		</a>
 		{#if data.trip}
-			<h1 class="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{data.trip.name}</h1>
-			<p class="text-sm text-zinc-500 dark:text-zinc-400">
-				{m.trip_date()}: {data.trip.date}
-				&nbsp;·&nbsp;
-				{m.trip_created_at()}: {formatDateTime(data.trip.created_at)}
-			</p>
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<h1 class="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{data.trip.name}</h1>
+					<p class="text-sm text-zinc-500 dark:text-zinc-400">
+						{m.trip_date()}: {data.trip.date}
+						&nbsp;·&nbsp;
+						{m.trip_created_at()}: {formatDateTime(data.trip.created_at)}
+					</p>
+				</div>
+				<div class="flex items-center gap-2">
+					<a
+						href="/optimizer?from={data.trip.id}"
+						class="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+					>
+						{m.trip_open_in_optimizer()}
+					</a>
+					<Button variant="danger" onclick={() => (showDeleteDialog = true)}>
+						{m.trip_delete()}
+					</Button>
+				</div>
+			</div>
 		{/if}
 	</div>
+
+	{#if deleteError}
+		<Toast message={deleteError} variant="error" onclose={() => (deleteError = null)} />
+	{/if}
 
 	{#if data.backendError}
 		<div
@@ -107,3 +150,12 @@
 		</div>
 	{/if}
 </div>
+
+{#if data.trip}
+	<DeleteTripDialog
+		bind:open={showDeleteDialog}
+		tripName={data.trip.name}
+		loading={deleting}
+		onconfirm={confirmDelete}
+	/>
+{/if}

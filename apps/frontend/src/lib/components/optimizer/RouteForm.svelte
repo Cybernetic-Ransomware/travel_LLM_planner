@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { PlaceOut, OptimizeRequest, TransportMode } from '$lib/types/index.js';
 	import Select from '$lib/components/ui/Select.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
@@ -9,18 +10,24 @@
 		hasLoadError = false,
 		selectedIds = $bindable<string[]>([]),
 		loading = false,
+		initialTransportMode = 'WALK',
+		initialDayStartHour = 8,
+		initialDayEndHour = 20,
 		onsubmit
 	}: {
 		places: PlaceOut[];
 		hasLoadError?: boolean;
 		selectedIds?: string[];
 		loading?: boolean;
+		initialTransportMode?: TransportMode;
+		initialDayStartHour?: number;
+		initialDayEndHour?: number;
 		onsubmit: (request: OptimizeRequest) => void;
 	} = $props();
 
-	let transportMode = $state<TransportMode>('WALK');
-	let dayStartHour = $state(8);
-	let dayEndHour = $state(20);
+	let transportMode = $state<TransportMode>(untrack(() => initialTransportMode));
+	let dayStartHour = $state(untrack(() => initialDayStartHour));
+	let dayEndHour = $state(untrack(() => initialDayEndHour));
 
 	const validHours = $derived(
 		dayStartHour >= 0 &&

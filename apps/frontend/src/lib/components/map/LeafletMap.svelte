@@ -102,9 +102,11 @@
 	}
 
 	onMount(() => {
+		let cancelled = false;
 		(async () => {
 			const L = await import('leaflet');
 			await import('leaflet/dist/leaflet.css');
+			if (cancelled) return;
 
 			leaflet = L;
 			map = L.map(container).setView(
@@ -118,7 +120,10 @@
 			buildMarkers(L);
 		})();
 
-		return () => map?.remove();
+		return () => {
+			cancelled = true;
+			map?.remove();
+		};
 	});
 
 	$effect(() => {

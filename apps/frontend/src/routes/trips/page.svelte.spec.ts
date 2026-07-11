@@ -13,16 +13,44 @@ const mockTrip: TripSummaryOut = {
 describe('/trips page', () => {
 	it('renders the page title', async () => {
 		const { getByRole } = render(Page, {
-			props: { data: { orchestratorReady: true, trips: [], backendError: null } }
+			props: {
+				data: { orchestratorReady: true, trips: [], backendError: null, deletedName: null }
+			}
 		});
 		expect(getByRole('heading', { name: 'Zapisane trasy' })).toBeTruthy();
 	});
 
 	it('renders empty state when no trips', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trips: [], backendError: null } }
+			props: {
+				data: { orchestratorReady: true, trips: [], backendError: null, deletedName: null }
+			}
 		});
 		expect(getByText('Nie masz jeszcze zapisanych tras.')).toBeTruthy();
+	});
+
+	it('empty state renders CTA link to optimizer', async () => {
+		const { getByRole } = render(Page, {
+			props: {
+				data: { orchestratorReady: true, trips: [], backendError: null, deletedName: null }
+			}
+		});
+		const cta = getByRole('link', { name: 'Zaplanuj pierwszą trasę' }).element();
+		expect(cta.getAttribute('href')).toBe('/optimizer');
+	});
+
+	it('renders success toast when deletedName is set', async () => {
+		const { getByText } = render(Page, {
+			props: {
+				data: {
+					orchestratorReady: true,
+					trips: [],
+					backendError: null,
+					deletedName: 'Weekend in Kraków'
+				}
+			}
+		});
+		expect(getByText('Trasa "Weekend in Kraków" została usunięta.')).toBeTruthy();
 	});
 
 	it('renders backend error when backendError is set', async () => {
@@ -31,7 +59,8 @@ describe('/trips page', () => {
 				data: {
 					orchestratorReady: true,
 					trips: [],
-					backendError: { message: 'Service unavailable', status: 503, source: 'backend' }
+					backendError: { message: 'Service unavailable', status: 503, source: 'backend' },
+					deletedName: null
 				}
 			}
 		});
@@ -41,7 +70,9 @@ describe('/trips page', () => {
 
 	it('renders trip card with name and date', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trips: [mockTrip], backendError: null } }
+			props: {
+				data: { orchestratorReady: true, trips: [mockTrip], backendError: null, deletedName: null }
+			}
 		});
 		expect(getByText('Weekend in Kraków')).toBeTruthy();
 		expect(getByText(/2025-06-01/)).toBeTruthy();
@@ -49,7 +80,9 @@ describe('/trips page', () => {
 
 	it('link points to /trips/:id', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trips: [mockTrip], backendError: null } }
+			props: {
+				data: { orchestratorReady: true, trips: [mockTrip], backendError: null, deletedName: null }
+			}
 		});
 		const nameEl = getByText('Weekend in Kraków').element();
 		const link = nameEl.closest('a');
