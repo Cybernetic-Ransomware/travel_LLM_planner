@@ -138,5 +138,15 @@
 	"error_page_back_trips": "Wróć do zapisanych tras",
 	"error_page_home": "Przejdź na stronę główną",
 	"chat_pricing_hint": "Nowość: zapytaj o ceny, bilety albo ofertę jedzenia w swoich miejscach",
-	"chat_pricing_example": "Ile kosztuje wstęp na Wawel?"
+	"chat_pricing_example": "Ile kosztuje wstęp na Wawel?",
+	"skip_reason_dropped_low_priority": "Pominięto, żeby zachować ważniejsze miejsca w trasie.",
+	"skip_reason_time_window_infeasible": "Nie mieści się w wybranych godzinach lub preferowanym oknie wizyty.",
+	"skip_reason_no_coordinates": "Brakuje współrzędnych miejsca.",
+	"skip_reason_no_matrix_entry": "Nie udało się policzyć dojazdu do tego miejsca.",
+	"skip_reason_matrix_incomplete": "Macierz tras jest niepełna dla tego miejsca.",
+	"skip_reason_unknown": "Miejsce zostało pominięte.",
+	"skip_tip_low_priority": "Wskazówka: podnieś priorytet miejsca lub wydłuż dzień, aby je uwzględnić.",
+	"results_summary_planned": "zaplanowane",
+	"results_summary_skipped": "pominięte",
+	"results_summary_must_see_kept": "must-see zachowane"
 }

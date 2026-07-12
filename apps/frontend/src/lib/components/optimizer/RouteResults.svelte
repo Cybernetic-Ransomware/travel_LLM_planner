@@ -1,10 +1,14 @@
 <script lang="ts">
-	import type { OptimizeResponse } from '$lib/types/index.js';
+	import type { OptimizeResponse, PlaceOut } from '$lib/types/index.js';
 	import * as m from '$lib/paraglide/messages.js';
 	import StepCard from './StepCard.svelte';
 	import SkippedPlaces from './SkippedPlaces.svelte';
 
-	let { result }: { result: OptimizeResponse } = $props();
+	let { result, places }: { result: OptimizeResponse; places?: PlaceOut[] } = $props();
+
+	const plannedIds = $derived(new Set(result.steps.map((s) => s.place_id)));
+	const mustSeePlaces = $derived((places ?? []).filter((p) => p.priority === 'must_see'));
+	const mustSeeKept = $derived(mustSeePlaces.filter((p) => plannedIds.has(p.id)).length);
 
 	function formatDuration(seconds: number): string {
 		const min = Math.round(seconds / 60);
@@ -40,6 +44,22 @@
 			<p class="text-xs text-zinc-500 dark:text-zinc-400">{m.results_wait_label()}</p>
 		</div>
 	</div>
+
+	<p
+		data-testid="route-summary"
+		class="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+	>
+		{result.steps.length}
+		{m.results_summary_planned()}
+		&nbsp;·&nbsp;
+		{result.skipped.length}
+		{m.results_summary_skipped()}
+		{#if mustSeePlaces.length > 0}
+			&nbsp;·&nbsp;
+			{mustSeeKept}/{mustSeePlaces.length}
+			{m.results_summary_must_see_kept()}
+		{/if}
+	</p>
 
 	<div class="flex flex-col gap-2">
 		{#each result.steps as step, i (step.place_id)}

@@ -29,7 +29,7 @@ Relevance to goal: ★★★ product core · ★★ supporting layer · ★ auxi
 | Multi-day trip partitioning | `src/optimizer/solver/multi_day_service.py` | Complete | ★★★ | Three-tier bin-pack: pinned / flexible / auto-assigned. |
 | AI assistant (LangGraph ReAct) | `src/orchestrator/` | Complete | ★★ | 4 tools, scope guard, human-in-the-loop confirm/cancel, OpenAI/Anthropic, SSE streaming. |
 | MongoDB checkpoint saver | `src/orchestrator/checkpointer.py` | Complete | ★★ | Index and TTL resolved (A2); compound index `checkpoint_lookup` + TTL on `expires_at` (30 d). |
-| SvelteKit frontend | `apps/frontend/` | Complete | ★★★ | 4 routes, Leaflet maps, SSE chat with HITL, i18n EN/PL (78/78 keys), Vitest component tests. |
+| SvelteKit frontend | `apps/frontend/` | Complete | ★★★ | 4 routes, Leaflet maps, SSE chat with HITL, i18n EN/PL (149/149 keys), Vitest component tests. |
 | Streamlit panel | `src/panel/` | Complete | ★★ | Repurposed as admin panel (replaces original retirement plan). Duplicate map render block in `app.py:300-342` deferred until conversion. |
 | Config / lifespan / DI | `src/config/`, `src/core/` | Complete | ★★★ | Graceful orchestrator degradation when no LLM key is set (returns 503). |
 | Exception handling | `src/core/middleware.py`, `exceptions.py` | Complete | ★★ | Hybrid: per-exception handlers + catch-all middleware (ADR-07). |
@@ -132,6 +132,10 @@ instead of relying on the `_LARGE` sentinel overflow.
 `MATRIX_INCOMPLETE` added as a third `SkippedPlace.reason` (actual_edges > 0 but
 < expected).  Frontend `SkippedPlace` union type updated in
 `apps/frontend/src/lib/types/optimizer.ts`.
+UX follow-up: raw reason codes are no longer shown to the user — the frontend maps
+each reason to a human-readable i18n message (`skippedReasons.ts`), shows an
+actionable tip for `DROPPED_LOW_PRIORITY` (raise priority or extend the day), and
+`RouteResults` displays a planned / skipped / must-see-kept summary.
 
 ### Phase C — Frontend migration and developer experience
 
