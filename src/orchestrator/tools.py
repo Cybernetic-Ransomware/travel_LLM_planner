@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.config.conf_logger import setup_logger
+from src.core.exceptions import InvalidHourRangeError
 from src.gmaps import GooglePlacesManager, PlaceCreate, PlacePatch, find_and_update_place, insert_place
 from src.trips.manager import TripsManager
 
@@ -159,6 +160,8 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
 
         try:
             updated = await find_and_update_place(db, place_id, patch)
+        except InvalidHourRangeError as exc:
+            return f"Invalid visit hours: {exc.detail}"
         except Exception as exc:
             return f"Failed to update place: {exc}"
 

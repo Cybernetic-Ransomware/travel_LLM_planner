@@ -7,6 +7,7 @@ from pymongo import ReturnDocument, UpdateOne
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.core.db.manager import GMAPS_COLLECTION
+from src.core.exceptions import InvalidHourRangeError
 from src.gmaps.models import PlaceCreate, PlacePatch, ScrapedPlace
 
 
@@ -82,16 +83,35 @@ async def fetch_places_by_ids(db: AsyncDatabase, place_ids: list[str]) -> list[d
 
 
 async def find_and_update_place(db: AsyncDatabase, place_id: str, patch: PlacePatch) -> dict | None:
-    """Atomically apply patch and return the updated document, or None if not found or invalid id.
+    """Apply patch and return the updated document, or None if not found or invalid id.
 
     Fields omitted from the patch are left unchanged; fields explicitly set to None are removed
     from the document ($unset), so cleared preferences read back as their model defaults.
+
+    Raises InvalidHourRangeError when the patch combined with the stored values would leave
+    preferred_hour_from >= preferred_hour_to. PlacePatch validates the range only within a
+    single payload, so a one-sided patch must be checked against the stored counterpart.
     """
     try:
         oid = ObjectId(place_id)
     except InvalidId:
         return None
     fields = patch.model_dump(exclude_unset=True)
+    collection = db[GMAPS_COLLECTION]
+
+    # Only a one-sided non-null hour patch can conflict with a stored value: a payload with
+    # both hours was already validated by PlacePatch, and clearing (null) cannot create a
+    # violation. The read-then-update pair is not atomic, which is acceptable for this app.
+    hour_keys = ("preferred_hour_from", "preferred_hour_to")
+    if any(fields.get(k) is not None for k in hour_keys) and not all(k in fields for k in hour_keys):
+        existing = await collection.find_one({"_id": oid})
+        if existing is None:
+            return None
+        eff_from = fields.get("preferred_hour_from", existing.get("preferred_hour_from"))
+        eff_to = fields.get("preferred_hour_to", existing.get("preferred_hour_to"))
+        if eff_from is not None and eff_to is not None and eff_from >= eff_to:
+            raise InvalidHourRangeError()
+
     set_fields = {k: v for k, v in fields.items() if v is not None}
     unset_fields = {k: "" for k, v in fields.items() if v is None}
     update: dict = {}
@@ -99,7 +119,6 @@ async def find_and_update_place(db: AsyncDatabase, place_id: str, patch: PlacePa
         update["$set"] = set_fields
     if unset_fields:
         update["$unset"] = unset_fields
-    collection = db[GMAPS_COLLECTION]
     if not update:
         return await collection.find_one({"_id": oid})
     return await collection.find_one_and_update(

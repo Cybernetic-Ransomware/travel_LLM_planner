@@ -24,7 +24,8 @@ from src.optimizer.solver.models import (
 logger = setup_logger(__name__, "optimizer")
 
 # Weights are spaced so a single must_see place always outweighs any combination of
-# lower-priority places (requests are capped well below 1000 places per route).
+# lower-priority places. This holds as long as a route has fewer than 1000 places;
+# OptimizeRequest and MultiDayRequest cap requests at 50 places.
 _PRIORITY_WEIGHTS = {"must_see": 1_000_000, "normal": 1_000, "optional": 1}
 
 

@@ -75,7 +75,7 @@ class TimeWindow:
 class OptimizeRequest(BaseModel):
     """Request body for a TSP route optimization."""
 
-    place_ids: list[str] = Field(min_length=2)
+    place_ids: list[str] = Field(min_length=2, max_length=50)
     transport_mode: TransportMode = TransportMode.WALK
     day_start_hour: int = Field(default=9, ge=0, le=23)
     day_end_hour: int = Field(default=21, ge=1, le=24)

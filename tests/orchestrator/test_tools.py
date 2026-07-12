@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.core.exceptions import InvalidHourRangeError
 from src.orchestrator.tools import PRICING_FIELD_MASK, create_tools
 
 
@@ -275,6 +276,22 @@ class TestUpdateVisitHoursErrors:
 
         assert "Failed" in result
         assert "connection lost" in result
+
+    @pytest.mark.regression
+    async def test_invalid_hour_range_error_returns_friendly_message(self):
+        tool = _make_tool()
+        place_id = "abc123"
+
+        with patch(
+            "src.orchestrator.tools.find_and_update_place",
+            new=AsyncMock(side_effect=InvalidHourRangeError()),
+        ):
+            result = await tool.ainvoke(
+                {"place_id": place_id, "preferred_hour_from": 18},
+                config=_config([place_id]),
+            )
+
+        assert result == "Invalid visit hours: preferred_hour_from must be less than preferred_hour_to"
 
 
 @pytest.mark.unit
