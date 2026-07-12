@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getPlacesContext } from '$lib/state/context.svelte.js';
+	import type { PlacePatch } from '$lib/types/index.js';
 	import * as m from '$lib/paraglide/messages.js';
 	import PlaceStats from '$lib/components/places/PlaceStats.svelte';
 	import PlaceFilters from '$lib/components/places/PlaceFilters.svelte';
@@ -21,6 +22,14 @@
 	let deleteTarget = $state<string | null>(null);
 	let deleteLoading = $state(false);
 	let showMap = $state(true);
+	let saveSuccess = $state<string | null>(null);
+
+	async function handlePatch(id: string, patch: PlacePatch) {
+		saveSuccess = null;
+		if (await places.patch(id, patch)) {
+			saveSuccess = m.places_save_success();
+		}
+	}
 
 	const deleteTargetName = $derived(
 		places.places.find((p) => p.id === deleteTarget)?.name ?? 'this place'
@@ -72,11 +81,15 @@
 		<Toast message={places.error} variant="error" onclose={() => (places.error = null)} />
 	{/if}
 
+	{#if saveSuccess}
+		<Toast message={saveSuccess} variant="success" onclose={() => (saveSuccess = null)} />
+	{/if}
+
 	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
 		<div class="{showMap ? 'md:w-3/5' : 'w-full'} min-h-0 overflow-auto">
 			<PlaceTable
 				places={places.filtered}
-				onpatch={(id, patch) => places.patch(id, patch)}
+				onpatch={handlePatch}
 				ondelete={(id) => (deleteTarget = id)}
 			/>
 		</div>

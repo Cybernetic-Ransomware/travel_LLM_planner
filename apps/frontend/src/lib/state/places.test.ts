@@ -26,6 +26,7 @@ const mockPlace = (overrides: Partial<PlaceOut> = {}): PlaceOut => ({
 	preferred_hour_from: 9,
 	preferred_hour_to: 17,
 	visit_duration_min: 90,
+	priority: 'normal',
 	skipped: false,
 	...overrides
 });
@@ -137,6 +138,36 @@ describe('PlacesState', () => {
 
 			expect(state.places[0].skipped).toBe(false);
 			expect(state.error).toBe('Server error');
+		});
+
+		it('returns true on success and false on failure', async () => {
+			state.places = [mockPlace({ id: '1' })];
+			vi.mocked(patchPlace).mockResolvedValue(mockPlace({ id: '1', skipped: true }));
+			expect(await state.patch('1', { skipped: true })).toBe(true);
+
+			vi.mocked(patchPlace).mockRejectedValue(new Error('Server error'));
+			expect(await state.patch('1', { skipped: false })).toBe(false);
+		});
+
+		it('applies explicit null optimistically and keeps server value on resolve', async () => {
+			state.places = [mockPlace({ id: '1', visit_duration_min: 90 })];
+			vi.mocked(patchPlace).mockResolvedValue(mockPlace({ id: '1', visit_duration_min: null }));
+
+			const patchPromise = state.patch('1', { visit_duration_min: null });
+			expect(state.places[0].visit_duration_min).toBeNull();
+
+			await patchPromise;
+			expect(state.places[0].visit_duration_min).toBeNull();
+		});
+
+		it('updates priority', async () => {
+			state.places = [mockPlace({ id: '1', priority: 'normal' })];
+			vi.mocked(patchPlace).mockResolvedValue(mockPlace({ id: '1', priority: 'must_see' }));
+
+			await state.patch('1', { priority: 'must_see' });
+
+			expect(state.places[0].priority).toBe('must_see');
+			expect(vi.mocked(patchPlace)).toHaveBeenCalledWith('1', { priority: 'must_see' });
 		});
 	});
 

@@ -105,6 +105,83 @@ class TestPatchPlace:
         response = await client.patch(f"/api/v1/core/gmaps/places/{ObjectId()}", json={"skipped": True})
         assert response.status_code == 404
 
+    async def test_sets_priority(self, client, sample_place):
+        response = await client.patch(f"/api/v1/core/gmaps/places/{sample_place}", json={"priority": "must_see"})
+        assert response.status_code == 200
+        assert response.json()["priority"] == "must_see"
+
+    async def test_invalid_priority_rejected(self, client, sample_place):
+        response = await client.patch(f"/api/v1/core/gmaps/places/{sample_place}", json={"priority": "urgent"})
+        assert response.status_code == 422
+
+    async def test_null_clears_preference(self, client, sample_place):
+        await client.patch(
+            f"/api/v1/core/gmaps/places/{sample_place}",
+            json={"preferred_hour_from": 9, "preferred_hour_to": 17},
+        )
+        response = await client.patch(
+            f"/api/v1/core/gmaps/places/{sample_place}", json={"preferred_hour_from": None}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["preferred_hour_from"] is None
+        assert data["preferred_hour_to"] == 17
+
+    async def test_null_skipped_rejected(self, client, sample_place):
+        response = await client.patch(f"/api/v1/core/gmaps/places/{sample_place}", json={"skipped": None})
+        assert response.status_code == 422
+
+    async def test_single_field_patch_does_not_clear_others(self, client, sample_place):
+        await client.patch(
+            f"/api/v1/core/gmaps/places/{sample_place}",
+            json={"preferred_hour_from": 9, "preferred_hour_to": 17},
+        )
+        response = await client.patch(f"/api/v1/core/gmaps/places/{sample_place}", json={"visit_duration_min": 60})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["preferred_hour_from"] == 9
+        assert data["preferred_hour_to"] == 17
+        assert data["visit_duration_min"] == 60
+
+    async def test_partial_patch_cannot_make_hour_from_exceed_stored_to(self, client, sample_place):
+        await client.patch(
+            f"/api/v1/core/gmaps/places/{sample_place}",
+            json={"preferred_hour_from": 9, "preferred_hour_to": 17},
+        )
+
+        response = await client.patch(f"/api/v1/core/gmaps/places/{sample_place}", json={"preferred_hour_from": 18})
+        assert response.status_code == 422
+
+        data = (await client.get(f"/api/v1/core/gmaps/places/{sample_place}")).json()
+        assert data["preferred_hour_from"] == 9
+        assert data["preferred_hour_to"] == 17
+
+    async def test_partial_patch_cannot_make_hour_to_precede_stored_from(self, client, sample_place):
+        await client.patch(
+            f"/api/v1/core/gmaps/places/{sample_place}",
+            json={"preferred_hour_from": 9, "preferred_hour_to": 17},
+        )
+
+        response = await client.patch(f"/api/v1/core/gmaps/places/{sample_place}", json={"preferred_hour_to": 8})
+        assert response.status_code == 422
+
+        data = (await client.get(f"/api/v1/core/gmaps/places/{sample_place}")).json()
+        assert data["preferred_hour_from"] == 9
+        assert data["preferred_hour_to"] == 17
+
+    async def test_clearing_one_hour_allows_later_single_hour_patch(self, client, sample_place):
+        await client.patch(
+            f"/api/v1/core/gmaps/places/{sample_place}",
+            json={"preferred_hour_from": 9, "preferred_hour_to": 17},
+        )
+
+        clear = await client.patch(f"/api/v1/core/gmaps/places/{sample_place}", json={"preferred_hour_to": None})
+        assert clear.status_code == 200
+
+        update = await client.patch(f"/api/v1/core/gmaps/places/{sample_place}", json={"preferred_hour_from": 18})
+        assert update.status_code == 200
+        assert update.json()["preferred_hour_from"] == 18
+
 
 @pytest.mark.integration
 class TestDeletePlace:

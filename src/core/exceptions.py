@@ -28,6 +28,13 @@ class MatrixUnavailableError(HTTPException):
         super().__init__(status_code=502, detail=detail)
 
 
+class InvalidHourRangeError(HTTPException):
+    """Raised when a partial patch would leave a place with preferred_hour_from >= preferred_hour_to."""
+
+    def __init__(self) -> None:
+        super().__init__(status_code=422, detail="preferred_hour_from must be less than preferred_hour_to")
+
+
 class OrchestratorUnavailableError(HTTPException):
     """Raised when the LLM orchestrator is not initialised (no API key configured)."""
 

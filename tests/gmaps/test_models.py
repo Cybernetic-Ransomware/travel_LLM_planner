@@ -76,6 +76,19 @@ class TestPlaceCreate:
         assert place.preferred_hour_from == 10
         assert place.preferred_hour_to is None
 
+    @pytest.mark.parametrize("priority", ["must_see", "normal", "optional"])
+    def test_priority_accepts_literals(self, priority):
+        place = PlaceCreate(name="Place", priority=priority)
+        assert place.priority == priority
+
+    def test_priority_defaults_to_none(self):
+        place = PlaceCreate(name="Place")
+        assert place.priority is None
+
+    def test_priority_rejects_invalid_value(self):
+        with pytest.raises(ValidationError):
+            PlaceCreate(name="Place", priority="high")
+
 
 @pytest.mark.unit
 class TestPlacePatch:
@@ -130,6 +143,34 @@ class TestPlacePatch:
         patch = PlacePatch(visit_duration_min=1)
         assert patch.visit_duration_min == 1
 
+    @pytest.mark.parametrize("priority", ["must_see", "normal", "optional"])
+    def test_priority_accepts_literals(self, priority):
+        patch = PlacePatch(priority=priority)
+        assert patch.priority == priority
+
+    def test_priority_rejects_invalid_value(self):
+        with pytest.raises(ValidationError):
+            PlacePatch(priority="high")
+
+    def test_explicit_null_priority_is_valid_and_marked_set(self):
+        patch = PlacePatch(priority=None)
+        fields = patch.model_dump(exclude_unset=True)
+        assert fields == {"priority": None}
+
+    def test_omitted_fields_excluded_from_unset_dump(self):
+        patch = PlacePatch(visit_duration_min=45)
+        fields = patch.model_dump(exclude_unset=True)
+        assert fields == {"visit_duration_min": 45}
+
+    def test_explicit_null_skipped_rejected(self):
+        with pytest.raises(ValidationError):
+            PlacePatch(skipped=None)
+
+    def test_omitted_skipped_is_valid(self):
+        patch = PlacePatch(preferred_hour_from=9)
+        assert patch.skipped is None
+        assert "skipped" not in patch.model_fields_set
+
 
 @pytest.mark.unit
 class TestPlaceOut:
@@ -159,3 +200,11 @@ class TestPlaceOut:
         hours = {"periods": [{"open": {"day": 1, "hour": 9}, "close": {"day": 1, "hour": 18}}]}
         place = PlaceOut.model_validate({"_id": "abc123", "opening_hours": hours})
         assert place.opening_hours == hours
+
+    def test_priority_defaults_to_normal(self):
+        place = PlaceOut.model_validate({"_id": ObjectId()})
+        assert place.priority == "normal"
+
+    def test_priority_populated_from_document(self):
+        place = PlaceOut.model_validate({"_id": "abc123", "priority": "must_see"})
+        assert place.priority == "must_see"

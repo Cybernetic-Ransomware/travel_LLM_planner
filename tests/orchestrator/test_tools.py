@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.core.exceptions import InvalidHourRangeError
 from src.orchestrator.tools import PRICING_FIELD_MASK, create_tools
 
 
@@ -167,6 +168,35 @@ class TestUpdateVisitHoursSuccess:
 
         assert "Cannot update" not in result
 
+    @pytest.mark.regression
+    async def test_omitted_args_not_marked_set_on_patch(self):
+        """Regression: PlacePatch clears explicitly-null fields, so the tool must
+        build the patch only from provided arguments — omitted args must not appear
+        in model_fields_set or they would be $unset in storage."""
+        tool = _make_tool()
+        place_id = "abc123"
+        updated_doc = {"name": "Wawel", "visit_duration_min": 45}
+
+        with patch("src.orchestrator.tools.find_and_update_place", new=AsyncMock(return_value=updated_doc)) as mock_update:
+            await tool.ainvoke(
+                {"place_id": place_id, "visit_duration_min": 45},
+                config=_config([place_id]),
+            )
+
+        _, _, called_patch = mock_update.call_args[0]
+        assert called_patch.model_fields_set == {"visit_duration_min"}
+
+    @pytest.mark.regression
+    async def test_no_args_returns_message_without_db_call(self):
+        tool = _make_tool()
+        place_id = "abc123"
+
+        with patch("src.orchestrator.tools.find_and_update_place", new=AsyncMock()) as mock_update:
+            result = await tool.ainvoke({"place_id": place_id}, config=_config([place_id]))
+
+        assert "No fields to update" in result
+        mock_update.assert_not_called()
+
 
 @pytest.mark.unit
 class TestUpdateVisitHoursErrors:
@@ -246,6 +276,22 @@ class TestUpdateVisitHoursErrors:
 
         assert "Failed" in result
         assert "connection lost" in result
+
+    @pytest.mark.regression
+    async def test_invalid_hour_range_error_returns_friendly_message(self):
+        tool = _make_tool()
+        place_id = "abc123"
+
+        with patch(
+            "src.orchestrator.tools.find_and_update_place",
+            new=AsyncMock(side_effect=InvalidHourRangeError()),
+        ):
+            result = await tool.ainvoke(
+                {"place_id": place_id, "preferred_hour_from": 18},
+                config=_config([place_id]),
+            )
+
+        assert result == "Invalid visit hours: preferred_hour_from must be less than preferred_hour_to"
 
 
 @pytest.mark.unit

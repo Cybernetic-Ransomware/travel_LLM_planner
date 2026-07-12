@@ -341,6 +341,92 @@ async def test_split_hours_no_visit_scheduled_in_break(test_db, google_routes_ma
     )
 
 
+def _full_matrix(*pairs: tuple[str, str, int]) -> DistanceMatrix:
+    """Symmetric matrix: every pair gets entries in both directions."""
+    entries = {}
+    for o, d, t in pairs:
+        entries[(o, d)] = MatrixEntry(o, d, t * 80, t)
+        entries[(d, o)] = MatrixEntry(d, o, t * 80, t)
+    return DistanceMatrix(entries, TransportMode.WALK, _NOW)
+
+
+@pytest.mark.unit
+class TestPriorityRetry:
+    """Hard must-see guarantee: low-priority places are dropped to fit must-see ones."""
+
+    @staticmethod
+    def _run(docs: list[dict], matrix: DistanceMatrix, **request_kwargs):
+        async def go(test_db, google_routes_manager):
+            with (
+                patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+                patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+            ):
+                request = OptimizeRequest(
+                    place_ids=[str(d["_id"]) for d in docs],
+                    transport_mode=TransportMode.WALK,
+                    **request_kwargs,
+                )
+                return await optimize_route(test_db, google_routes_manager, request)
+
+        return go
+
+    async def test_optional_dropped_to_fit_must_see(self, test_db, google_routes_manager):
+        """Two must-see (20 min each) and one optional in a 1-hour day: the optional
+        lures the greedy path away from the second must-see, so it must be dropped."""
+        docs = [
+            _place("m1", visit_min=20, priority="must_see"),
+            _place("m2", visit_min=20, priority="must_see"),
+            _place("o1", visit_min=20, priority="optional"),
+        ]
+        matrix = _full_matrix(("m1", "m2", 600), ("m1", "o1", 60), ("m2", "o1", 60))
+        result = await self._run(docs, matrix, day_start_hour=9, day_end_hour=10)(test_db, google_routes_manager)
+
+        routed = {s.place_id for s in result.steps}
+        assert routed == {"m1", "m2"}
+        assert [s.place_id for s in result.skipped] == ["o1"]
+        assert result.skipped[0].reason == "DROPPED_LOW_PRIORITY"
+
+    async def test_normal_dropped_when_no_optional_left(self, test_db, google_routes_manager):
+        docs = [
+            _place("m1", visit_min=20, priority="must_see"),
+            _place("m2", visit_min=20, priority="must_see"),
+            _place("n1", visit_min=20, priority="normal"),
+        ]
+        matrix = _full_matrix(("m1", "m2", 600), ("m1", "n1", 60), ("m2", "n1", 60))
+        result = await self._run(docs, matrix, day_start_hour=9, day_end_hour=10)(test_db, google_routes_manager)
+
+        routed = {s.place_id for s in result.steps}
+        assert routed == {"m1", "m2"}
+        assert [s.place_id for s in result.skipped] == ["n1"]
+        assert result.skipped[0].reason == "DROPPED_LOW_PRIORITY"
+
+    async def test_infeasible_must_see_does_not_drop_others(self, test_db, google_routes_manager):
+        """A must-see that cannot fit its own window keeps the standard skip reason
+        and must not cause lower-priority places to be dropped."""
+        docs = [
+            _place("p1"),
+            _place("p2"),
+            _place("p3", visit_min=90, preferred_hour_from=20, preferred_hour_to=21, priority="must_see"),
+        ]
+        matrix = _full_matrix(("p1", "p2", 600), ("p1", "p3", 600), ("p2", "p3", 600))
+        result = await self._run(docs, matrix)(test_db, google_routes_manager)
+
+        routed = {s.place_id for s in result.steps}
+        assert routed == {"p1", "p2"}
+        assert [s.place_id for s in result.skipped] == ["p3"]
+        assert result.skipped[0].reason == "TIME_WINDOW_INFEASIBLE"
+        assert not any(s.reason == "DROPPED_LOW_PRIORITY" for s in result.skipped)
+
+    async def test_no_priorities_single_pass_no_drops(self, test_db, google_routes_manager):
+        """Documents without a priority field behave exactly as before."""
+        docs = [_place("p1"), _place("p2")]
+        matrix = _full_matrix(("p1", "p2", 600))
+        result = await self._run(docs, matrix)(test_db, google_routes_manager)
+
+        assert len(result.steps) == 2
+        assert result.skipped == []
+
+
 @pytest.mark.unit
 async def test_optimize_skip_reason_matrix_incomplete(test_db, google_routes_manager):
     """A place with some but not all matrix edges should be reported as MATRIX_INCOMPLETE.

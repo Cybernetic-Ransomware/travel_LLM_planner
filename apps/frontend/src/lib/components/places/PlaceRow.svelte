@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { PlaceOut, PlacePatch } from '$lib/types/index.js';
+	import type { PlaceOut, PlacePatch, PlacePriority } from '$lib/types/index.js';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let {
 		place,
@@ -12,6 +13,10 @@
 	} = $props();
 
 	function handleHourInput(field: 'preferred_hour_from' | 'preferred_hour_to', raw: string) {
+		if (raw.trim() === '') {
+			onpatch({ [field]: null });
+			return;
+		}
 		const val = parseInt(raw, 10);
 		if (!isNaN(val) && val >= 0 && val <= 23) {
 			onpatch({ [field]: val });
@@ -19,6 +24,10 @@
 	}
 
 	function handleDurationInput(raw: string) {
+		if (raw.trim() === '') {
+			onpatch({ visit_duration_min: null });
+			return;
+		}
 		const val = parseInt(raw, 10);
 		if (!isNaN(val) && val >= 1 && val <= 480) {
 			onpatch({ visit_duration_min: val });
@@ -74,6 +83,17 @@
 			class="w-16 rounded border border-zinc-200 px-1.5 py-0.5 text-center text-xs focus:ring-1 focus:ring-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 			placeholder="—"
 		/>
+	</td>
+	<td class="px-3 py-2.5">
+		<select
+			value={place.priority}
+			onchange={(e) => onpatch({ priority: e.currentTarget.value as PlacePriority })}
+			class="rounded border border-zinc-200 px-1.5 py-0.5 text-xs focus:ring-1 focus:ring-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+		>
+			<option value="must_see">{m.priority_must_see()}</option>
+			<option value="normal">{m.priority_normal()}</option>
+			<option value="optional">{m.priority_optional()}</option>
+		</select>
 	</td>
 	<td class="px-3 py-2.5 text-center">
 		<input

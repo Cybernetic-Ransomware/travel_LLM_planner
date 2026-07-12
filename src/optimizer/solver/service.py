@@ -10,6 +10,7 @@ from src.config.conf_logger import setup_logger
 from src.core.exceptions import MatrixUnavailableError
 from src.gmaps import fetch_places_by_ids
 from src.optimizer.matrix.client import GoogleRoutesManager
+from src.optimizer.matrix.models import DistanceMatrix
 from src.optimizer.matrix.service import get_matrix
 from src.optimizer.solver.engine import nearest_neighbor, schedule_route, two_opt
 from src.optimizer.solver.models import (
@@ -21,6 +22,11 @@ from src.optimizer.solver.models import (
 )
 
 logger = setup_logger(__name__, "optimizer")
+
+# Weights are spaced so a single must_see place always outweighs any combination of
+# lower-priority places. This holds as long as a route has fewer than 1000 places;
+# OptimizeRequest and MultiDayRequest cap requests at 50 places.
+_PRIORITY_WEIGHTS = {"must_see": 1_000_000, "normal": 1_000, "optional": 1}
 
 
 def _google_weekday(d: date) -> int:
@@ -84,6 +90,59 @@ def _parse_time_window(
         return None
 
     return TimeWindow(open_s=open_s, close_s=close_s)
+
+
+def _solve_with_priorities(
+    node_ids: list[str],
+    matrix: DistanceMatrix,
+    time_windows: dict[str, TimeWindow],
+    visit_durations_s: dict[str, int],
+    day_start_s: int,
+    day_end_s: int,
+    priorities: dict[str, str],
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    """Solve the route with a hard must-see guarantee.
+
+    Runs Nearest Neighbor on progressively smaller candidate sets (all places →
+    without optional → must-see only) until the solver no longer leaves out any
+    must-see place, then keeps the attempt with the highest total priority weight.
+    A must-see that is physically infeasible even alone cannot improve any attempt,
+    so the best earlier attempt wins and the place stays in solver_skipped for
+    standard reason classification.
+
+    Returns:
+        (route, solver_skipped, dropped_low_priority, final_candidates)
+    """
+    weights = {n: _PRIORITY_WEIGHTS.get(priorities.get(n, "normal"), 1_000) for n in node_ids}
+
+    tiers = [
+        node_ids,
+        [n for n in node_ids if priorities.get(n, "normal") != "optional"],
+        [n for n in node_ids if priorities.get(n, "normal") == "must_see"],
+    ]
+
+    best: tuple[list[str], list[str], list[str]] | None = None
+    best_score = -1
+    prev_size: int | None = None
+    for tier in tiers:
+        if prev_size is not None and len(tier) == prev_size:
+            continue  # tier removes nothing — rerun would produce the same result
+        prev_size = len(tier)
+        route, solver_skipped = nearest_neighbor(
+            tier, matrix, time_windows, visit_durations_s, day_start_s, day_end_s, weights
+        )
+        score = sum(weights[n] for n in route)
+        if score > best_score:
+            best_score = score
+            best = (route, solver_skipped, tier)
+        if not any(priorities.get(n, "normal") == "must_see" for n in solver_skipped):
+            break
+
+    assert best is not None  # the first tier always runs
+    route, solver_skipped, candidates = best
+    candidate_set = set(candidates)
+    dropped = [n for n in node_ids if n not in candidate_set]
+    return route, solver_skipped, dropped, candidates
 
 
 def _seconds_to_time(s: int) -> time:
@@ -180,14 +239,20 @@ async def optimize_route(
         raise MatrixUnavailableError(status=status or "UNKNOWN", error=error)
 
     node_ids = [pid for pid, _, _ in coords]
-    route, solver_skipped = nearest_neighbor(node_ids, matrix, time_windows, visit_durations_s, day_start_s, day_end_s)
+    priorities = {pid: (doc_map[pid].get("priority") or "normal") for pid in node_ids}
+    route, solver_skipped, dropped, final_candidates = _solve_with_priorities(
+        node_ids, matrix, time_windows, visit_durations_s, day_start_s, day_end_s, priorities
+    )
     route = two_opt(route, matrix, time_windows, visit_durations_s, day_start_s, day_end_s)
 
-    expected_edges = len(node_ids) - 1
+    for place_id in dropped:
+        skipped.append(SkippedPlace(place_id=place_id, name=doc_map[place_id].get("name"), reason="DROPPED_LOW_PRIORITY"))
+
+    expected_edges = len(final_candidates) - 1
     for place_id in solver_skipped:
         actual_edges = sum(
             1
-            for other in node_ids
+            for other in final_candidates
             if other != place_id and (matrix.get(place_id, other) is not None or matrix.get(other, place_id) is not None)
         )
         if actual_edges == 0:

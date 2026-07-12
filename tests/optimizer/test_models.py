@@ -1,10 +1,12 @@
-"""Unit tests for optimizer matrix models: TransportMode, MatrixEntry, DistanceMatrix."""
+"""Unit tests for optimizer models: TransportMode, MatrixEntry, DistanceMatrix, OptimizeRequest."""
 
 from datetime import UTC, datetime, timezone
 
 import pytest
+from pydantic import ValidationError
 
 from src.optimizer.matrix.models import DistanceMatrix, MatrixEntry, TransportMode
+from src.optimizer.solver.models import OptimizeRequest
 
 
 @pytest.mark.unit
@@ -75,3 +77,18 @@ class TestDistanceMatrix:
 
     def test_transport_mode_stored(self, matrix):
         assert matrix.transport_mode == TransportMode.WALK
+
+
+@pytest.mark.unit
+class TestOptimizeRequestPlaceIdsLimit:
+    def test_accepts_fifty_places(self):
+        request = OptimizeRequest(place_ids=[f"p{i}" for i in range(50)])
+        assert len(request.place_ids) == 50
+
+    def test_rejects_more_than_fifty_places(self):
+        with pytest.raises(ValidationError, match="place_ids"):
+            OptimizeRequest(place_ids=[f"p{i}" for i in range(51)])
+
+    def test_rejects_fewer_than_two_places(self):
+        with pytest.raises(ValidationError, match="place_ids"):
+            OptimizeRequest(place_ids=["p1"])

@@ -5,7 +5,8 @@ import pendulum
 from bson import ObjectId
 
 from src.core.db.manager import GMAPS_COLLECTION
-from src.gmaps.models import PlacePatch
+from src.core.exceptions import InvalidHourRangeError
+from src.gmaps.models import PlaceOut, PlacePatch
 from src.gmaps.storage import (
     delete_place,
     fetch_enrichment_candidates,
@@ -122,6 +123,79 @@ class TestFindAndUpdatePlace:
     async def test_invalid_id_returns_none(self, test_db):
         doc = await find_and_update_place(test_db, "bad-id", PlacePatch(skipped=True))
         assert doc is None
+
+    async def test_sets_priority(self, test_db, sample_place):
+        doc = await find_and_update_place(test_db, sample_place, PlacePatch(priority="must_see"))
+        assert doc is not None
+        assert doc["priority"] == "must_see"
+
+    async def test_explicit_null_unsets_field(self, test_db, sample_place):
+        await find_and_update_place(
+            test_db, sample_place, PlacePatch(preferred_hour_from=9, preferred_hour_to=17, visit_duration_min=60)
+        )
+        doc = await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_from=None))
+        assert doc is not None
+        assert "preferred_hour_from" not in doc
+        assert doc["preferred_hour_to"] == 17
+        assert doc["visit_duration_min"] == 60
+
+    async def test_omitted_fields_left_unchanged(self, test_db, sample_place):
+        await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_from=9, preferred_hour_to=17))
+        doc = await find_and_update_place(test_db, sample_place, PlacePatch(visit_duration_min=60))
+        assert doc is not None
+        assert doc["preferred_hour_from"] == 9
+        assert doc["preferred_hour_to"] == 17
+        assert doc["visit_duration_min"] == 60
+
+    async def test_null_priority_unsets_and_reads_back_as_normal(self, test_db, sample_place):
+        await find_and_update_place(test_db, sample_place, PlacePatch(priority="optional"))
+        doc = await find_and_update_place(test_db, sample_place, PlacePatch(priority=None))
+        assert doc is not None
+        assert "priority" not in doc
+        assert PlaceOut.model_validate(doc).priority == "normal"
+
+    async def test_mixed_set_and_unset_in_one_call(self, test_db, sample_place):
+        await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_to=17))
+        doc = await find_and_update_place(
+            test_db, sample_place, PlacePatch(visit_duration_min=45, preferred_hour_to=None)
+        )
+        assert doc is not None
+        assert doc["visit_duration_min"] == 45
+        assert "preferred_hour_to" not in doc
+
+    async def test_one_sided_hour_patch_conflicting_with_stored_to_raises(self, test_db, sample_place):
+        await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_from=9, preferred_hour_to=17))
+
+        with pytest.raises(InvalidHourRangeError):
+            await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_from=18))
+
+        doc = await fetch_place_by_id(test_db, sample_place)
+        assert doc["preferred_hour_from"] == 9
+        assert doc["preferred_hour_to"] == 17
+
+    async def test_one_sided_hour_patch_conflicting_with_stored_from_raises(self, test_db, sample_place):
+        await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_from=9, preferred_hour_to=17))
+
+        with pytest.raises(InvalidHourRangeError):
+            await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_to=8))
+
+        doc = await fetch_place_by_id(test_db, sample_place)
+        assert doc["preferred_hour_from"] == 9
+        assert doc["preferred_hour_to"] == 17
+
+    async def test_one_sided_hour_patch_without_stored_counterpart_succeeds(self, test_db, sample_place):
+        doc = await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_from=18))
+        assert doc is not None
+        assert doc["preferred_hour_from"] == 18
+
+    async def test_hour_patch_paired_with_null_counterpart_succeeds(self, test_db, sample_place):
+        await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_from=9, preferred_hour_to=17))
+        doc = await find_and_update_place(
+            test_db, sample_place, PlacePatch(preferred_hour_from=18, preferred_hour_to=None)
+        )
+        assert doc is not None
+        assert doc["preferred_hour_from"] == 18
+        assert "preferred_hour_to" not in doc
 
 
 @pytest.mark.integration

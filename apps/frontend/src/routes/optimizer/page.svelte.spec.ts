@@ -33,6 +33,7 @@ const mockPlace = (id: string, name: string): PlaceOut => ({
 	preferred_hour_from: null,
 	preferred_hour_to: null,
 	visit_duration_min: null,
+	priority: 'normal',
 	skipped: false
 });
 

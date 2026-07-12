@@ -1,3 +1,5 @@
+export type PlacePriority = 'must_see' | 'normal' | 'optional';
+
 export interface PlaceOut {
 	id: string;
 	name: string | null;
@@ -14,6 +16,7 @@ export interface PlaceOut {
 	preferred_hour_from: number | null;
 	preferred_hour_to: number | null;
 	visit_duration_min: number | null;
+	priority: PlacePriority;
 	skipped: boolean;
 }
 
@@ -21,7 +24,8 @@ export interface PlacePatch {
 	preferred_hour_from?: number | null;
 	preferred_hour_to?: number | null;
 	visit_duration_min?: number | null;
-	skipped?: boolean | null;
+	priority?: PlacePriority | null;
+	skipped?: boolean;
 }
 
 export interface ImportRequest {

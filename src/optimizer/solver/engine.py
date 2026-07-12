@@ -82,6 +82,13 @@ def _route_travel_time(route: list[str], matrix: DistanceMatrix) -> int:
     return total
 
 
+def _route_score(route: list[str], weights: dict[str, int] | None) -> int:
+    """Total priority weight of the route. Without weights every node counts as 1."""
+    if weights is None:
+        return len(route)
+    return sum(weights.get(node, 1) for node in route)
+
+
 def nearest_neighbor(
     nodes: list[str],
     matrix: DistanceMatrix,
@@ -89,13 +96,14 @@ def nearest_neighbor(
     visit_durations_s: dict[str, int],
     day_start_s: int,
     day_end_s: int,
+    weights: dict[str, int] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Build an initial route using the Nearest Neighbor heuristic.
 
-    Tries every node as the starting point. Selects the route that visits
-    the most nodes; among ties, prefers the shortest total travel time.
-    Nodes that cannot be reached within their time window are left out and
-    returned in the skipped list.
+    Tries every node as the starting point. Selects the route with the highest
+    total priority weight (node count when weights is None); among ties, prefers
+    the shortest total travel time. Nodes that cannot be reached within their
+    time window are left out and returned in the skipped list.
 
     Returns:
         (route, skipped_ids)
@@ -104,15 +112,15 @@ def nearest_neighbor(
         return [], []
 
     best_route: list[str] = []
-    best_count = 0
+    best_score = 0
     best_time = _LARGE
 
     for start in nodes:
         route, _ = _nn_from_start(start, nodes, matrix, time_windows, visit_durations_s, day_start_s, day_end_s)
         t = _route_travel_time(route, matrix)
-        count = len(route)
-        if count > best_count or (count == best_count and t < best_time):
-            best_count = count
+        score = _route_score(route, weights)
+        if score > best_score or (score == best_score and t < best_time):
+            best_score = score
             best_time = t
             best_route = route
 
@@ -135,14 +143,22 @@ def _nn_from_start(
     Among feasible candidates the one with the soonest close time is chosen.
     When close times are equal (e.g. all unconstrained nodes sharing day_end_s),
     the shortest travel time breaks the tie — preserving classic NN behaviour.
+    Returns an empty route when the start node itself cannot be visited.
     """
     route = [start]
     unvisited = set(nodes) - {start}
-    current_s = day_start_s
 
     tw = time_windows.get(start)
-    open_s = tw.open_s if tw is not None else day_start_s
-    current_s = max(current_s, open_s) + visit_durations_s.get(start, 0)
+    visit_s_start = visit_durations_s.get(start, 0)
+    if tw is not None:
+        start_time = tw.earliest_start(day_start_s, visit_s_start)
+        if start_time is None:
+            return [], list(nodes)
+    else:
+        start_time = day_start_s
+    if start_time + visit_s_start > day_end_s:
+        return [], list(nodes)
+    current_s = start_time + visit_s_start
 
     while unvisited:
         best_node: str | None = None

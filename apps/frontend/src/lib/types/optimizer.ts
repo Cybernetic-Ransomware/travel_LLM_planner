@@ -26,7 +26,12 @@ export interface RouteStep {
 export interface SkippedPlace {
 	place_id: string;
 	name: string | null;
-	reason: 'NO_COORDINATES' | 'TIME_WINDOW_INFEASIBLE' | 'NO_MATRIX_ENTRY' | 'MATRIX_INCOMPLETE';
+	reason:
+		| 'NO_COORDINATES'
+		| 'TIME_WINDOW_INFEASIBLE'
+		| 'NO_MATRIX_ENTRY'
+		| 'MATRIX_INCOMPLETE'
+		| 'DROPPED_LOW_PRIORITY';
 }
 
 export interface OptimizeResponse {
