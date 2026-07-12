@@ -47,6 +47,12 @@
 		}
 	});
 
+	const requestedPlaces = $derived.by(() => {
+		if (!lastRequest) return [];
+		const ids = new Set(lastRequest.place_ids);
+		return data.places.filter((p) => ids.has(p.id));
+	});
+
 	const mapPlaces = $derived(result ? [] : data.places);
 	const mapSteps = $derived(result?.steps ?? []);
 	const mapSelectedIds = $derived(new Set(selectedIds));
@@ -161,7 +167,7 @@
 			/>
 
 			{#if result}
-				<RouteResults {result} />
+				<RouteResults {result} places={requestedPlaces} />
 
 				{#if data.prefill}
 					<button

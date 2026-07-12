@@ -138,5 +138,15 @@
 	"error_page_back_trips": "Back to saved trips",
 	"error_page_home": "Go to home page",
 	"chat_pricing_hint": "New: ask about prices, tickets, or food options for your places",
-	"chat_pricing_example": "How much is admission to Wawel Castle?"
+	"chat_pricing_example": "How much is admission to Wawel Castle?",
+	"skip_reason_dropped_low_priority": "Skipped to keep higher-priority places in the route.",
+	"skip_reason_time_window_infeasible": "Does not fit the selected hours or the preferred visit window.",
+	"skip_reason_no_coordinates": "The place has no coordinates.",
+	"skip_reason_no_matrix_entry": "Could not compute travel to this place.",
+	"skip_reason_matrix_incomplete": "The route matrix is incomplete for this place.",
+	"skip_reason_unknown": "The place was skipped.",
+	"skip_tip_low_priority": "Tip: raise the place's priority or extend the day to include it.",
+	"results_summary_planned": "planned",
+	"results_summary_skipped": "skipped",
+	"results_summary_must_see_kept": "must-see kept"
 }

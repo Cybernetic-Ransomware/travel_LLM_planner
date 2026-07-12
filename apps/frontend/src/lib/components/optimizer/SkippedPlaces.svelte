@@ -1,8 +1,11 @@
 <script lang="ts">
 	import type { SkippedPlace } from '$lib/types/index.js';
 	import * as m from '$lib/paraglide/messages.js';
+	import { skipReasonMessage, isLowPriorityDrop } from '$lib/utils/skippedReasons.js';
 
 	let { skipped }: { skipped: SkippedPlace[] } = $props();
+
+	const hasLowPriorityDrop = $derived(skipped.some((s) => isLowPriorityDrop(s.reason)));
 </script>
 
 {#if skipped.length > 0}
@@ -14,15 +17,18 @@
 			{m.results_places_unit()}
 			{m.results_skipped_label()}
 		</p>
-		<ul class="mt-1 flex flex-col gap-0.5">
+		<ul class="mt-1 flex flex-col gap-1.5">
 			{#each skipped as s (s.place_id)}
-				<li class="text-xs text-zinc-600 dark:text-zinc-400">
-					{s.name ?? s.place_id}
-					<span class="text-zinc-400 dark:text-zinc-500"
-						>— {s.reason.replace(/_/g, ' ').toLowerCase()}</span
-					>
+				<li class="text-xs">
+					<span class="font-medium text-zinc-700 dark:text-zinc-300">{s.name ?? s.place_id}</span>
+					<span class="block text-zinc-500 dark:text-zinc-400">{skipReasonMessage(s.reason)}</span>
 				</li>
 			{/each}
 		</ul>
+		{#if hasLowPriorityDrop}
+			<p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+				{m.skip_tip_low_priority()}
+			</p>
+		{/if}
 	</div>
 {/if}
