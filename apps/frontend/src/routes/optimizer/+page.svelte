@@ -68,6 +68,8 @@
 		data.backendError ? `${data.backendError.message} (${data.backendError.status})` : null
 	);
 
+	const optimizerBusy = $derived(loading || promotingPlaceId !== null);
+
 	async function runOptimization(request: OptimizeRequest): Promise<boolean> {
 		loading = true;
 		error = null;
@@ -95,6 +97,8 @@
 	}
 
 	async function handleSubmit(request: OptimizeRequest) {
+		if (promotingPlaceId !== null || loading) return;
+
 		lastRequest = request;
 		result = null;
 		saveSuccess = null;
@@ -202,7 +206,7 @@
 				{places}
 				hasLoadError={data.backendError !== null}
 				bind:selectedIds
-				{loading}
+				loading={optimizerBusy}
 				initialTransportMode={data.prefill?.transportMode}
 				initialDayStartHour={data.prefill?.dayStartHour}
 				initialDayEndHour={data.prefill?.dayEndHour}

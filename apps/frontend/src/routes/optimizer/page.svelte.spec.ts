@@ -289,6 +289,27 @@ describe('/optimizer page — mark place as must-see', () => {
 		expect(patchPlace).not.toHaveBeenCalledWith('p2', { priority: 'must_see' });
 	});
 
+	it('disables manual optimization while promotion is running', async () => {
+		let resolvePatch!: (place: PlaceOut) => void;
+		vi.mocked(patchPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePatch = resolve;
+				})
+		);
+
+		const { getByRole, getByTestId } = await renderAndOptimize();
+
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+
+		const optimizeButton = getByTestId('optimize-submit');
+		await expect.element(optimizeButton).toBeDisabled();
+		expect(optimizeRoute).toHaveBeenCalledTimes(1);
+
+		resolvePatch({ ...mockPlace('p1', 'Wawel'), priority: 'must_see' });
+		await vi.waitFor(() => expect(optimizeRoute).toHaveBeenCalledTimes(2));
+	});
+
 	it('hides the mark-as-must-see button after a successful promotion', async () => {
 		const updatedPlace: PlaceOut = { ...mockPlace('p1', 'Wawel'), priority: 'must_see' };
 		vi.mocked(patchPlace).mockResolvedValueOnce(updatedPlace);
