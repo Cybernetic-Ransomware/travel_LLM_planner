@@ -32,7 +32,8 @@
 	let showSaveForm = $state(false);
 	let saveSuccess = $state<string | null>(null);
 	let updating = $state(false);
-	let preferenceSuccess = $state<string | null>(null);
+	let preferenceNotice = $state<{ message: string; variant: 'success' | 'warning' } | null>(null);
+	let promotingPlaceId = $state<string | null>(null);
 	const promotedPlaceIds = new SvelteSet<string>();
 	let prefillNotice = $state<string | null>(
 		untrack(() =>
@@ -67,14 +68,15 @@
 		data.backendError ? `${data.backendError.message} (${data.backendError.status})` : null
 	);
 
-	async function handleSubmit(request: OptimizeRequest) {
-		lastRequest = request;
+	const optimizerBusy = $derived(loading || promotingPlaceId !== null);
+
+	async function runOptimization(request: OptimizeRequest): Promise<boolean> {
 		loading = true;
 		error = null;
-		result = null;
-		saveSuccess = null;
 		try {
 			result = await optimizeRoute(request);
+			promotedPlaceIds.clear();
+			return true;
 		} catch (err) {
 			if (err instanceof ApiError) {
 				const d = err.detail.toLowerCase();
@@ -88,9 +90,20 @@
 			} else {
 				error = 'Optimization failed.';
 			}
+			return false;
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function handleSubmit(request: OptimizeRequest) {
+		if (promotingPlaceId !== null || loading) return;
+
+		lastRequest = request;
+		result = null;
+		saveSuccess = null;
+		preferenceNotice = null;
+		await runOptimization(request);
 	}
 
 	function handleTripSaved(trip: TripOut) {
@@ -119,15 +132,22 @@
 	}
 
 	async function handleMarkMustSee(placeId: string) {
+		if (!lastRequest || promotingPlaceId !== null) return;
 		error = null;
-		preferenceSuccess = null;
+		preferenceNotice = null;
+		promotingPlaceId = placeId;
 		try {
 			const updatedPlace = await patchPlace(placeId, { priority: 'must_see' });
 			places = places.map((p) => (p.id === placeId ? updatedPlace : p));
 			promotedPlaceIds.add(placeId);
-			preferenceSuccess = m.optimizer_preference_updated();
+			const rerunSucceeded = await runOptimization(lastRequest);
+			preferenceNotice = rerunSucceeded
+				? { message: m.optimizer_preference_updated_and_rerun(), variant: 'success' }
+				: { message: m.optimizer_preference_updated_rerun_failed(), variant: 'warning' };
 		} catch (err) {
 			error = err instanceof ApiError ? err.detail : m.optimizer_preference_update_failed();
+		} finally {
+			promotingPlaceId = null;
 		}
 	}
 </script>
@@ -172,11 +192,11 @@
 		<Toast message={saveSuccess} variant="success" onclose={() => (saveSuccess = null)} />
 	{/if}
 
-	{#if preferenceSuccess}
+	{#if preferenceNotice}
 		<Toast
-			message={preferenceSuccess}
-			variant="success"
-			onclose={() => (preferenceSuccess = null)}
+			message={preferenceNotice.message}
+			variant={preferenceNotice.variant}
+			onclose={() => (preferenceNotice = null)}
 		/>
 	{/if}
 
@@ -186,7 +206,7 @@
 				{places}
 				hasLoadError={data.backendError !== null}
 				bind:selectedIds
-				{loading}
+				loading={optimizerBusy}
 				initialTransportMode={data.prefill?.transportMode}
 				initialDayStartHour={data.prefill?.dayStartHour}
 				initialDayEndHour={data.prefill?.dayEndHour}
@@ -199,6 +219,7 @@
 					places={requestedPlaces}
 					onmarkmustsee={handleMarkMustSee}
 					{promotedPlaceIds}
+					{promotingPlaceId}
 				/>
 
 				{#if data.prefill}

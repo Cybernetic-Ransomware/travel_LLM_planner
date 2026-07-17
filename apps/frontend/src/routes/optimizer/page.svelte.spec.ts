@@ -162,6 +162,26 @@ describe('/optimizer page — mark place as must-see', () => {
 		{ place_id: 'p1', name: 'Wawel', reason: 'DROPPED_LOW_PRIORITY' }
 	];
 	const resultWithSkip: OptimizeResponse = { ...mockResult, skipped };
+	const resultAfterUpdate: OptimizeResponse = {
+		steps: [
+			{
+				place_id: 'p1',
+				name: 'Wawel',
+				lat: 50.0,
+				lng: 20.0,
+				arrival_time: '09:00:00',
+				departure_time: '10:00:00',
+				travel_from_previous_s: 0,
+				visit_duration_min: 60,
+				wait_min: 0
+			}
+		],
+		total_travel_time_s: 0,
+		total_visit_time_min: 60,
+		total_wait_min: 0,
+		transport_mode: 'WALK',
+		skipped: []
+	};
 
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -175,10 +195,18 @@ describe('/optimizer page — mark place as must-see', () => {
 		expect(patchPlace).toHaveBeenCalledWith('p1', { priority: 'must_see' });
 	});
 
-	it('shows a success toast telling the user to re-run optimization', async () => {
+	it('re-runs optimization with the original request after marking must-see', async () => {
+		const { getByRole } = await renderAndOptimize();
+		const originalRequest = vi.mocked(optimizeRoute).mock.calls[0][0];
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+		await vi.waitFor(() => expect(optimizeRoute).toHaveBeenCalledTimes(2));
+		expect(optimizeRoute).toHaveBeenLastCalledWith(originalRequest);
+	});
+
+	it('shows the rerun-success message after marking must-see', async () => {
 		const { getByRole, getByText } = await renderAndOptimize();
 		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
-		await expect.element(getByText(m.optimizer_preference_updated())).toBeVisible();
+		await expect.element(getByText(m.optimizer_preference_updated_and_rerun())).toBeVisible();
 	});
 
 	it('shows the ApiError detail on failure', async () => {
@@ -186,6 +214,7 @@ describe('/optimizer page — mark place as must-see', () => {
 		const { getByRole, getByText } = await renderAndOptimize();
 		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
 		await expect.element(getByText("Place 'p1' not found")).toBeVisible();
+		expect(optimizeRoute).toHaveBeenCalledTimes(1);
 	});
 
 	it('shows a generic failure message on unexpected error', async () => {
@@ -193,40 +222,111 @@ describe('/optimizer page — mark place as must-see', () => {
 		const { getByRole, getByText } = await renderAndOptimize();
 		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
 		await expect.element(getByText(m.optimizer_preference_update_failed())).toBeVisible();
+		expect(optimizeRoute).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows a rerun-failure message (not the generic preference-update failure) when the rerun fails', async () => {
+		const updatedPlace: PlaceOut = { ...mockPlace('p1', 'Wawel'), priority: 'must_see' };
+		vi.mocked(patchPlace).mockResolvedValueOnce(updatedPlace);
+		vi.mocked(optimizeRoute)
+			.mockResolvedValueOnce(resultWithSkip)
+			.mockRejectedValueOnce(new ApiError(500, 'boom'));
+
+		const { getByRole, getByText } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+
+		await expect.element(getByText(m.optimizer_preference_updated_rerun_failed())).toBeVisible();
+		expect(getByText(m.optimizer_preference_update_failed()).query()).toBeNull();
+	});
+
+	it('disables the button and prevents a duplicate call while promoting', async () => {
+		let resolvePatch!: (place: PlaceOut) => void;
+		vi.mocked(patchPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePatch = resolve;
+				})
+		);
+
+		const { getByRole } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+
+		const button = getByRole('button', { name: m.optimizer_preference_updating() });
+		await expect.element(button).toBeVisible();
+		await expect.element(button).toBeDisabled();
+
+		resolvePatch({ ...mockPlace('p1', 'Wawel'), priority: 'must_see' });
+		await vi.waitFor(() => expect(patchPlace).toHaveBeenCalledTimes(1));
+	});
+
+	it('does not start a second promotion for a different place while one is running', async () => {
+		const resultWithTwoSkips: OptimizeResponse = {
+			...mockResult,
+			skipped: [
+				{ place_id: 'p1', name: 'Wawel', reason: 'DROPPED_LOW_PRIORITY' },
+				{ place_id: 'p2', name: 'Sukiennice', reason: 'DROPPED_LOW_PRIORITY' }
+			]
+		};
+		vi.mocked(optimizeRoute).mockResolvedValue(resultWithTwoSkips);
+
+		let resolvePatch!: (place: PlaceOut) => void;
+		vi.mocked(patchPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePatch = resolve;
+				})
+		);
+
+		const { getByTestId } = await renderAndOptimize();
+		const p1Button = getByTestId('skipped-place-p1').getByRole('button');
+		const p2Button = getByTestId('skipped-place-p2').getByRole('button');
+		await userEvent.click(p1Button);
+
+		await expect.element(p2Button).toBeDisabled();
+
+		resolvePatch({ ...mockPlace('p1', 'Wawel'), priority: 'must_see' });
+		await vi.waitFor(() => expect(patchPlace).toHaveBeenCalledTimes(1));
+		expect(patchPlace).not.toHaveBeenCalledWith('p2', { priority: 'must_see' });
+	});
+
+	it('disables manual optimization while promotion is running', async () => {
+		let resolvePatch!: (place: PlaceOut) => void;
+		vi.mocked(patchPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePatch = resolve;
+				})
+		);
+
+		const { getByRole, getByTestId } = await renderAndOptimize();
+
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+
+		const optimizeButton = getByTestId('optimize-submit');
+		await expect.element(optimizeButton).toBeDisabled();
+		expect(optimizeRoute).toHaveBeenCalledTimes(1);
+
+		resolvePatch({ ...mockPlace('p1', 'Wawel'), priority: 'must_see' });
+		await vi.waitFor(() => expect(optimizeRoute).toHaveBeenCalledTimes(2));
 	});
 
 	it('hides the mark-as-must-see button after a successful promotion', async () => {
 		const updatedPlace: PlaceOut = { ...mockPlace('p1', 'Wawel'), priority: 'must_see' };
 		vi.mocked(patchPlace).mockResolvedValueOnce(updatedPlace);
+		vi.mocked(optimizeRoute)
+			.mockResolvedValueOnce(resultWithSkip)
+			.mockResolvedValueOnce(resultAfterUpdate);
 
 		const { getByRole } = await renderAndOptimize();
 		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
 
-		expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull();
+		await vi.waitFor(() =>
+			expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull()
+		);
 	});
 
 	it('reflects the updated priority in the must-see-kept summary after re-optimizing', async () => {
 		const updatedPlace: PlaceOut = { ...mockPlace('p1', 'Wawel'), priority: 'must_see' };
-		const resultAfterUpdate: OptimizeResponse = {
-			steps: [
-				{
-					place_id: 'p1',
-					name: 'Wawel',
-					lat: 50.0,
-					lng: 20.0,
-					arrival_time: '09:00:00',
-					departure_time: '10:00:00',
-					travel_from_previous_s: 0,
-					visit_duration_min: 60,
-					wait_min: 0
-				}
-			],
-			total_travel_time_s: 0,
-			total_visit_time_min: 60,
-			total_wait_min: 0,
-			transport_mode: 'WALK',
-			skipped: []
-		};
 		vi.mocked(optimizeRoute)
 			.mockResolvedValueOnce(resultWithSkip)
 			.mockResolvedValueOnce(resultAfterUpdate);
@@ -234,11 +334,11 @@ describe('/optimizer page — mark place as must-see', () => {
 
 		const { getByRole, getByTestId } = await renderAndOptimize();
 		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
-		await userEvent.click(getByTestId('optimize-submit'));
 
 		const summary = getByTestId('route-summary');
-		await expect.element(summary).toBeVisible();
-		const text = (summary.element().textContent ?? '').replace(/\s+/g, ' ').trim();
-		expect(text).toContain(`1/1 ${m.results_summary_must_see_kept()}`);
+		await vi.waitFor(() => {
+			const text = (summary.element().textContent ?? '').replace(/\s+/g, ' ').trim();
+			expect(text).toContain(`1/1 ${m.results_summary_must_see_kept()}`);
+		});
 	});
 });

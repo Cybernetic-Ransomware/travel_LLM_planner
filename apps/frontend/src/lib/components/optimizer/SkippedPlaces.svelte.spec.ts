@@ -117,4 +117,38 @@ describe('SkippedPlaces', () => {
 
 		expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull();
 	});
+
+	it('disables and shows the updating label for the place currently being promoted', async () => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')],
+				onmarkmustsee: vi.fn(),
+				promotingPlaceId: 'p1'
+			}
+		});
+
+		const button = getByRole('button', { name: m.optimizer_preference_updating() });
+		await expect.element(button).toBeVisible();
+		await expect.element(button).toBeDisabled();
+	});
+
+	it('disables other promotion actions while one promotion is running', async () => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [
+					mockSkipped('p1', 'DROPPED_LOW_PRIORITY'),
+					mockSkipped('p2', 'DROPPED_LOW_PRIORITY')
+				],
+				onmarkmustsee: vi.fn(),
+				promotingPlaceId: 'p1'
+			}
+		});
+
+		await expect
+			.element(getByRole('button', { name: m.optimizer_preference_updating() }))
+			.toBeVisible();
+		const p2Button = getByRole('button', { name: m.skipped_action_mark_must_see() });
+		await expect.element(p2Button).toBeVisible();
+		await expect.element(p2Button).toBeDisabled();
+	});
 });
