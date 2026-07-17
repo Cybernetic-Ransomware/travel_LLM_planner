@@ -194,4 +194,51 @@ describe('/optimizer page — mark place as must-see', () => {
 		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
 		await expect.element(getByText(m.optimizer_preference_update_failed())).toBeVisible();
 	});
+
+	it('hides the mark-as-must-see button after a successful promotion', async () => {
+		const updatedPlace: PlaceOut = { ...mockPlace('p1', 'Wawel'), priority: 'must_see' };
+		vi.mocked(patchPlace).mockResolvedValueOnce(updatedPlace);
+
+		const { getByRole } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+
+		expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull();
+	});
+
+	it('reflects the updated priority in the must-see-kept summary after re-optimizing', async () => {
+		const updatedPlace: PlaceOut = { ...mockPlace('p1', 'Wawel'), priority: 'must_see' };
+		const resultAfterUpdate: OptimizeResponse = {
+			steps: [
+				{
+					place_id: 'p1',
+					name: 'Wawel',
+					lat: 50.0,
+					lng: 20.0,
+					arrival_time: '09:00:00',
+					departure_time: '10:00:00',
+					travel_from_previous_s: 0,
+					visit_duration_min: 60,
+					wait_min: 0
+				}
+			],
+			total_travel_time_s: 0,
+			total_visit_time_min: 60,
+			total_wait_min: 0,
+			transport_mode: 'WALK',
+			skipped: []
+		};
+		vi.mocked(optimizeRoute)
+			.mockResolvedValueOnce(resultWithSkip)
+			.mockResolvedValueOnce(resultAfterUpdate);
+		vi.mocked(patchPlace).mockResolvedValueOnce(updatedPlace);
+
+		const { getByRole, getByTestId } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+		await userEvent.click(getByTestId('optimize-submit'));
+
+		const summary = getByTestId('route-summary');
+		await expect.element(summary).toBeVisible();
+		const text = (summary.element().textContent ?? '').replace(/\s+/g, ' ').trim();
+		expect(text).toContain(`1/1 ${m.results_summary_must_see_kept()}`);
+	});
 });

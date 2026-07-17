@@ -105,4 +105,16 @@ describe('SkippedPlaces', () => {
 
 		expect(onmarkmustsee).toHaveBeenCalledWith('p1');
 	});
+
+	it('hides mark-as-must-see action for a place already in promotedPlaceIds', () => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')],
+				onmarkmustsee: vi.fn(),
+				promotedPlaceIds: new Set(['p1'])
+			}
+		});
+
+		expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull();
+	});
 });

@@ -109,4 +109,14 @@ describe('RouteResults skipped places', () => {
 			.element(getByRole('button', { name: m.skipped_action_mark_must_see() }))
 			.toBeVisible();
 	});
+
+	it('passes promotedPlaceIds through to SkippedPlaces', () => {
+		const onmarkmustsee = vi.fn();
+		const result = mockResult([], [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')]);
+		const { getByRole } = render(RouteResults, {
+			props: { result, onmarkmustsee, promotedPlaceIds: new Set(['p1']) }
+		});
+
+		expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull();
+	});
 });

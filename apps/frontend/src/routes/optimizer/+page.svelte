@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import type { PageData } from './$types.js';
 	import { optimizeRoute } from '$lib/api/optimizer.js';
 	import { updateTrip } from '$lib/api/trips.js';
 	import { patchPlace } from '$lib/api/gmaps.js';
 	import { ApiError } from '$lib/api/client.js';
-	import type { OptimizeRequest, OptimizeResponse, TripOut } from '$lib/types/index.js';
+	import type { OptimizeRequest, OptimizeResponse, PlaceOut, TripOut } from '$lib/types/index.js';
 	import RouteForm from '$lib/components/optimizer/RouteForm.svelte';
 	import RouteResults from '$lib/components/optimizer/RouteResults.svelte';
 	import SaveTripForm from '$lib/components/optimizer/SaveTripForm.svelte';
@@ -15,11 +16,13 @@
 
 	let { data }: { data: PageData } = $props();
 
+	let places = $state<PlaceOut[]>(untrack(() => data.places));
+
 	let selectedIds = $state<string[]>(
 		untrack(() =>
 			data.prefill
-				? data.prefill.selectedPlaceIds.filter((id) => data.places.some((p) => p.id === id))
-				: data.places.map((p) => p.id)
+				? data.prefill.selectedPlaceIds.filter((id) => places.some((p) => p.id === id))
+				: places.map((p) => p.id)
 		)
 	);
 	let result = $state<OptimizeResponse | null>(null);
@@ -30,6 +33,7 @@
 	let saveSuccess = $state<string | null>(null);
 	let updating = $state(false);
 	let preferenceSuccess = $state<string | null>(null);
+	const promotedPlaceIds = new SvelteSet<string>();
 	let prefillNotice = $state<string | null>(
 		untrack(() =>
 			data.prefill ? m.optimizer_prefill_notice({ name: data.prefill.tripName }) : null
@@ -42,7 +46,7 @@
 		$state(null);
 
 	$effect(() => {
-		if (!LeafletMap && (data.places.length > 0 || result !== null)) {
+		if (!LeafletMap && (places.length > 0 || result !== null)) {
 			import('$lib/components/map/LeafletMap.svelte').then((m) => {
 				LeafletMap = m.default;
 			});
@@ -52,10 +56,10 @@
 	const requestedPlaces = $derived.by(() => {
 		if (!lastRequest) return [];
 		const ids = new Set(lastRequest.place_ids);
-		return data.places.filter((p) => ids.has(p.id));
+		return places.filter((p) => ids.has(p.id));
 	});
 
-	const mapPlaces = $derived(result ? [] : data.places);
+	const mapPlaces = $derived(result ? [] : places);
 	const mapSteps = $derived(result?.steps ?? []);
 	const mapSelectedIds = $derived(new Set(selectedIds));
 
@@ -118,7 +122,9 @@
 		error = null;
 		preferenceSuccess = null;
 		try {
-			await patchPlace(placeId, { priority: 'must_see' });
+			const updatedPlace = await patchPlace(placeId, { priority: 'must_see' });
+			places = places.map((p) => (p.id === placeId ? updatedPlace : p));
+			promotedPlaceIds.add(placeId);
 			preferenceSuccess = m.optimizer_preference_updated();
 		} catch (err) {
 			error = err instanceof ApiError ? err.detail : m.optimizer_preference_update_failed();
@@ -177,7 +183,7 @@
 	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
 		<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-72 md:shrink-0">
 			<RouteForm
-				places={data.places}
+				{places}
 				hasLoadError={data.backendError !== null}
 				bind:selectedIds
 				{loading}
@@ -188,7 +194,12 @@
 			/>
 
 			{#if result}
-				<RouteResults {result} places={requestedPlaces} onmarkmustsee={handleMarkMustSee} />
+				<RouteResults
+					{result}
+					places={requestedPlaces}
+					onmarkmustsee={handleMarkMustSee}
+					{promotedPlaceIds}
+				/>
 
 				{#if data.prefill}
 					<button

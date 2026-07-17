@@ -5,10 +5,12 @@
 
 	let {
 		skipped,
-		onmarkmustsee
+		onmarkmustsee,
+		promotedPlaceIds
 	}: {
 		skipped: SkippedPlace[];
 		onmarkmustsee?: (placeId: string) => void | Promise<void>;
+		promotedPlaceIds?: Set<string>;
 	} = $props();
 
 	const hasLowPriorityDrop = $derived(skipped.some((s) => isLowPriorityDrop(s.reason)));
@@ -28,7 +30,7 @@
 				<li class="text-xs">
 					<span class="font-medium text-zinc-700 dark:text-zinc-300">{s.name ?? s.place_id}</span>
 					<span class="block text-zinc-500 dark:text-zinc-400">{skipReasonMessage(s.reason)}</span>
-					{#if isLowPriorityDrop(s.reason) && onmarkmustsee}
+					{#if isLowPriorityDrop(s.reason) && onmarkmustsee && !promotedPlaceIds?.has(s.place_id)}
 						<button
 							type="button"
 							onclick={() => onmarkmustsee(s.place_id)}
