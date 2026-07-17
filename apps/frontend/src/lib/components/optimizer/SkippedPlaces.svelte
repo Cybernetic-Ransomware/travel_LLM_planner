@@ -29,14 +29,14 @@
 		</p>
 		<ul class="mt-1 flex flex-col gap-1.5">
 			{#each skipped as s (s.place_id)}
-				<li class="text-xs">
+				<li class="text-xs" data-testid="skipped-place-{s.place_id}">
 					<span class="font-medium text-zinc-700 dark:text-zinc-300">{s.name ?? s.place_id}</span>
 					<span class="block text-zinc-500 dark:text-zinc-400">{skipReasonMessage(s.reason)}</span>
 					{#if isLowPriorityDrop(s.reason) && onmarkmustsee && !promotedPlaceIds?.has(s.place_id)}
 						<button
 							type="button"
 							onclick={() => onmarkmustsee(s.place_id)}
-							disabled={promotingPlaceId === s.place_id}
+							disabled={!!promotingPlaceId}
 							class="mt-1 rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900"
 						>
 							{promotingPlaceId === s.place_id

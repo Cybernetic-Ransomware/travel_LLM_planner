@@ -259,6 +259,36 @@ describe('/optimizer page — mark place as must-see', () => {
 		await vi.waitFor(() => expect(patchPlace).toHaveBeenCalledTimes(1));
 	});
 
+	it('does not start a second promotion for a different place while one is running', async () => {
+		const resultWithTwoSkips: OptimizeResponse = {
+			...mockResult,
+			skipped: [
+				{ place_id: 'p1', name: 'Wawel', reason: 'DROPPED_LOW_PRIORITY' },
+				{ place_id: 'p2', name: 'Sukiennice', reason: 'DROPPED_LOW_PRIORITY' }
+			]
+		};
+		vi.mocked(optimizeRoute).mockResolvedValue(resultWithTwoSkips);
+
+		let resolvePatch!: (place: PlaceOut) => void;
+		vi.mocked(patchPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePatch = resolve;
+				})
+		);
+
+		const { getByTestId } = await renderAndOptimize();
+		const p1Button = getByTestId('skipped-place-p1').getByRole('button');
+		const p2Button = getByTestId('skipped-place-p2').getByRole('button');
+		await userEvent.click(p1Button);
+
+		await expect.element(p2Button).toBeDisabled();
+
+		resolvePatch({ ...mockPlace('p1', 'Wawel'), priority: 'must_see' });
+		await vi.waitFor(() => expect(patchPlace).toHaveBeenCalledTimes(1));
+		expect(patchPlace).not.toHaveBeenCalledWith('p2', { priority: 'must_see' });
+	});
+
 	it('hides the mark-as-must-see button after a successful promotion', async () => {
 		const updatedPlace: PlaceOut = { ...mockPlace('p1', 'Wawel'), priority: 'must_see' };
 		vi.mocked(patchPlace).mockResolvedValueOnce(updatedPlace);

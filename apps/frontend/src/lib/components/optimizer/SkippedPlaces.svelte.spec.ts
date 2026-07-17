@@ -132,7 +132,7 @@ describe('SkippedPlaces', () => {
 		await expect.element(button).toBeDisabled();
 	});
 
-	it("leaves other places' buttons enabled while a different place is being promoted", async () => {
+	it('disables other promotion actions while one promotion is running', async () => {
 		const { getByRole } = render(SkippedPlaces, {
 			props: {
 				skipped: [
@@ -149,6 +149,6 @@ describe('SkippedPlaces', () => {
 			.toBeVisible();
 		const p2Button = getByRole('button', { name: m.skipped_action_mark_must_see() });
 		await expect.element(p2Button).toBeVisible();
-		await expect.element(p2Button).not.toBeDisabled();
+		await expect.element(p2Button).toBeDisabled();
 	});
 });
