@@ -146,6 +146,9 @@
 	"skip_reason_matrix_incomplete": "The route matrix is incomplete for this place.",
 	"skip_reason_unknown": "The place was skipped.",
 	"skip_tip_low_priority": "Tip: raise the place's priority or extend the day to include it.",
+	"skipped_action_mark_must_see": "Mark as must-see",
+	"optimizer_preference_updated": "Place priority updated. Re-run optimization to see the new result.",
+	"optimizer_preference_update_failed": "Failed to update place preferences.",
 	"results_summary_planned": "planned",
 	"results_summary_skipped": "skipped",
 	"results_summary_must_see_kept": "must-see kept"

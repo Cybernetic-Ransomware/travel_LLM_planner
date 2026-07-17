@@ -3,7 +3,13 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import { skipReasonMessage, isLowPriorityDrop } from '$lib/utils/skippedReasons.js';
 
-	let { skipped }: { skipped: SkippedPlace[] } = $props();
+	let {
+		skipped,
+		onmarkmustsee
+	}: {
+		skipped: SkippedPlace[];
+		onmarkmustsee?: (placeId: string) => void | Promise<void>;
+	} = $props();
 
 	const hasLowPriorityDrop = $derived(skipped.some((s) => isLowPriorityDrop(s.reason)));
 </script>
@@ -22,6 +28,15 @@
 				<li class="text-xs">
 					<span class="font-medium text-zinc-700 dark:text-zinc-300">{s.name ?? s.place_id}</span>
 					<span class="block text-zinc-500 dark:text-zinc-400">{skipReasonMessage(s.reason)}</span>
+					{#if isLowPriorityDrop(s.reason) && onmarkmustsee}
+						<button
+							type="button"
+							onclick={() => onmarkmustsee(s.place_id)}
+							class="mt-1 rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900"
+						>
+							{m.skipped_action_mark_must_see()}
+						</button>
+					{/if}
 				</li>
 			{/each}
 		</ul>

@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { userEvent } from 'vitest/browser';
 import SkippedPlaces from './SkippedPlaces.svelte';
 import * as m from '$lib/paraglide/messages.js';
 import type { SkippedPlace } from '$lib/types/index.js';
@@ -54,5 +55,54 @@ describe('SkippedPlaces', () => {
 	it('renders nothing when there are no skipped places', () => {
 		const { container } = render(SkippedPlaces, { props: { skipped: [] } });
 		expect((container.textContent ?? '').trim()).toBe('');
+	});
+
+	it('shows mark-as-must-see action for low-priority drops', async () => {
+		const onmarkmustsee = vi.fn();
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')],
+				onmarkmustsee
+			}
+		});
+
+		await expect
+			.element(getByRole('button', { name: m.skipped_action_mark_must_see() }))
+			.toBeVisible();
+	});
+
+	it.each(
+		REASON_CASES.filter(([reason]) => reason !== 'DROPPED_LOW_PRIORITY').map(([reason]) => reason)
+	)('hides mark-as-must-see action for %s', (reason) => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [mockSkipped('p1', reason)],
+				onmarkmustsee: vi.fn()
+			}
+		});
+
+		expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull();
+	});
+
+	it('hides mark-as-must-see action when no callback is provided', () => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: { skipped: [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')] }
+		});
+
+		expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull();
+	});
+
+	it('calls onmarkmustsee with the place id when clicked', async () => {
+		const onmarkmustsee = vi.fn();
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')],
+				onmarkmustsee
+			}
+		});
+
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+
+		expect(onmarkmustsee).toHaveBeenCalledWith('p1');
 	});
 });

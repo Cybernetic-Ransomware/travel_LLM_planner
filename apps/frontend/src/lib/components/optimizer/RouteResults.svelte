@@ -4,7 +4,15 @@
 	import StepCard from './StepCard.svelte';
 	import SkippedPlaces from './SkippedPlaces.svelte';
 
-	let { result, places }: { result: OptimizeResponse; places?: PlaceOut[] } = $props();
+	let {
+		result,
+		places,
+		onmarkmustsee
+	}: {
+		result: OptimizeResponse;
+		places?: PlaceOut[];
+		onmarkmustsee?: (placeId: string) => void | Promise<void>;
+	} = $props();
 
 	const plannedIds = $derived(new Set(result.steps.map((s) => s.place_id)));
 	const mustSeePlaces = $derived((places ?? []).filter((p) => p.priority === 'must_see'));
@@ -67,5 +75,5 @@
 		{/each}
 	</div>
 
-	<SkippedPlaces skipped={result.skipped} />
+	<SkippedPlaces skipped={result.skipped} {onmarkmustsee} />
 </div>

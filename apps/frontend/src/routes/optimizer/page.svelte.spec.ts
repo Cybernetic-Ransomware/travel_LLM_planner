@@ -4,8 +4,10 @@ import { userEvent } from 'vitest/browser';
 import Page from './+page.svelte';
 import { optimizeRoute } from '$lib/api/optimizer.js';
 import { updateTrip } from '$lib/api/trips.js';
+import { patchPlace } from '$lib/api/gmaps.js';
 import { ApiError } from '$lib/api/client.js';
-import type { OptimizeResponse, PlaceOut, TripOut } from '$lib/types/index.js';
+import * as m from '$lib/paraglide/messages.js';
+import type { OptimizeResponse, PlaceOut, SkippedPlace, TripOut } from '$lib/types/index.js';
 import type { OptimizerPrefill } from './+page.server.js';
 
 vi.mock('$lib/api/optimizer.js', () => ({
@@ -15,6 +17,10 @@ vi.mock('$lib/api/optimizer.js', () => ({
 vi.mock('$lib/api/trips.js', () => ({
 	updateTrip: vi.fn(),
 	saveTrip: vi.fn()
+}));
+
+vi.mock('$lib/api/gmaps.js', () => ({
+	patchPlace: vi.fn()
 }));
 
 const mockPlace = (id: string, name: string): PlaceOut => ({
@@ -148,5 +154,44 @@ describe('/optimizer page — update saved trip', () => {
 		const { getByRole, getByText } = await renderAndOptimize();
 		await userEvent.click(getByRole('button', { name: 'Zaktualizuj zapisaną trasę' }));
 		await expect.element(getByText('Nie udało się zaktualizować trasy.')).toBeVisible();
+	});
+});
+
+describe('/optimizer page — mark place as must-see', () => {
+	const skipped: SkippedPlace[] = [
+		{ place_id: 'p1', name: 'Wawel', reason: 'DROPPED_LOW_PRIORITY' }
+	];
+	const resultWithSkip: OptimizeResponse = { ...mockResult, skipped };
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.mocked(optimizeRoute).mockResolvedValue(resultWithSkip);
+		vi.mocked(patchPlace).mockResolvedValue({} as PlaceOut);
+	});
+
+	it('calls patchPlace with must_see priority when clicked', async () => {
+		const { getByRole } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+		expect(patchPlace).toHaveBeenCalledWith('p1', { priority: 'must_see' });
+	});
+
+	it('shows a success toast telling the user to re-run optimization', async () => {
+		const { getByRole, getByText } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+		await expect.element(getByText(m.optimizer_preference_updated())).toBeVisible();
+	});
+
+	it('shows the ApiError detail on failure', async () => {
+		vi.mocked(patchPlace).mockRejectedValueOnce(new ApiError(404, "Place 'p1' not found"));
+		const { getByRole, getByText } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+		await expect.element(getByText("Place 'p1' not found")).toBeVisible();
+	});
+
+	it('shows a generic failure message on unexpected error', async () => {
+		vi.mocked(patchPlace).mockRejectedValueOnce(new Error('boom'));
+		const { getByRole, getByText } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+		await expect.element(getByText(m.optimizer_preference_update_failed())).toBeVisible();
 	});
 });

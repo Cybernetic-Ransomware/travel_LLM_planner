@@ -146,6 +146,9 @@
 	"skip_reason_matrix_incomplete": "Macierz tras jest niepełna dla tego miejsca.",
 	"skip_reason_unknown": "Miejsce zostało pominięte.",
 	"skip_tip_low_priority": "Wskazówka: podnieś priorytet miejsca lub wydłuż dzień, aby je uwzględnić.",
+	"skipped_action_mark_must_see": "Oznacz jako konieczne",
+	"optimizer_preference_updated": "Priorytet miejsca zaktualizowany. Przelicz trasę, aby zobaczyć nowy wynik.",
+	"optimizer_preference_update_failed": "Nie udało się zaktualizować preferencji miejsca.",
 	"results_summary_planned": "zaplanowane",
 	"results_summary_skipped": "pominięte",
 	"results_summary_must_see_kept": "must-see zachowane"
