@@ -6,11 +6,13 @@
 	let {
 		skipped,
 		onmarkmustsee,
-		promotedPlaceIds
+		promotedPlaceIds,
+		promotingPlaceId
 	}: {
 		skipped: SkippedPlace[];
 		onmarkmustsee?: (placeId: string) => void | Promise<void>;
 		promotedPlaceIds?: Set<string>;
+		promotingPlaceId?: string | null;
 	} = $props();
 
 	const hasLowPriorityDrop = $derived(skipped.some((s) => isLowPriorityDrop(s.reason)));
@@ -34,9 +36,12 @@
 						<button
 							type="button"
 							onclick={() => onmarkmustsee(s.place_id)}
-							class="mt-1 rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900"
+							disabled={promotingPlaceId === s.place_id}
+							class="mt-1 rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900"
 						>
-							{m.skipped_action_mark_must_see()}
+							{promotingPlaceId === s.place_id
+								? m.optimizer_preference_updating()
+								: m.skipped_action_mark_must_see()}
 						</button>
 					{/if}
 				</li>
