@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import RouteResults from './RouteResults.svelte';
 import * as m from '$lib/paraglide/messages.js';
@@ -96,5 +96,27 @@ describe('RouteResults summary', () => {
 		const { getByTestId } = render(RouteResults, { props: { result, places } });
 		const text = summaryText(getByTestId('route-summary'));
 		expect(text).not.toContain(m.results_summary_must_see_kept());
+	});
+});
+
+describe('RouteResults skipped places', () => {
+	it('passes onmarkmustsee through to SkippedPlaces', async () => {
+		const onmarkmustsee = vi.fn();
+		const result = mockResult([], [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')]);
+		const { getByRole } = render(RouteResults, { props: { result, onmarkmustsee } });
+
+		await expect
+			.element(getByRole('button', { name: m.skipped_action_mark_must_see() }))
+			.toBeVisible();
+	});
+
+	it('passes promotedPlaceIds through to SkippedPlaces', () => {
+		const onmarkmustsee = vi.fn();
+		const result = mockResult([], [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')]);
+		const { getByRole } = render(RouteResults, {
+			props: { result, onmarkmustsee, promotedPlaceIds: new Set(['p1']) }
+		});
+
+		expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull();
 	});
 });
