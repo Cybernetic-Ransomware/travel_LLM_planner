@@ -13,7 +13,6 @@ services:
         - action: sync
           path: ../src
           target: /src
-          initial_sync: true
         - action: rebuild
           path: ../pyproject.toml
         - action: rebuild
