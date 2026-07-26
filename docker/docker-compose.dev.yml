@@ -1,0 +1,19 @@
+services:
+  app:
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --reload
+    develop:
+      watch:
+        - action: sync
+          path: ../src
+          target: /src
+        - action: rebuild
+          path: ../pyproject.toml
+        - action: rebuild
+          path: ../uv.lock

@@ -37,6 +37,7 @@ RUN mkdir -p /ms-playwright /log && \
     chown -R appuser:appgroup /ms-playwright /log
 
 COPY --chown=appuser:appgroup ./src .
+RUN chown appuser:appgroup /src
 
 USER appuser
 

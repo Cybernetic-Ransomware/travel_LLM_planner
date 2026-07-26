@@ -162,10 +162,10 @@ Before conversion: remove the duplicate map render block (`app.py:300-342`, item
 Full migration of `src/` → `apps/api/src/` is deferred to a dedicated PR (involves
 updating `pyproject.toml`, Docker, `justfile`, and all import paths).
 
-**C3. Docker dev workflow**
-Add `develop.watch` (sync `src/` without rebuild, Docker Compose v2.22+) and
-`uvicorn --reload` to the Compose file, then add a `just dev` recipe. Eliminates
-`just up` on every code change during development.
+**C3. Docker dev workflow** ✅ done
+`docker/docker-compose.dev.yml` adds `uvicorn --reload` and a `develop.watch` block
+(sync `../src` → `/src`, rebuild on `pyproject.toml`/`uv.lock` changes). `just dev` runs
+both compose files together via `docker compose ... watch`.
 
 ### Phase D — Housekeeping (low effort, low risk)
 
@@ -187,5 +187,5 @@ Add `develop.watch` (sync `src/` without rebuild, Docker Compose v2.22+) and
 | B2 ✅ | `src/optimizer/solver/service.py` · `src/optimizer/solver/models.py` · `apps/frontend/src/lib/types/optimizer.ts` |
 | C1 | `src/panel/` (admin panel conversion) |
 | C2 ✅ | `pyproject.toml` · `apps/api/pyproject.toml` · `docs/12_ADR-frontend-monorepo-structure.md` |
-| C3 | `docker/docker-compose.yml` · `justfile` |
+| C3 ✅ | `docker/docker-compose.dev.yml` · `docker/Dockerfile` · `justfile` · `README.md` |
 | D1–D4 | `pyproject.toml` · `CLAUDE.md` · `src/panel/app.py` · ~~`src/arch.md`~~ (removed) |

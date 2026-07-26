@@ -28,7 +28,7 @@ and the planner computes the most time-efficient visiting order using Google Map
 ## Requirements
 - Python >=3.14
 - [uv](https://github.com/astral-sh/uv) package manager
-- Docker Desktop / Docker + Compose
+- Docker Desktop / Docker + Compose 2.22 or newer (required for `develop.watch`, used by `just dev`)
 - Google Cloud API key with **Places API (New)** and **Routes API** enabled
 
 ## Environment Variables
@@ -56,6 +56,12 @@ Copy `docker/.env.template` to `docker/.env` and fill in the values:
 3. Run using Docker:
       ```powershell
       just up
+      ```
+
+For local development, `just dev` starts the same stack with `uvicorn --reload` and
+Docker Compose `watch` enabled, so changes under `src/` are picked up without a rebuild:
+      ```powershell
+      just dev
       ```
 
 #### MongoDB Compass
