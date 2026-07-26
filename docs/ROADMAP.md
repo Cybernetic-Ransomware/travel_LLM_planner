@@ -162,10 +162,10 @@ Before conversion: remove the duplicate map render block (`app.py:300-342`, item
 Full migration of `src/` → `apps/api/src/` is deferred to a dedicated PR (involves
 updating `pyproject.toml`, Docker, `justfile`, and all import paths).
 
-**C3. Docker dev workflow**
-Add `develop.watch` (sync `src/` without rebuild, Docker Compose v2.22+) and
-`uvicorn --reload` to the Compose file, then add a `just dev` recipe. Eliminates
-`just up` on every code change during development.
+**C3. Docker dev workflow** ✅ done
+`docker/docker-compose.dev.yml` adds `uvicorn --reload` and a `develop.watch` block
+(sync `../src` → `/src`, rebuild on `pyproject.toml`/`uv.lock` changes). `just dev` runs
+both compose files together via `docker compose ... watch`.
 
 ### Phase D — Housekeeping (low effort, low risk)
 

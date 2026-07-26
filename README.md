@@ -58,6 +58,12 @@ Copy `docker/.env.template` to `docker/.env` and fill in the values:
       just up
       ```
 
+For local development, `just dev` starts the same stack with `uvicorn --reload` and
+Docker Compose `watch` enabled, so changes under `src/` are picked up without a rebuild:
+      ```powershell
+      just dev
+      ```
+
 #### MongoDB Compass
 The Docker stack runs MongoDB as a single-node replica set for transaction support.
 The application connects from inside the Docker network via the service name `mongo`, but MongoDB Compass connects from the Windows host, so it should use:

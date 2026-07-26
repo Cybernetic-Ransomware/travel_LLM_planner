@@ -32,6 +32,10 @@ docker-down:
 docker-logs:
     docker-compose -f docker/docker-compose.yml logs -f app
 
+# Start Docker stack in dev mode (uvicorn --reload + compose watch, no rebuild on src changes)
+dev:
+    docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml watch
+
 # Start Streamlit location management panel (requires: just up)
 panel:
     $env:PYTHONPATH = "."; uv run streamlit run src/panel/app.py
