@@ -106,6 +106,26 @@ describe('SkippedPlaces', () => {
 		expect(onmarkmustsee).toHaveBeenCalledWith('p1');
 	});
 
+	it('shows the edit-hours link with the correct href for time-window-infeasible places', async () => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: { skipped: [mockSkipped('p1', 'TIME_WINDOW_INFEASIBLE')] }
+		});
+
+		const link = getByRole('link', { name: m.skipped_action_edit_hours() });
+		await expect.element(link).toBeVisible();
+		await expect.element(link).toHaveAttribute('href', '/places?focus=p1');
+	});
+
+	it.each(
+		REASON_CASES.filter(([reason]) => reason !== 'TIME_WINDOW_INFEASIBLE').map(([reason]) => reason)
+	)('hides the edit-hours link for %s', (reason) => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: { skipped: [mockSkipped('p1', reason)] }
+		});
+
+		expect(getByRole('link', { name: m.skipped_action_edit_hours() }).query()).toBeNull();
+	});
+
 	it('hides mark-as-must-see action for a place already in promotedPlaceIds', () => {
 		const { getByRole } = render(SkippedPlaces, {
 			props: {

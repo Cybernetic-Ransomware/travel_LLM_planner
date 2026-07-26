@@ -147,6 +147,7 @@
 	"skip_reason_unknown": "The place was skipped.",
 	"skip_tip_low_priority": "Tip: raise the place's priority or extend the day to include it.",
 	"skipped_action_mark_must_see": "Mark as must-see",
+	"skipped_action_edit_hours": "Edit hours and visit duration",
 	"optimizer_preference_updating": "Updating and recalculating…",
 	"optimizer_preference_updated_and_rerun": "Place priority updated and the route was recalculated.",
 	"optimizer_preference_updated_rerun_failed": "The priority was saved, but the route could not be recalculated.",

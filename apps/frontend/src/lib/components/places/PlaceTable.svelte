@@ -6,11 +6,13 @@
 	let {
 		places,
 		onpatch,
-		ondelete
+		ondelete,
+		highlightedPlaceId
 	}: {
 		places: PlaceOut[];
 		onpatch: (id: string, patch: PlacePatch) => void;
 		ondelete: (id: string) => void;
+		highlightedPlaceId?: string | null;
 	} = $props();
 </script>
 
@@ -42,6 +44,7 @@
 							{place}
 							onpatch={(patch) => onpatch(place.id, patch)}
 							ondelete={() => ondelete(place.id)}
+							highlighted={place.id === highlightedPlaceId}
 						/>
 					{/each}
 				</tbody>

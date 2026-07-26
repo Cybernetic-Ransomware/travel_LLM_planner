@@ -1,7 +1,11 @@
 <script lang="ts">
 	import type { SkippedPlace } from '$lib/types/index.js';
 	import * as m from '$lib/paraglide/messages.js';
-	import { skipReasonMessage, isLowPriorityDrop } from '$lib/utils/skippedReasons.js';
+	import {
+		skipReasonMessage,
+		isLowPriorityDrop,
+		isTimeWindowInfeasible
+	} from '$lib/utils/skippedReasons.js';
 
 	let {
 		skipped,
@@ -43,6 +47,14 @@
 								? m.optimizer_preference_updating()
 								: m.skipped_action_mark_must_see()}
 						</button>
+					{/if}
+					{#if isTimeWindowInfeasible(s.reason)}
+						<a
+							href="/places?focus={encodeURIComponent(s.place_id)}"
+							class="mt-1 inline-block text-xs font-medium text-amber-800 underline hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100"
+						>
+							{m.skipped_action_edit_hours()}
+						</a>
 					{/if}
 				</li>
 			{/each}

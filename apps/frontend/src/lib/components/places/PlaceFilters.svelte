@@ -21,6 +21,16 @@
 	let listNameRaw = $state('');
 
 	$effect(() => {
+		const expected = filterSkipped === null ? '' : String(filterSkipped);
+		if (skippedRaw !== expected) skippedRaw = expected;
+	});
+
+	$effect(() => {
+		const expected = filterListName ?? '';
+		if (listNameRaw !== expected) listNameRaw = expected;
+	});
+
+	$effect(() => {
 		filterSkipped = skippedRaw === '' ? null : skippedRaw === 'true';
 	});
 
