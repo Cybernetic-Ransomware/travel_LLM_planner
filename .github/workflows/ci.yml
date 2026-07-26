@@ -39,6 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare Compose environment
+        run: cp docker/.env.template docker/.env
+
       - name: Validate merged compose config
         run: |
           docker compose \
