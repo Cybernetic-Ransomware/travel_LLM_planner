@@ -187,5 +187,5 @@ both compose files together via `docker compose ... watch`.
 | B2 ✅ | `src/optimizer/solver/service.py` · `src/optimizer/solver/models.py` · `apps/frontend/src/lib/types/optimizer.ts` |
 | C1 | `src/panel/` (admin panel conversion) |
 | C2 ✅ | `pyproject.toml` · `apps/api/pyproject.toml` · `docs/12_ADR-frontend-monorepo-structure.md` |
-| C3 | `docker/docker-compose.yml` · `justfile` |
+| C3 ✅ | `docker/docker-compose.dev.yml` · `docker/Dockerfile` · `justfile` · `README.md` |
 | D1–D4 | `pyproject.toml` · `CLAUDE.md` · `src/panel/app.py` · ~~`src/arch.md`~~ (removed) |

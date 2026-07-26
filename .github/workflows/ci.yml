@@ -33,6 +33,19 @@ jobs:
       - name: codespell
         run: uv run python -m codespell_lib src/
 
+  compose-validate:
+    name: Validate Docker Compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate merged compose config
+        run: |
+          docker compose \
+            -f docker/docker-compose.yml \
+            -f docker/docker-compose.dev.yml \
+            config --quiet
+
   test:
     name: Unit tests
     runs-on: ubuntu-latest
