@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 
 	let {
@@ -22,12 +23,12 @@
 
 	$effect(() => {
 		const expected = filterSkipped === null ? '' : String(filterSkipped);
-		if (skippedRaw !== expected) skippedRaw = expected;
+		if (untrack(() => skippedRaw) !== expected) skippedRaw = expected;
 	});
 
 	$effect(() => {
 		const expected = filterListName ?? '';
-		if (listNameRaw !== expected) listNameRaw = expected;
+		if (untrack(() => listNameRaw) !== expected) listNameRaw = expected;
 	});
 
 	$effect(() => {

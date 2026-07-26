@@ -52,9 +52,10 @@
 			});
 			document.getElementById(`hours-from-${id}`)?.focus();
 		});
-		setTimeout(() => {
+		const timeout = setTimeout(() => {
 			if (highlightedPlaceId === id) highlightedPlaceId = null;
 		}, 2500);
+		return () => clearTimeout(timeout);
 	});
 
 	async function handlePatch(id: string, patch: PlacePatch) {
