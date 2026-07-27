@@ -155,9 +155,24 @@ class GooglePlacesManager:
             if resolved_id:
                 details, status, error_message = await self.fetch_place_details(resolved_id)
 
+        # Status/error must reflect the last operation actually attempted, not an arbitrary
+        # preference — otherwise a search failure (e.g. PERMISSION_DENIED) can be masked by a
+        # stale status from the earlier, superseded fetch attempt (e.g. NOT_FOUND).
+        if details:
+            final_status = status
+            final_error = error_message
+        elif resolved_id:
+            # Search succeeded, but fetching the resolved id failed.
+            final_status = status or resolve_status
+            final_error = error_message or resolve_error
+        else:
+            # Search itself did not resolve the place.
+            final_status = resolve_status or status
+            final_error = resolve_error or error_message
+
         update_fields: dict[str, Any] = {
-            "details_status": status or resolve_status,
-            "details_error": error_message or resolve_error,
+            "details_status": final_status,
+            "details_error": final_error,
             "resolve_status": resolve_status,
             "resolve_error": resolve_error,
             "enriched_at": pendulum.now("UTC"),

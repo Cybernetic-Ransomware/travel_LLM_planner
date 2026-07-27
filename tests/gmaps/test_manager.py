@@ -237,3 +237,23 @@ async def test_build_enrichment_update_not_resolved_when_google_finds_nothing(ht
     assert resolved is False
     assert "details" not in update_fields
     assert "lat" not in update_fields
+
+
+@pytest.mark.unit
+async def test_build_enrichment_update_prefers_search_error_over_stale_fetch_status(httpx_mock, manager):
+    """A stored place_id that 404s must not mask a more informative search failure.
+
+    Regression: the initial fetch's NOT_FOUND status is superseded by the search's
+    own status, since the search is the last operation actually attempted.
+    """
+    httpx_mock.add_response(url=_PLACE_URL, status_code=404, json={"error": {"status": "NOT_FOUND"}})
+    httpx_mock.add_response(
+        url=_SEARCH_URL, status_code=403, json={"error": {"status": "PERMISSION_DENIED", "message": "API key invalid"}}
+    )
+
+    update_fields, resolved = await manager.build_enrichment_update({"gmaps_place_id": "ChIxyz", "name": "Test"})
+
+    assert resolved is False
+    assert update_fields["details_status"] == "PERMISSION_DENIED"
+    assert update_fields["details_error"] == "API key invalid"
+    assert update_fields["resolve_status"] == "PERMISSION_DENIED"

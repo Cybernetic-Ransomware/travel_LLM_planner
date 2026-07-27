@@ -446,3 +446,67 @@ describe('/optimizer page — enrich place', () => {
 		await vi.waitFor(() => expect(enrichPlace).toHaveBeenCalledTimes(1));
 	});
 });
+
+describe('/optimizer page — cross-action notices', () => {
+	const skipped: SkippedPlace[] = [
+		{ place_id: 'p1', name: 'Wawel', reason: 'DROPPED_LOW_PRIORITY' },
+		{ place_id: 'p2', name: 'Sukiennice', reason: 'NO_COORDINATES' }
+	];
+	const resultWithSkip: OptimizeResponse = { ...mockResult, skipped };
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.mocked(optimizeRoute).mockResolvedValue(resultWithSkip);
+	});
+
+	it('clears a leftover preference notice when starting enrichment', async () => {
+		vi.mocked(patchPlace).mockResolvedValueOnce({
+			...mockPlace('p1', 'Wawel'),
+			priority: 'must_see'
+		});
+		const { getByRole, getByText } = await renderAndOptimize();
+
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+		await expect.element(getByText(m.optimizer_preference_updated_and_rerun())).toBeVisible();
+
+		let resolveEnrich!: (place: PlaceOut) => void;
+		vi.mocked(enrichPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveEnrich = resolve;
+				})
+		);
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+
+		expect(getByText(m.optimizer_preference_updated_and_rerun()).query()).toBeNull();
+
+		resolveEnrich({ ...mockPlace('p2', 'Sukiennice'), lat: 50.0, lng: 20.0 });
+		await vi.waitFor(() => expect(enrichPlace).toHaveBeenCalledTimes(1));
+	});
+
+	it('clears a leftover enrich notice when starting a must-see promotion', async () => {
+		vi.mocked(enrichPlace).mockResolvedValueOnce({
+			...mockPlace('p2', 'Sukiennice'),
+			lat: null,
+			lng: null
+		});
+		const { getByRole, getByText } = await renderAndOptimize();
+
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+		await expect.element(getByText(m.optimizer_enrich_no_coordinates())).toBeVisible();
+
+		let resolvePatch!: (place: PlaceOut) => void;
+		vi.mocked(patchPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePatch = resolve;
+				})
+		);
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+
+		expect(getByText(m.optimizer_enrich_no_coordinates()).query()).toBeNull();
+
+		resolvePatch({ ...mockPlace('p1', 'Wawel'), priority: 'must_see' });
+		await vi.waitFor(() => expect(patchPlace).toHaveBeenCalledTimes(1));
+	});
+});

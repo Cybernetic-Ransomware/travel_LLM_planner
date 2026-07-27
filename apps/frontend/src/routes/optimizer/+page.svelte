@@ -98,13 +98,18 @@
 		}
 	}
 
+	function clearPlaceUpdateNotices() {
+		preferenceNotice = null;
+		enrichNotice = null;
+	}
+
 	async function handleSubmit(request: OptimizeRequest) {
 		if (updatingPlaceId !== null || loading) return;
 
 		lastRequest = request;
 		result = null;
 		saveSuccess = null;
-		preferenceNotice = null;
+		clearPlaceUpdateNotices();
 		await runOptimization(request);
 	}
 
@@ -136,7 +141,7 @@
 	async function handleMarkMustSee(placeId: string) {
 		if (!lastRequest || updatingPlaceId !== null) return;
 		error = null;
-		preferenceNotice = null;
+		clearPlaceUpdateNotices();
 		updatingPlaceId = placeId;
 		placeUpdateKind = 'priority';
 		try {
@@ -158,7 +163,7 @@
 	async function handleEnrichPlace(placeId: string) {
 		if (!lastRequest || updatingPlaceId !== null) return;
 		error = null;
-		enrichNotice = null;
+		clearPlaceUpdateNotices();
 		updatingPlaceId = placeId;
 		placeUpdateKind = 'enrichment';
 		try {
