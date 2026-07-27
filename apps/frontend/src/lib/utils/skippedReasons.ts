@@ -19,3 +19,7 @@ export function skipReasonMessage(reason: string): string {
 export function isLowPriorityDrop(reason: string): boolean {
 	return reason === 'DROPPED_LOW_PRIORITY';
 }
+
+export function isTimeWindowInfeasible(reason: string): boolean {
+	return reason === 'TIME_WINDOW_INFEASIBLE';
+}

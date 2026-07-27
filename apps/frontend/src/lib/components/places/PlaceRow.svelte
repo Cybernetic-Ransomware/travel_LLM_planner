@@ -5,11 +5,13 @@
 	let {
 		place,
 		onpatch,
-		ondelete
+		ondelete,
+		highlighted = false
 	}: {
 		place: PlaceOut;
 		onpatch: (patch: PlacePatch) => void;
 		ondelete: () => void;
+		highlighted?: boolean;
 	} = $props();
 
 	function handleHourInput(field: 'preferred_hour_from' | 'preferred_hour_to', raw: string) {
@@ -36,9 +38,11 @@
 </script>
 
 <tr
+	id="place-row-{place.id}"
+	data-place-id={place.id}
 	class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800 {place.skipped
 		? 'opacity-60'
-		: ''}"
+		: ''} {highlighted ? 'bg-amber-50 ring-2 ring-amber-400 ring-inset dark:bg-amber-950/40' : ''}"
 >
 	<td class="px-3 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100">
 		{place.name ?? '—'}
@@ -52,6 +56,7 @@
 	<td class="px-3 py-2.5">
 		<div class="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
 			<input
+				id="hours-from-{place.id}"
 				type="number"
 				min="0"
 				max="23"

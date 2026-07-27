@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 
 	let {
@@ -19,6 +20,16 @@
 
 	let skippedRaw = $state('');
 	let listNameRaw = $state('');
+
+	$effect(() => {
+		const expected = filterSkipped === null ? '' : String(filterSkipped);
+		if (untrack(() => skippedRaw) !== expected) skippedRaw = expected;
+	});
+
+	$effect(() => {
+		const expected = filterListName ?? '';
+		if (untrack(() => listNameRaw) !== expected) listNameRaw = expected;
+	});
 
 	$effect(() => {
 		filterSkipped = skippedRaw === '' ? null : skippedRaw === 'true';

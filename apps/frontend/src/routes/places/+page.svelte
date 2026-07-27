@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick, untrack } from 'svelte';
 	import { getPlacesContext } from '$lib/state/context.svelte.js';
 	import type { PlacePatch } from '$lib/types/index.js';
 	import * as m from '$lib/paraglide/messages.js';
@@ -23,6 +24,39 @@
 	let deleteLoading = $state(false);
 	let showMap = $state(true);
 	let saveSuccess = $state<string | null>(null);
+	let highlightedPlaceId = $state<string | null>(null);
+	let focusHandledFor = $state<string | null>(null);
+
+	$effect(() => {
+		const id = data.focusPlaceId;
+		if (!id || id === untrack(() => focusHandledFor)) return;
+
+		const place = places.places.find((p) => p.id === id);
+		if (!place) {
+			focusHandledFor = id;
+			return;
+		}
+
+		if (!places.filtered.some((p) => p.id === id)) {
+			places.filterSkipped = null;
+			places.filterListName = null;
+			return;
+		}
+
+		focusHandledFor = id;
+		highlightedPlaceId = id;
+		tick().then(() => {
+			document.getElementById(`place-row-${id}`)?.scrollIntoView({
+				behavior: 'smooth',
+				block: 'center'
+			});
+			document.getElementById(`hours-from-${id}`)?.focus();
+		});
+		const timeout = setTimeout(() => {
+			if (highlightedPlaceId === id) highlightedPlaceId = null;
+		}, 2500);
+		return () => clearTimeout(timeout);
+	});
 
 	async function handlePatch(id: string, patch: PlacePatch) {
 		saveSuccess = null;
@@ -91,6 +125,7 @@
 				places={places.filtered}
 				onpatch={handlePatch}
 				ondelete={(id) => (deleteTarget = id)}
+				{highlightedPlaceId}
 			/>
 		</div>
 
