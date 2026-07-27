@@ -1,5 +1,3 @@
-from typing import Any
-
 import pendulum
 from fastapi import APIRouter, HTTPException, Query
 from pymongo import UpdateOne
@@ -7,6 +5,7 @@ from pymongo import UpdateOne
 from src.config.conf_logger import setup_logger
 from src.core.auth import CurrentUserDep
 from src.core.db.deps import MongoDbDep
+from src.core.exceptions import PlaceResolutionError
 from src.gmaps.deps import GooglePlacesDep
 from src.gmaps.models import (
     EnrichRequest,
@@ -18,6 +17,7 @@ from src.gmaps.models import (
 )
 from src.gmaps.scraper import scrape_public_list
 from src.gmaps.storage import (
+    apply_enrichment_update,
     bulk_update_enrichment,
     delete_place,
     fetch_enrichment_candidates,
@@ -62,48 +62,8 @@ async def enrich_places(
     candidates = await fetch_enrichment_candidates(db, payload.limit)
     updates: list[UpdateOne] = []
     for doc in candidates:
-        place_id = doc.get("gmaps_place_id")
-        if place_id and not str(place_id).startswith("ChI"):
-            place_id = None
-        details = None
-        status = None
-        error_message = None
-
-        if place_id:
-            details, status, error_message = await gp.fetch_place_details(place_id)
-
-        if not details:
-            resolved_id, resolve_status, resolve_error = await gp.search_place_id(
-                doc.get("name"), doc.get("lat"), doc.get("lng")
-            )
-            update_doc: dict[str, Any] = {
-                "details_status": resolve_status or status,
-                "details_error": resolve_error or error_message,
-                "resolve_status": resolve_status,
-                "resolve_error": resolve_error,
-                "enriched_at": pendulum.now("UTC"),
-            }
-            if resolved_id:
-                details, status, error_message = await gp.fetch_place_details(resolved_id)
-                update_doc["gmaps_place_id"] = resolved_id
-                update_doc["details_status"] = status
-                update_doc["details_error"] = error_message
-            if details:
-                update_doc["details"] = details
-                update_doc["address"] = details.get("formattedAddress")
-                update_doc["opening_hours"] = details.get("regularOpeningHours")
-            updates.append(UpdateOne({"_id": doc["_id"]}, {"$set": update_doc}))
-            continue
-
-        update_doc = {
-            "details_status": status,
-            "details_error": error_message,
-            "details": details,
-            "address": details.get("formattedAddress") if details else None,
-            "opening_hours": details.get("regularOpeningHours") if details else None,
-            "enriched_at": pendulum.now("UTC"),
-        }
-        updates.append(UpdateOne({"_id": doc["_id"]}, {"$set": update_doc}))
+        update_fields, _ = await gp.build_enrichment_update(doc)
+        updates.append(UpdateOne({"_id": doc["_id"]}, {"$set": update_fields}))
 
     updated = await bulk_update_enrichment(db, updates)
     return EnrichResponse(scanned=len(candidates), updated=updated)
@@ -144,6 +104,24 @@ async def remove_place(place_id: str, db: MongoDbDep, _user: CurrentUserDep) -> 
     deleted = await delete_place(db, place_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Place not found")
+
+
+@router.post("/places/{place_id}/enrich", response_model=PlaceOut)
+async def enrich_place(place_id: str, db: MongoDbDep, gp: GooglePlacesDep, _user: CurrentUserDep) -> PlaceOut:
+    """Enrich a single place via the Google Places API and return the updated record."""
+    doc = await fetch_place_by_id(db, place_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+
+    update_fields, resolved = await gp.build_enrichment_update(doc)
+    updated = await apply_enrichment_update(db, place_id, update_fields)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+
+    if not resolved:
+        raise PlaceResolutionError(update_fields.get("details_status"), update_fields.get("details_error"))
+
+    return PlaceOut.model_validate(updated)
 
 
 @router.get("/keycheck")

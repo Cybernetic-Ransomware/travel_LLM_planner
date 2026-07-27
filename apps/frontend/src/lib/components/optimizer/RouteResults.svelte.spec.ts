@@ -120,15 +120,25 @@ describe('RouteResults skipped places', () => {
 		expect(getByRole('button', { name: m.skipped_action_mark_must_see() }).query()).toBeNull();
 	});
 
-	it('passes promotingPlaceId through to SkippedPlaces', async () => {
+	it('passes updatingPlaceId and placeUpdateKind through to SkippedPlaces', async () => {
 		const onmarkmustsee = vi.fn();
 		const result = mockResult([], [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')]);
 		const { getByRole } = render(RouteResults, {
-			props: { result, onmarkmustsee, promotingPlaceId: 'p1' }
+			props: { result, onmarkmustsee, updatingPlaceId: 'p1', placeUpdateKind: 'priority' }
 		});
 
 		await expect
 			.element(getByRole('button', { name: m.optimizer_preference_updating() }))
+			.toBeVisible();
+	});
+
+	it('passes onenrich through to SkippedPlaces', async () => {
+		const onenrich = vi.fn();
+		const result = mockResult([], [mockSkipped('p1', 'NO_COORDINATES')]);
+		const { getByRole } = render(RouteResults, { props: { result, onenrich } });
+
+		await expect
+			.element(getByRole('button', { name: m.skipped_action_enrich_location() }))
 			.toBeVisible();
 	});
 });

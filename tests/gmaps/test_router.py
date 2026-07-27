@@ -273,3 +273,71 @@ class TestEnrichBackoff:
         response = await client.post("/api/v1/core/gmaps/enrich", json={"limit": 10})
         assert response.status_code == 200
         assert response.json()["scanned"] == 0
+
+
+@pytest.mark.integration
+class TestEnrichPlace:
+    @pytest.fixture
+    async def place_without_coordinates(self, test_db):
+        result = await test_db[GMAPS_COLLECTION].insert_one(
+            {"name": "Wawel Castle", "gmaps_place_id": "ChItest123", "lat": None, "lng": None}
+        )
+        return str(result.inserted_id)
+
+    async def test_enriches_target_place_and_sets_coordinates(
+        self, client, test_db, place_without_coordinates, httpx_mock: HTTPXMock
+    ):
+        fake_details = {
+            "id": "ChItest123",
+            "formattedAddress": "Wawel 5, 31-001 Kraków",
+            "location": {"latitude": 50.054, "longitude": 19.935},
+        }
+        httpx_mock.add_response(url=f"{_PLACES_API_URL}/ChItest123", json=fake_details)
+
+        response = await client.post(f"/api/v1/core/gmaps/places/{place_without_coordinates}/enrich")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == place_without_coordinates
+        assert data["address"] == "Wawel 5, 31-001 Kraków"
+        assert data["lat"] == 50.054
+        assert data["lng"] == 19.935
+
+    async def test_does_not_touch_other_places(
+        self, client, test_db, place_without_coordinates, httpx_mock: HTTPXMock
+    ):
+        other = await test_db[GMAPS_COLLECTION].insert_one(
+            {"name": "Other Place", "gmaps_place_id": "ChIother", "address": None, "lat": None, "lng": None}
+        )
+        fake_details = {
+            "id": "ChItest123",
+            "formattedAddress": "Wawel 5, 31-001 Kraków",
+            "location": {"latitude": 50.054, "longitude": 19.935},
+        }
+        httpx_mock.add_response(url=f"{_PLACES_API_URL}/ChItest123", json=fake_details)
+
+        await client.post(f"/api/v1/core/gmaps/places/{place_without_coordinates}/enrich")
+
+        other_doc = await test_db[GMAPS_COLLECTION].find_one({"_id": other.inserted_id})
+        assert other_doc["address"] is None
+        assert other_doc["lat"] is None
+
+    async def test_not_found(self, client):
+        response = await client.post(f"/api/v1/core/gmaps/places/{ObjectId()}/enrich")
+        assert response.status_code == 404
+
+    async def test_invalid_id(self, client):
+        response = await client.post("/api/v1/core/gmaps/places/not-an-id/enrich")
+        assert response.status_code == 404
+
+    async def test_returns_error_when_google_cannot_resolve_location(
+        self, client, place_without_coordinates, httpx_mock: HTTPXMock
+    ):
+        httpx_mock.add_response(
+            url=f"{_PLACES_API_URL}/ChItest123", status_code=404, json={"error": {"status": "NOT_FOUND"}}
+        )
+        httpx_mock.add_response(url=f"{_PLACES_API_URL}:searchText", json={"places": []})
+
+        response = await client.post(f"/api/v1/core/gmaps/places/{place_without_coordinates}/enrich")
+
+        assert response.status_code == 502

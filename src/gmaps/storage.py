@@ -199,6 +199,19 @@ async def fetch_enrichment_candidates(db: AsyncDatabase, limit: int) -> list[dic
     return await cursor.to_list(length=limit)
 
 
+async def apply_enrichment_update(db: AsyncDatabase, place_id: str, update_fields: dict) -> dict | None:
+    """Persist enrichment fields for a single place. Returns the updated document, or None if not found."""
+    try:
+        oid = ObjectId(place_id)
+    except InvalidId:
+        return None
+    return await db[GMAPS_COLLECTION].find_one_and_update(
+        {"_id": oid},
+        {"$set": update_fields},
+        return_document=ReturnDocument.AFTER,
+    )
+
+
 async def bulk_update_enrichment(db: AsyncDatabase, updates: list[UpdateOne]) -> int:
     """Apply a batch of enrichment updates. Returns the number of modified documents."""
     if not updates:

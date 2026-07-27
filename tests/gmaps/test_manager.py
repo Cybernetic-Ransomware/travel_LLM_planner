@@ -177,3 +177,63 @@ async def test_search_place_id_http_error(httpx_mock, manager):
     assert place_id is None
     assert status == "PERMISSION_DENIED"
     assert error == "API key invalid"
+
+
+@pytest.mark.unit
+async def test_build_enrichment_update_extracts_coordinates(httpx_mock, manager):
+    fake_payload = {
+        "id": "ChIxyz",
+        "formattedAddress": "ul. Testowa 1",
+        "location": {"latitude": 50.05, "longitude": 19.93},
+    }
+    httpx_mock.add_response(url=_PLACE_URL, json=fake_payload)
+
+    update_fields, resolved = await manager.build_enrichment_update({"gmaps_place_id": "ChIxyz", "name": "Test"})
+
+    assert resolved is True
+    assert update_fields["address"] == "ul. Testowa 1"
+    assert update_fields["lat"] == 50.05
+    assert update_fields["lng"] == 19.93
+    assert update_fields["details_status"] == "OK"
+
+
+@pytest.mark.unit
+async def test_build_enrichment_update_missing_location_leaves_coordinates_unset(httpx_mock, manager):
+    fake_payload = {"id": "ChIxyz", "formattedAddress": "ul. Testowa 1"}
+    httpx_mock.add_response(url=_PLACE_URL, json=fake_payload)
+
+    update_fields, resolved = await manager.build_enrichment_update({"gmaps_place_id": "ChIxyz", "name": "Test"})
+
+    assert resolved is True
+    assert "lat" not in update_fields
+    assert "lng" not in update_fields
+
+
+@pytest.mark.unit
+async def test_build_enrichment_update_falls_back_to_search(httpx_mock, manager):
+    httpx_mock.add_response(url=_PLACE_URL, status_code=404, json={"error": {"status": "NOT_FOUND"}})
+    httpx_mock.add_response(
+        url=_SEARCH_URL, json={"places": [{"id": "ChIresolved", "formattedAddress": "ul. Nowa 2"}]}
+    )
+    httpx_mock.add_response(
+        url="https://places.googleapis.com/v1/places/ChIresolved",
+        json={"id": "ChIresolved", "formattedAddress": "ul. Nowa 2", "location": {"latitude": 1.0, "longitude": 2.0}},
+    )
+
+    update_fields, resolved = await manager.build_enrichment_update({"gmaps_place_id": "ChIxyz", "name": "Test"})
+
+    assert resolved is True
+    assert update_fields["gmaps_place_id"] == "ChIresolved"
+    assert update_fields["lat"] == 1.0
+    assert update_fields["lng"] == 2.0
+
+
+@pytest.mark.unit
+async def test_build_enrichment_update_not_resolved_when_google_finds_nothing(httpx_mock, manager):
+    httpx_mock.add_response(url=_SEARCH_URL, json={"places": []})
+
+    update_fields, resolved = await manager.build_enrichment_update({"gmaps_place_id": None, "name": "Unknown"})
+
+    assert resolved is False
+    assert "details" not in update_fields
+    assert "lat" not in update_fields

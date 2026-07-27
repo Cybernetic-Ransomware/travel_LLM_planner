@@ -4,7 +4,7 @@
 	import type { PageData } from './$types.js';
 	import { optimizeRoute } from '$lib/api/optimizer.js';
 	import { updateTrip } from '$lib/api/trips.js';
-	import { patchPlace } from '$lib/api/gmaps.js';
+	import { patchPlace, enrichPlace } from '$lib/api/gmaps.js';
 	import { ApiError } from '$lib/api/client.js';
 	import type { OptimizeRequest, OptimizeResponse, PlaceOut, TripOut } from '$lib/types/index.js';
 	import RouteForm from '$lib/components/optimizer/RouteForm.svelte';
@@ -33,7 +33,9 @@
 	let saveSuccess = $state<string | null>(null);
 	let updating = $state(false);
 	let preferenceNotice = $state<{ message: string; variant: 'success' | 'warning' } | null>(null);
-	let promotingPlaceId = $state<string | null>(null);
+	let enrichNotice = $state<{ message: string; variant: 'success' | 'warning' } | null>(null);
+	let updatingPlaceId = $state<string | null>(null);
+	let placeUpdateKind = $state<'priority' | 'enrichment' | null>(null);
 	const promotedPlaceIds = new SvelteSet<string>();
 	let prefillNotice = $state<string | null>(
 		untrack(() =>
@@ -68,7 +70,7 @@
 		data.backendError ? `${data.backendError.message} (${data.backendError.status})` : null
 	);
 
-	const optimizerBusy = $derived(loading || promotingPlaceId !== null);
+	const optimizerBusy = $derived(loading || updatingPlaceId !== null);
 
 	async function runOptimization(request: OptimizeRequest): Promise<boolean> {
 		loading = true;
@@ -97,7 +99,7 @@
 	}
 
 	async function handleSubmit(request: OptimizeRequest) {
-		if (promotingPlaceId !== null || loading) return;
+		if (updatingPlaceId !== null || loading) return;
 
 		lastRequest = request;
 		result = null;
@@ -132,10 +134,11 @@
 	}
 
 	async function handleMarkMustSee(placeId: string) {
-		if (!lastRequest || promotingPlaceId !== null) return;
+		if (!lastRequest || updatingPlaceId !== null) return;
 		error = null;
 		preferenceNotice = null;
-		promotingPlaceId = placeId;
+		updatingPlaceId = placeId;
+		placeUpdateKind = 'priority';
 		try {
 			const updatedPlace = await patchPlace(placeId, { priority: 'must_see' });
 			places = places.map((p) => (p.id === placeId ? updatedPlace : p));
@@ -147,7 +150,33 @@
 		} catch (err) {
 			error = err instanceof ApiError ? err.detail : m.optimizer_preference_update_failed();
 		} finally {
-			promotingPlaceId = null;
+			updatingPlaceId = null;
+			placeUpdateKind = null;
+		}
+	}
+
+	async function handleEnrichPlace(placeId: string) {
+		if (!lastRequest || updatingPlaceId !== null) return;
+		error = null;
+		enrichNotice = null;
+		updatingPlaceId = placeId;
+		placeUpdateKind = 'enrichment';
+		try {
+			const updatedPlace = await enrichPlace(placeId);
+			places = places.map((p) => (p.id === placeId ? updatedPlace : p));
+			if (updatedPlace.lat === null || updatedPlace.lng === null) {
+				enrichNotice = { message: m.optimizer_enrich_no_coordinates(), variant: 'warning' };
+				return;
+			}
+			const rerunSucceeded = await runOptimization(lastRequest);
+			enrichNotice = rerunSucceeded
+				? { message: m.optimizer_enrich_success_and_rerun(), variant: 'success' }
+				: { message: m.optimizer_enrich_success_rerun_failed(), variant: 'warning' };
+		} catch (err) {
+			error = err instanceof ApiError ? err.detail : m.optimizer_enrich_failed();
+		} finally {
+			updatingPlaceId = null;
+			placeUpdateKind = null;
 		}
 	}
 </script>
@@ -200,6 +229,14 @@
 		/>
 	{/if}
 
+	{#if enrichNotice}
+		<Toast
+			message={enrichNotice.message}
+			variant={enrichNotice.variant}
+			onclose={() => (enrichNotice = null)}
+		/>
+	{/if}
+
 	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
 		<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-72 md:shrink-0">
 			<RouteForm
@@ -218,8 +255,10 @@
 					{result}
 					places={requestedPlaces}
 					onmarkmustsee={handleMarkMustSee}
+					onenrich={handleEnrichPlace}
 					{promotedPlaceIds}
-					{promotingPlaceId}
+					{updatingPlaceId}
+					{placeUpdateKind}
 				/>
 
 				{#if data.prefill}

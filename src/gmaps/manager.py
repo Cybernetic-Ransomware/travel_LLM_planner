@@ -1,6 +1,7 @@
 from typing import Any
 
 import httpx
+import pendulum
 
 
 class GooglePlacesManager:
@@ -128,3 +129,48 @@ class GooglePlacesManager:
         if not place_id:
             return None, "NOT_FOUND", None
         return place_id, "OK", None
+
+    async def build_enrichment_update(self, doc: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """Resolve Google Places details for one candidate document.
+
+        Tries the stored gmaps_place_id first, falling back to a text search when it is
+        missing or invalid. Returns (update_fields, resolved) where resolved is True once
+        usable place details were obtained from Google (even if location/hours are still
+        missing), and False when Places API could not locate the place at all.
+        """
+        place_id = doc.get("gmaps_place_id")
+        if place_id and not str(place_id).startswith("ChI"):
+            place_id = None
+
+        details = status = error_message = None
+        resolved_id = resolve_status = resolve_error = None
+
+        if place_id:
+            details, status, error_message = await self.fetch_place_details(place_id)
+
+        if not details:
+            resolved_id, resolve_status, resolve_error = await self.search_place_id(
+                doc.get("name"), doc.get("lat"), doc.get("lng")
+            )
+            if resolved_id:
+                details, status, error_message = await self.fetch_place_details(resolved_id)
+
+        update_fields: dict[str, Any] = {
+            "details_status": status or resolve_status,
+            "details_error": error_message or resolve_error,
+            "resolve_status": resolve_status,
+            "resolve_error": resolve_error,
+            "enriched_at": pendulum.now("UTC"),
+        }
+        if resolved_id:
+            update_fields["gmaps_place_id"] = resolved_id
+        if details:
+            location = details.get("location") or {}
+            update_fields["details"] = details
+            update_fields["address"] = details.get("formattedAddress")
+            update_fields["opening_hours"] = details.get("regularOpeningHours")
+            if location.get("latitude") is not None and location.get("longitude") is not None:
+                update_fields["lat"] = location["latitude"]
+                update_fields["lng"] = location["longitude"]
+
+        return update_fields, details is not None
