@@ -95,4 +95,28 @@ describe('/places page — focus deep link', () => {
 		expect(container.querySelector('.ring-amber-400')).toBeNull();
 		expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
 	});
+
+	it('clears the highlight once its 2.5s timer elapses', async () => {
+		vi.useFakeTimers();
+		try {
+			const { container } = render(Harness, {
+				props: { data: pageData('p1'), initialFilterSkipped: true }
+			});
+
+			// Flush the pending microtasks (effect scheduling, tick()) without touching fake timers.
+			for (let i = 0; i < 10; i++) {
+				await Promise.resolve();
+			}
+
+			const row = container.querySelector('#place-row-p1');
+			expect(row).not.toBeNull();
+			expect(row?.className).toContain('ring-amber-400');
+
+			await vi.advanceTimersByTimeAsync(2500);
+
+			expect(row?.className).not.toContain('ring-amber-400');
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });

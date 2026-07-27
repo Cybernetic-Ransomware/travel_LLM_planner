@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { getPlacesContext } from '$lib/state/context.svelte.js';
 	import type { PlacePatch } from '$lib/types/index.js';
 	import * as m from '$lib/paraglide/messages.js';
@@ -29,7 +29,7 @@
 
 	$effect(() => {
 		const id = data.focusPlaceId;
-		if (!id || id === focusHandledFor) return;
+		if (!id || id === untrack(() => focusHandledFor)) return;
 
 		const place = places.places.find((p) => p.id === id);
 		if (!place) {
