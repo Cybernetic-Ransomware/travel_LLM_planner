@@ -4,19 +4,24 @@
 	import {
 		skipReasonMessage,
 		isLowPriorityDrop,
-		isTimeWindowInfeasible
+		isTimeWindowInfeasible,
+		isNoCoordinates
 	} from '$lib/utils/skippedReasons.js';
 
 	let {
 		skipped,
 		onmarkmustsee,
+		onenrich,
 		promotedPlaceIds,
-		promotingPlaceId
+		updatingPlaceId,
+		placeUpdateKind
 	}: {
 		skipped: SkippedPlace[];
 		onmarkmustsee?: (placeId: string) => void | Promise<void>;
+		onenrich?: (placeId: string) => void | Promise<void>;
 		promotedPlaceIds?: Set<string>;
-		promotingPlaceId?: string | null;
+		updatingPlaceId?: string | null;
+		placeUpdateKind?: 'priority' | 'enrichment' | null;
 	} = $props();
 
 	const hasLowPriorityDrop = $derived(skipped.some((s) => isLowPriorityDrop(s.reason)));
@@ -40,10 +45,10 @@
 						<button
 							type="button"
 							onclick={() => onmarkmustsee(s.place_id)}
-							disabled={!!promotingPlaceId}
+							disabled={!!updatingPlaceId}
 							class="mt-1 rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900"
 						>
-							{promotingPlaceId === s.place_id
+							{updatingPlaceId === s.place_id && placeUpdateKind === 'priority'
 								? m.optimizer_preference_updating()
 								: m.skipped_action_mark_must_see()}
 						</button>
@@ -55,6 +60,18 @@
 						>
 							{m.skipped_action_edit_hours()}
 						</a>
+					{/if}
+					{#if isNoCoordinates(s.reason) && onenrich}
+						<button
+							type="button"
+							onclick={() => onenrich(s.place_id)}
+							disabled={!!updatingPlaceId}
+							class="mt-1 rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900"
+						>
+							{updatingPlaceId === s.place_id && placeUpdateKind === 'enrichment'
+								? m.optimizer_enrich_updating()
+								: m.skipped_action_enrich_location()}
+						</button>
 					{/if}
 				</li>
 			{/each}

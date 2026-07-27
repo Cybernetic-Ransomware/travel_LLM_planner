@@ -39,3 +39,10 @@ export function enrichPlaces(limit: number): Promise<EnrichResponse> {
 		timeout: 120_000
 	});
 }
+
+export function enrichPlace(id: string): Promise<PlaceOut> {
+	return apiFetch<PlaceOut>(`/core/gmaps/places/${encodeURIComponent(id)}/enrich`, {
+		method: 'POST',
+		timeout: 120_000
+	});
+}

@@ -4,7 +4,7 @@ import { userEvent } from 'vitest/browser';
 import Page from './+page.svelte';
 import { optimizeRoute } from '$lib/api/optimizer.js';
 import { updateTrip } from '$lib/api/trips.js';
-import { patchPlace } from '$lib/api/gmaps.js';
+import { patchPlace, enrichPlace } from '$lib/api/gmaps.js';
 import { ApiError } from '$lib/api/client.js';
 import * as m from '$lib/paraglide/messages.js';
 import type { OptimizeResponse, PlaceOut, SkippedPlace, TripOut } from '$lib/types/index.js';
@@ -20,7 +20,8 @@ vi.mock('$lib/api/trips.js', () => ({
 }));
 
 vi.mock('$lib/api/gmaps.js', () => ({
-	patchPlace: vi.fn()
+	patchPlace: vi.fn(),
+	enrichPlace: vi.fn()
 }));
 
 const mockPlace = (id: string, name: string): PlaceOut => ({
@@ -340,5 +341,172 @@ describe('/optimizer page — mark place as must-see', () => {
 			const text = (summary.element().textContent ?? '').replace(/\s+/g, ' ').trim();
 			expect(text).toContain(`1/1 ${m.results_summary_must_see_kept()}`);
 		});
+	});
+});
+
+describe('/optimizer page — enrich place', () => {
+	const skipped: SkippedPlace[] = [{ place_id: 'p1', name: 'Wawel', reason: 'NO_COORDINATES' }];
+	const resultWithSkip: OptimizeResponse = { ...mockResult, skipped };
+
+	const enrichedPlaceWithCoordinates: PlaceOut = {
+		...mockPlace('p1', 'Wawel'),
+		lat: 50.0,
+		lng: 20.0
+	};
+	const enrichedPlaceWithoutCoordinates: PlaceOut = {
+		...mockPlace('p1', 'Wawel'),
+		lat: null,
+		lng: null
+	};
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.mocked(optimizeRoute).mockResolvedValue(resultWithSkip);
+		vi.mocked(enrichPlace).mockResolvedValue(enrichedPlaceWithCoordinates);
+	});
+
+	it('calls enrichPlace with the place id when clicked', async () => {
+		const { getByRole } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+		expect(enrichPlace).toHaveBeenCalledWith('p1');
+	});
+
+	it('re-runs optimization with the original request after enrichment resolves coordinates', async () => {
+		const { getByRole } = await renderAndOptimize();
+		const originalRequest = vi.mocked(optimizeRoute).mock.calls[0][0];
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+		await vi.waitFor(() => expect(optimizeRoute).toHaveBeenCalledTimes(2));
+		expect(optimizeRoute).toHaveBeenLastCalledWith(originalRequest);
+	});
+
+	it('shows the rerun-success message after enrichment resolves coordinates', async () => {
+		const { getByRole, getByText } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+		await expect.element(getByText(m.optimizer_enrich_success_and_rerun())).toBeVisible();
+	});
+
+	it('shows a warning and does not re-run when coordinates are still missing', async () => {
+		vi.mocked(enrichPlace).mockResolvedValueOnce(enrichedPlaceWithoutCoordinates);
+		const { getByRole, getByText } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+		await expect.element(getByText(m.optimizer_enrich_no_coordinates())).toBeVisible();
+		expect(optimizeRoute).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows the ApiError detail on failure and does not re-run', async () => {
+		vi.mocked(enrichPlace).mockRejectedValueOnce(
+			new ApiError(502, 'Google Places could not resolve this location')
+		);
+		const { getByRole, getByText } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+		await expect.element(getByText('Google Places could not resolve this location')).toBeVisible();
+		expect(optimizeRoute).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows a generic failure message on unexpected error', async () => {
+		vi.mocked(enrichPlace).mockRejectedValueOnce(new Error('boom'));
+		const { getByRole, getByText } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+		await expect.element(getByText(m.optimizer_enrich_failed())).toBeVisible();
+		expect(optimizeRoute).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps the previous result when the rerun fails after enrichment', async () => {
+		vi.mocked(optimizeRoute)
+			.mockResolvedValueOnce(resultWithSkip)
+			.mockRejectedValueOnce(new ApiError(500, 'boom'));
+
+		const { getByRole, getByText } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+
+		await expect.element(getByText(m.optimizer_enrich_success_rerun_failed())).toBeVisible();
+		await expect.element(getByText(m.skipped_action_enrich_location())).toBeVisible();
+	});
+
+	it('disables the button and blocks other actions while enriching', async () => {
+		let resolveEnrich!: (place: PlaceOut) => void;
+		vi.mocked(enrichPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveEnrich = resolve;
+				})
+		);
+
+		const { getByRole, getByTestId } = await renderAndOptimize();
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+
+		const button = getByRole('button', { name: m.optimizer_enrich_updating() });
+		await expect.element(button).toBeVisible();
+		await expect.element(button).toBeDisabled();
+
+		const optimizeButton = getByTestId('optimize-submit');
+		await expect.element(optimizeButton).toBeDisabled();
+
+		resolveEnrich(enrichedPlaceWithCoordinates);
+		await vi.waitFor(() => expect(enrichPlace).toHaveBeenCalledTimes(1));
+	});
+});
+
+describe('/optimizer page — cross-action notices', () => {
+	const skipped: SkippedPlace[] = [
+		{ place_id: 'p1', name: 'Wawel', reason: 'DROPPED_LOW_PRIORITY' },
+		{ place_id: 'p2', name: 'Sukiennice', reason: 'NO_COORDINATES' }
+	];
+	const resultWithSkip: OptimizeResponse = { ...mockResult, skipped };
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.mocked(optimizeRoute).mockResolvedValue(resultWithSkip);
+	});
+
+	it('clears a leftover preference notice when starting enrichment', async () => {
+		vi.mocked(patchPlace).mockResolvedValueOnce({
+			...mockPlace('p1', 'Wawel'),
+			priority: 'must_see'
+		});
+		const { getByRole, getByText } = await renderAndOptimize();
+
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+		await expect.element(getByText(m.optimizer_preference_updated_and_rerun())).toBeVisible();
+
+		let resolveEnrich!: (place: PlaceOut) => void;
+		vi.mocked(enrichPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveEnrich = resolve;
+				})
+		);
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+
+		expect(getByText(m.optimizer_preference_updated_and_rerun()).query()).toBeNull();
+
+		resolveEnrich({ ...mockPlace('p2', 'Sukiennice'), lat: 50.0, lng: 20.0 });
+		await vi.waitFor(() => expect(enrichPlace).toHaveBeenCalledTimes(1));
+	});
+
+	it('clears a leftover enrich notice when starting a must-see promotion', async () => {
+		vi.mocked(enrichPlace).mockResolvedValueOnce({
+			...mockPlace('p2', 'Sukiennice'),
+			lat: null,
+			lng: null
+		});
+		const { getByRole, getByText } = await renderAndOptimize();
+
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+		await expect.element(getByText(m.optimizer_enrich_no_coordinates())).toBeVisible();
+
+		let resolvePatch!: (place: PlaceOut) => void;
+		vi.mocked(patchPlace).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePatch = resolve;
+				})
+		);
+		await userEvent.click(getByRole('button', { name: m.skipped_action_mark_must_see() }));
+
+		expect(getByText(m.optimizer_enrich_no_coordinates()).query()).toBeNull();
+
+		resolvePatch({ ...mockPlace('p1', 'Wawel'), priority: 'must_see' });
+		await vi.waitFor(() => expect(patchPlace).toHaveBeenCalledTimes(1));
 	});
 });

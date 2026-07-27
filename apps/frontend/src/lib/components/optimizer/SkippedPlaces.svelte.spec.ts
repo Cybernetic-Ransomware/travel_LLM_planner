@@ -143,7 +143,8 @@ describe('SkippedPlaces', () => {
 			props: {
 				skipped: [mockSkipped('p1', 'DROPPED_LOW_PRIORITY')],
 				onmarkmustsee: vi.fn(),
-				promotingPlaceId: 'p1'
+				updatingPlaceId: 'p1',
+				placeUpdateKind: 'priority'
 			}
 		});
 
@@ -160,7 +161,8 @@ describe('SkippedPlaces', () => {
 					mockSkipped('p2', 'DROPPED_LOW_PRIORITY')
 				],
 				onmarkmustsee: vi.fn(),
-				promotingPlaceId: 'p1'
+				updatingPlaceId: 'p1',
+				placeUpdateKind: 'priority'
 			}
 		});
 
@@ -170,5 +172,86 @@ describe('SkippedPlaces', () => {
 		const p2Button = getByRole('button', { name: m.skipped_action_mark_must_see() });
 		await expect.element(p2Button).toBeVisible();
 		await expect.element(p2Button).toBeDisabled();
+	});
+
+	it('shows enrich-location action for missing coordinates', async () => {
+		const onenrich = vi.fn();
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [mockSkipped('p1', 'NO_COORDINATES')],
+				onenrich
+			}
+		});
+
+		await expect
+			.element(getByRole('button', { name: m.skipped_action_enrich_location() }))
+			.toBeVisible();
+	});
+
+	it.each(REASON_CASES.filter(([reason]) => reason !== 'NO_COORDINATES').map(([reason]) => reason))(
+		'hides enrich-location action for %s',
+		(reason) => {
+			const { getByRole } = render(SkippedPlaces, {
+				props: {
+					skipped: [mockSkipped('p1', reason)],
+					onenrich: vi.fn()
+				}
+			});
+
+			expect(getByRole('button', { name: m.skipped_action_enrich_location() }).query()).toBeNull();
+		}
+	);
+
+	it('hides enrich-location action when no callback is provided', () => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: { skipped: [mockSkipped('p1', 'NO_COORDINATES')] }
+		});
+
+		expect(getByRole('button', { name: m.skipped_action_enrich_location() }).query()).toBeNull();
+	});
+
+	it('calls onenrich with the place id when clicked', async () => {
+		const onenrich = vi.fn();
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [mockSkipped('p1', 'NO_COORDINATES')],
+				onenrich
+			}
+		});
+
+		await userEvent.click(getByRole('button', { name: m.skipped_action_enrich_location() }));
+
+		expect(onenrich).toHaveBeenCalledWith('p1');
+	});
+
+	it('disables and shows the updating label for the place currently being enriched', async () => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [mockSkipped('p1', 'NO_COORDINATES')],
+				onenrich: vi.fn(),
+				updatingPlaceId: 'p1',
+				placeUpdateKind: 'enrichment'
+			}
+		});
+
+		const button = getByRole('button', { name: m.optimizer_enrich_updating() });
+		await expect.element(button).toBeVisible();
+		await expect.element(button).toBeDisabled();
+	});
+
+	it('disables the enrich-location action while a different action is running', async () => {
+		const { getByRole } = render(SkippedPlaces, {
+			props: {
+				skipped: [mockSkipped('p1', 'DROPPED_LOW_PRIORITY'), mockSkipped('p2', 'NO_COORDINATES')],
+				onmarkmustsee: vi.fn(),
+				onenrich: vi.fn(),
+				updatingPlaceId: 'p1',
+				placeUpdateKind: 'priority'
+			}
+		});
+
+		const enrichButton = getByRole('button', { name: m.skipped_action_enrich_location() });
+		await expect.element(enrichButton).toBeVisible();
+		await expect.element(enrichButton).toBeDisabled();
 	});
 });

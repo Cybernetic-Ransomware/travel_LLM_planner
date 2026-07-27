@@ -28,6 +28,16 @@ class MatrixUnavailableError(HTTPException):
         super().__init__(status_code=502, detail=detail)
 
 
+class PlaceResolutionError(HTTPException):
+    """Raised when Google Places cannot locate a place during single-place enrichment."""
+
+    def __init__(self, status: str | None, error: str | None = None) -> None:
+        detail = f"Google Places could not resolve this location: {status or 'NOT_FOUND'}"
+        if error:
+            detail += f" — {error}"
+        super().__init__(status_code=502, detail=detail)
+
+
 class InvalidHourRangeError(HTTPException):
     """Raised when a partial patch would leave a place with preferred_hour_from >= preferred_hour_to."""
 

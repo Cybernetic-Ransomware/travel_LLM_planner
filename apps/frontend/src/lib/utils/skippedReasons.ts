@@ -23,3 +23,7 @@ export function isLowPriorityDrop(reason: string): boolean {
 export function isTimeWindowInfeasible(reason: string): boolean {
 	return reason === 'TIME_WINDOW_INFEASIBLE';
 }
+
+export function isNoCoordinates(reason: string): boolean {
+	return reason === 'NO_COORDINATES';
+}

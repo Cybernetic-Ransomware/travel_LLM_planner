@@ -8,14 +8,18 @@
 		result,
 		places,
 		onmarkmustsee,
+		onenrich,
 		promotedPlaceIds,
-		promotingPlaceId
+		updatingPlaceId,
+		placeUpdateKind
 	}: {
 		result: OptimizeResponse;
 		places?: PlaceOut[];
 		onmarkmustsee?: (placeId: string) => void | Promise<void>;
+		onenrich?: (placeId: string) => void | Promise<void>;
 		promotedPlaceIds?: Set<string>;
-		promotingPlaceId?: string | null;
+		updatingPlaceId?: string | null;
+		placeUpdateKind?: 'priority' | 'enrichment' | null;
 	} = $props();
 
 	const plannedIds = $derived(new Set(result.steps.map((s) => s.place_id)));
@@ -79,5 +83,12 @@
 		{/each}
 	</div>
 
-	<SkippedPlaces skipped={result.skipped} {onmarkmustsee} {promotedPlaceIds} {promotingPlaceId} />
+	<SkippedPlaces
+		skipped={result.skipped}
+		{onmarkmustsee}
+		{onenrich}
+		{promotedPlaceIds}
+		{updatingPlaceId}
+		{placeUpdateKind}
+	/>
 </div>
