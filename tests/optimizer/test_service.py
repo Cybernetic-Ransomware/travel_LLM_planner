@@ -260,3 +260,53 @@ class TestAnchorLegs:
 
         assert matrix is None
         assert status == "PERMISSION_DENIED"
+
+
+_SINGLE_COORD = [("p1", 50.061, 19.938)]
+
+
+@pytest.mark.unit
+class TestSinglePlaceMatrix:
+    """A single real place has no real x real pair — the square API call is skipped."""
+
+    async def test_no_anchors_makes_zero_calls(self, test_db, routes_manager):
+        with (
+            patch("src.optimizer.matrix.service.load_cached_matrix", new=AsyncMock(return_value=None)),
+            patch("src.optimizer.matrix.service.store_matrix", new=AsyncMock()) as mock_store,
+            patch.object(routes_manager, "compute_matrix", new=AsyncMock()) as mock_api,
+        ):
+            matrix, status, _ = await get_matrix(test_db, routes_manager, _SINGLE_COORD, TransportMode.WALK)
+
+        assert status == "OK"
+        assert len(matrix) == 0
+        mock_api.assert_not_called()
+        mock_store.assert_not_called()
+
+    async def test_start_and_end_anchors_make_two_calls_not_three(self, test_db, routes_manager):
+        start_entry = MatrixEntry("__start__", "p1", 400, 200)
+        end_entry = MatrixEntry("p1", "__end__", 500, 300)
+
+        def fake_compute_matrix(coords, mode, departure_time=None, dest_coords=None):
+            if dest_coords is _SINGLE_COORD:
+                return [start_entry], "OK", None
+            return [end_entry], "OK", None
+
+        with (
+            patch("src.optimizer.matrix.service.load_cached_matrix", new=AsyncMock(return_value=None)),
+            patch("src.optimizer.matrix.service.store_matrix", new=AsyncMock()) as mock_store,
+            patch.object(routes_manager, "compute_matrix", new=AsyncMock(side_effect=fake_compute_matrix)) as mock_api,
+        ):
+            matrix, status, _ = await get_matrix(
+                test_db,
+                routes_manager,
+                _SINGLE_COORD,
+                TransportMode.WALK,
+                start_anchor=_START_ANCHOR,
+                end_anchor=_END_ANCHOR,
+            )
+
+        assert status == "OK"
+        assert mock_api.await_count == 2  # start leg + end leg, no square real x real call
+        assert matrix.duration_s("__start__", "p1") == 200
+        assert matrix.duration_s("p1", "__end__") == 300
+        mock_store.assert_not_called()

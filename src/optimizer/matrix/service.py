@@ -26,7 +26,7 @@ async def get_matrix(
     matrix.
 
     start_anchor/end_anchor, when given, add a day's start/end location (e.g. a
-    hotel) that is not a real place with a stable Google Place ID. Their legs are
+    hotel) that is not one of the app's real places. Their legs are
     fetched as separate, direction-limited requests (start_anchor -> place_coords
     outgoing only, place_coords -> end_anchor incoming only) merged into the
     result, rather than folded into the square real-place matrix — doing the
@@ -58,6 +58,10 @@ async def get_matrix(
     if cached is not None:
         entry_map: dict[tuple[str, str], MatrixEntry] = dict(cached.entries)
         computed_at = cached.computed_at
+    elif len(place_coords) == 1:
+        # A single place has only a self-pair — the square API call would always be empty.
+        entry_map = {}
+        computed_at = pendulum.now("UTC")
     else:
         entries, status, error = await manager.compute_matrix(place_coords, transport_mode, departure_time)
         if entries is None:

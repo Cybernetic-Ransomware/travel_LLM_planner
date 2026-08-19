@@ -28,7 +28,7 @@ logger = setup_logger(__name__, "optimizer")
 # OptimizeRequest and MultiDayRequest cap requests at 50 places.
 _PRIORITY_WEIGHTS = {"must_see": 1_000_000, "normal": 1_000, "optional": 1}
 
-# Internal day-start/day-end anchor ids (e.g. a hotel) — never real Google Place ids, never exposed publicly.
+# Sentinel ids for day-start/day-end anchors — must never collide with real node/place ids, never exposed publicly.
 _START_ANCHOR_ID = "__start__"
 _END_ANCHOR_ID = "__end__"
 

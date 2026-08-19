@@ -572,6 +572,54 @@ class TestOptimizeRouteAnchors:
         assert result.travel_to_end_s == 300
         assert result.total_travel_time_s == 300 + 500 + 300
 
+    async def test_single_place_no_anchors(self, test_db, google_routes_manager):
+        docs = [_place("p1")]
+        matrix = DistanceMatrix({}, TransportMode.WALK, _NOW)
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(place_ids=["p1"], transport_mode=TransportMode.WALK)
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert len(result.steps) == 1
+        assert result.steps[0].place_id == "p1"
+        assert result.steps[0].travel_from_previous_s == 0
+        assert result.travel_to_end_s == 0
+
+    async def test_single_place_start_only(self, test_db, google_routes_manager):
+        docs = [_place("p1")]
+        matrix = _anchor_matrix(("__start__", "p1", 500))
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(place_ids=["p1"], transport_mode=TransportMode.WALK, start_lat=50.0, start_lng=20.0)
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert len(result.steps) == 1
+        assert result.steps[0].place_id == "p1"
+        assert result.steps[0].travel_from_previous_s == 500
+        assert result.travel_to_end_s == 0
+
+    async def test_single_place_end_only(self, test_db, google_routes_manager):
+        docs = [_place("p1")]
+        matrix = _anchor_matrix(("p1", "__end__", 700))
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(place_ids=["p1"], transport_mode=TransportMode.WALK, end_lat=51.0, end_lng=21.0)
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert len(result.steps) == 1
+        assert result.steps[0].place_id == "p1"
+        assert result.steps[0].travel_from_previous_s == 0
+        assert result.travel_to_end_s == 700
+
     async def test_single_place_with_anchors_has_nonzero_travel(self, test_db, google_routes_manager):
         """Regression: a day with exactly one place must not teleport — see multi_day_service fix."""
         docs = [_place("p1")]
