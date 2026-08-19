@@ -10,6 +10,7 @@ from src.optimizer.matrix.models import DistanceMatrix, MatrixEntry, TransportMo
 from src.optimizer.solver.engine import (
     is_feasible,
     nearest_neighbor,
+    nn_from_start,
     schedule_route,
     two_opt,
 )
@@ -441,3 +442,111 @@ class TestScheduleRouteSplitHours:
         # Let's make visit 5h to exceed both segments
         result = schedule_route(["A", "B"], m, tw, {"A": 0, "B": 5 * 3600}, _9H)
         assert result == []
+
+
+@pytest.mark.unit
+class TestTwoOptPinEnd:
+    """pin_end must keep the last route position fixed for day-end location anchors."""
+
+    @staticmethod
+    def _matrix_favoring_tail_reversal() -> DistanceMatrix:
+        """A→B is deliberately expensive; reversing the whole tail (A,D,C,B) is cheaper."""
+        return _matrix(
+            _entry("A", "B", 1000),
+            _entry("B", "A", 1000),
+            _entry("B", "C", 100),
+            _entry("C", "B", 100),
+            _entry("C", "D", 100),
+            _entry("D", "C", 100),
+            _entry("A", "D", 100),
+            _entry("D", "A", 100),
+            _entry("A", "C", 900),
+            _entry("C", "A", 900),
+            _entry("B", "D", 900),
+            _entry("D", "B", 900),
+        )
+
+    def test_without_pin_end_last_element_can_move(self):
+        m = self._matrix_favoring_tail_reversal()
+        tw = {n: TimeWindow(open_s=_9H, close_s=_21H) for n in "ABCD"}
+        result = two_opt(["A", "B", "C", "D"], m, tw, {}, _9H, _21H)
+        assert result[-1] != "D"
+
+    def test_pin_end_keeps_last_element_fixed(self):
+        m = self._matrix_favoring_tail_reversal()
+        tw = {n: TimeWindow(open_s=_9H, close_s=_21H) for n in "ABCD"}
+        result = two_opt(["A", "B", "C", "D"], m, tw, {}, _9H, _21H, pin_end=True)
+        assert result[-1] == "D"
+
+    def test_position_zero_never_moves(self):
+        """Characterization: two_opt never relocates route[0] (i always starts at 0)."""
+        m = _matrix(
+            _entry("A", "B", 100),
+            _entry("B", "C", 100),
+            _entry("C", "D", 100),
+            _entry("D", "A", 100),
+            _entry("A", "C", 300),
+            _entry("C", "B", 50),
+            _entry("B", "D", 300),
+            _entry("D", "C", 100),
+            _entry("B", "A", 100),
+            _entry("C", "A", 300),
+            _entry("D", "B", 300),
+            _entry("A", "D", 100),
+        )
+        tw = {n: TimeWindow(open_s=_9H, close_s=_21H) for n in "ABCD"}
+        result = two_opt(["A", "C", "B", "D"], m, tw, {}, _9H, _21H)
+        assert result[0] == "A"
+
+
+@pytest.mark.unit
+class TestNnFromStartEndAnchor:
+    """end_anchor must be appended as a forced final stop, with lookahead during construction."""
+
+    def test_end_anchor_appended_when_reachable(self):
+        m = _matrix(_entry("START", "X", 300), _entry("X", "END", 300))
+        route, skipped = nn_from_start("START", ["X"], m, {}, {}, _9H, _21H, end_anchor="END")
+        assert route == ["START", "X", "END"]
+        assert skipped == []
+
+    def test_lookahead_rejects_candidate_that_would_strand_end(self):
+        """Y is nearer but visiting it would strand END; X is farther but keeps END reachable."""
+        day_start = _9H
+        day_end = _9H + 3600  # a tight 1-hour day
+        m = _matrix(
+            _entry("START", "X", 1000),
+            _entry("START", "Y", 100),
+            _entry("X", "END", 100),
+            _entry("Y", "END", 4000),
+        )
+        route, skipped = nn_from_start("START", ["X", "Y"], m, {}, {}, day_start, day_end, end_anchor="END")
+        assert route == ["START", "X", "END"]
+        assert skipped == ["Y"]
+
+    def test_end_anchor_unreachable_returns_empty(self):
+        """No edge at all back to END — the whole attempt is infeasible, not a partial route."""
+        m = _matrix(_entry("START", "X", 100))
+        route, skipped = nn_from_start("START", ["X"], m, {}, {}, _9H, _9H + 3600, end_anchor="END")
+        assert route == []
+        assert skipped == ["X"]
+
+    def test_no_end_anchor_behaves_as_before(self):
+        m = _matrix(_entry("START", "X", 300))
+        route, skipped = nn_from_start("START", ["X"], m, {}, {}, _9H, _21H)
+        assert route == ["START", "X"]
+        assert skipped == []
+
+
+@pytest.mark.unit
+class TestNearestNeighborEndAnchor:
+    def test_forwards_end_anchor_to_every_candidate_start(self):
+        m = _matrix(
+            _entry("A", "B", 100),
+            _entry("B", "A", 100),
+            _entry("A", "END", 100),
+            _entry("B", "END", 100),
+        )
+        route, skipped = nearest_neighbor(["A", "B"], m, {}, {}, _9H, _21H, end_anchor="END")
+        assert route[-1] == "END"
+        assert skipped == []
+        assert sorted(route[:-1]) == ["A", "B"]

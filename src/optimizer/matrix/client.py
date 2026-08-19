@@ -55,13 +55,18 @@ class GoogleRoutesManager:
         place_coords: list[tuple[str, float, float]],
         transport_mode: TransportMode,
         departure_time: datetime | None = None,
+        dest_coords: list[tuple[str, float, float]] | None = None,
     ) -> tuple[list[MatrixEntry] | None, str | None, str | None]:
-        """Fetch travel costs for all pairs from the Routes API.
+        """Fetch travel costs for all origin/destination pairs from the Routes API.
 
         Args:
-            place_coords: List of (place_id, lat, lng) tuples.
+            place_coords: List of (place_id, lat, lng) tuples used as origins. Also used
+                as destinations when dest_coords is omitted, producing a square matrix.
             transport_mode: One of WALK, DRIVE, BICYCLE, TRANSIT.
             departure_time: Required for TRANSIT; used as the representative departure time.
+            dest_coords: Optional separate list of (place_id, lat, lng) tuples used as
+                destinations, for asymmetric origin/destination requests (e.g. a single
+                anchor as origin against many real places as destinations).
 
         Returns:
             (entries, status, error_message). Status is "OK" on success.
@@ -69,13 +74,14 @@ class GoogleRoutesManager:
         if not self._api_key:
             return None, "MISSING_API_KEY", None
 
-        waypoints = [
-            {"waypoint": {"location": {"latLng": {"latitude": lat, "longitude": lng}}}} for _, lat, lng in place_coords
-        ]
+        destination_coords = dest_coords if dest_coords is not None else place_coords
+
+        def _waypoints(coords: list[tuple[str, float, float]]) -> list[dict[str, Any]]:
+            return [{"waypoint": {"location": {"latLng": {"latitude": lat, "longitude": lng}}}} for _, lat, lng in coords]
 
         body: dict[str, Any] = {
-            "origins": waypoints,
-            "destinations": waypoints,
+            "origins": _waypoints(place_coords),
+            "destinations": _waypoints(destination_coords),
             "travelMode": transport_mode.value,
         }
 
@@ -108,7 +114,8 @@ class GoogleRoutesManager:
             return None, "UNEXPECTED_RESPONSE", "Expected a JSON array from computeRouteMatrix"
 
         entries: list[MatrixEntry] = []
-        ids = [place_id for place_id, _, _ in place_coords]
+        origin_ids = [place_id for place_id, _, _ in place_coords]
+        dest_ids = [place_id for place_id, _, _ in destination_coords]
 
         for item in raw_entries:
             item_status = item.get("status", {})
@@ -118,13 +125,15 @@ class GoogleRoutesManager:
             origin_idx: int = item["originIndex"]
             dest_idx: int = item["destinationIndex"]
 
-            if origin_idx == dest_idx:
+            origin_id = origin_ids[origin_idx]
+            dest_id = dest_ids[dest_idx]
+            if origin_id == dest_id:
                 continue
 
             duration_str: str = item.get("duration", "0s")
             duration_s = int(duration_str.rstrip("s")) if duration_str.endswith("s") else 0
             distance_m: int = item.get("distanceMeters", 0)
 
-            entries.append(MatrixEntry(ids[origin_idx], ids[dest_idx], distance_m, duration_s))
+            entries.append(MatrixEntry(origin_id, dest_id, distance_m, duration_s))
 
         return entries, "OK", None

@@ -201,9 +201,7 @@ class TestPartitionPriorityOrder:
 
 def _opening_hours(*google_days: int) -> dict:
     """Build a minimal opening_hours dict with periods for the given Google weekday numbers."""
-    return {
-        "periods": [{"open": {"day": d, "hour": 9}, "close": {"day": d, "hour": 17}} for d in google_days]
-    }
+    return {"periods": [{"open": {"day": d, "hour": 9}, "close": {"day": d, "hour": 17}} for d in google_days]}
 
 
 # 2026-03-30 = Monday (Python weekday 0, Google weekday 1)
@@ -467,3 +465,119 @@ class TestOptimizeTrip:
             result = await optimize_trip(_mock_db(), _mock_manager(), req)
 
         assert result.days[1].steps == []
+
+
+@pytest.mark.unit
+class TestOptimizeTripAnchors:
+    async def test_single_place_day_routes_through_optimize_route(self):
+        """Regression: the removed _build_single_place_plan hardcoded zero travel cost."""
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 10)), _day_config(date(2026, 6, 11))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=1)],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        assert mock_optimize.call_count == 2
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert day0_request.place_ids == ["p1"]
+
+    async def test_travel_to_end_s_propagated_to_day_plan(self):
+        docs = [_place("p1"), _place("p2")]
+        response = OptimizeResponse(
+            steps=[],
+            total_travel_time_s=100,
+            total_visit_time_min=0,
+            total_wait_min=0,
+            transport_mode=TransportMode.WALK,
+            skipped=[],
+            travel_to_end_s=250,
+        )
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=AsyncMock(return_value=response)),
+        ):
+            req = _req(places=[_pref("p1", day_index=0), _pref("p2", day_index=0)])
+            result = await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        assert result.days[0].travel_to_end_s == 250
+
+    async def test_per_day_anchor_overrides_trip_level_default(self):
+        docs = [_place("p1"), _place("p2"), _place("p3"), _place("p4")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[
+                    DayConfig(date=date(2026, 6, 10), start_lat=1.0, start_lng=2.0),
+                    _day_config(date(2026, 6, 11)),
+                ],
+                places=[
+                    _pref("p1", day_index=0),
+                    _pref("p2", day_index=0),
+                    _pref("p3", day_index=1),
+                    _pref("p4", day_index=1),
+                ],
+                start_lat=9.0,
+                start_lng=9.0,
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        day1_request = mock_optimize.call_args_list[1][0][2]
+        assert (day0_request.start_lat, day0_request.start_lng) == (1.0, 2.0)  # per-day override wins
+        assert (day1_request.start_lat, day1_request.start_lng) == (9.0, 9.0)  # falls back to trip-level
+
+    async def test_per_day_end_anchor_overrides_trip_level_default(self):
+        docs = [_place("p1"), _place("p2"), _place("p3"), _place("p4")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[
+                    DayConfig(date=date(2026, 6, 10), end_lat=3.0, end_lng=4.0),
+                    _day_config(date(2026, 6, 11)),
+                ],
+                places=[
+                    _pref("p1", day_index=0),
+                    _pref("p2", day_index=0),
+                    _pref("p3", day_index=1),
+                    _pref("p4", day_index=1),
+                ],
+                end_lat=9.0,
+                end_lng=9.0,
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        day1_request = mock_optimize.call_args_list[1][0][2]
+        assert (day0_request.end_lat, day0_request.end_lng) == (3.0, 4.0)  # per-day override wins
+        assert (day1_request.end_lat, day1_request.end_lng) == (9.0, 9.0)  # falls back to trip-level
+
+    async def test_no_anchors_set_leaves_request_fields_none(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(places=[_pref("p1", day_index=0), _pref("p2", day_index=0)])
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert day0_request.start_lat is None
+        assert day0_request.end_lat is None

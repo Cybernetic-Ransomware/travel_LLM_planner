@@ -224,3 +224,53 @@ async def test_waypoints_built_from_coords(httpx_mock, manager):
     first_origin = body["origins"][0]["waypoint"]["location"]["latLng"]
     assert first_origin["latitude"] == 50.061
     assert first_origin["longitude"] == 19.938
+
+
+_ANCHOR_COORD = [("start_anchor", 50.070, 19.920)]
+
+
+@pytest.mark.unit
+async def test_dest_coords_omitted_defaults_to_symmetric_matrix(httpx_mock, manager):
+    httpx_mock.add_response(url=_MATRIX_URL, json=[])
+
+    await manager.compute_matrix(_PLACE_COORDS, TransportMode.WALK)
+
+    body = json.loads(httpx_mock.get_requests()[0].content)
+    assert body["origins"] == body["destinations"]
+
+
+@pytest.mark.unit
+async def test_dest_coords_builds_asymmetric_origins_destinations(httpx_mock, manager):
+    httpx_mock.add_response(url=_MATRIX_URL, json=[])
+
+    await manager.compute_matrix(_ANCHOR_COORD, TransportMode.WALK, dest_coords=_PLACE_COORDS)
+
+    body = json.loads(httpx_mock.get_requests()[0].content)
+    assert len(body["origins"]) == 1
+    assert len(body["destinations"]) == 3
+
+
+@pytest.mark.unit
+async def test_dest_coords_entries_use_separate_id_lists(httpx_mock, manager):
+    raw = [_make_entry(0, 0, 500, 300), _make_entry(0, 1, 600, 400)]
+    httpx_mock.add_response(url=_MATRIX_URL, json=raw)
+
+    entries, status, _ = await manager.compute_matrix(_ANCHOR_COORD, TransportMode.WALK, dest_coords=_PLACE_COORDS[:2])
+
+    assert status == "OK"
+    ids = {(e.origin_id, e.dest_id) for e in entries}
+    assert ("start_anchor", "place_a") in ids
+    assert ("start_anchor", "place_b") in ids
+
+
+@pytest.mark.unit
+async def test_numeric_index_match_not_skipped_when_ids_differ(httpx_mock, manager):
+    """originIndex==destinationIndex is only a self-pair when the resolved ids match too."""
+    httpx_mock.add_response(url=_MATRIX_URL, json=[_make_entry(0, 0, 500, 300)])
+
+    entries, status, _ = await manager.compute_matrix(_ANCHOR_COORD, TransportMode.WALK, dest_coords=_PLACE_COORDS[:1])
+
+    assert status == "OK"
+    assert len(entries) == 1
+    assert entries[0].origin_id == "start_anchor"
+    assert entries[0].dest_id == "place_a"

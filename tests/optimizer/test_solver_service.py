@@ -310,12 +310,16 @@ async def test_split_hours_no_visit_scheduled_in_break(test_db, google_routes_ma
 
     docs = [
         _place("p1", visit_min=30),  # no split hours
-        _place("p2", visit_min=30, opening_hours={
-            "periods": [
-                {"open": {"day": 1, "hour": 9, "minute": 0}, "close": {"day": 1, "hour": 13, "minute": 0}},
-                {"open": {"day": 1, "hour": 15, "minute": 0}, "close": {"day": 1, "hour": 18, "minute": 0}},
-            ]
-        }),
+        _place(
+            "p2",
+            visit_min=30,
+            opening_hours={
+                "periods": [
+                    {"open": {"day": 1, "hour": 9, "minute": 0}, "close": {"day": 1, "hour": 13, "minute": 0}},
+                    {"open": {"day": 1, "hour": 15, "minute": 0}, "close": {"day": 1, "hour": 18, "minute": 0}},
+                ]
+            },
+        ),
     ]
     matrix = _make_matrix(("p1", "p2", 600), ("p2", "p1", 600))
 
@@ -458,3 +462,223 @@ async def test_optimize_skip_reason_matrix_incomplete(test_db, google_routes_man
     p3_skips = [s for s in result.skipped if s.place_id == "p3"]
     assert p3_skips, "p3 should be in skipped"
     assert p3_skips[0].reason == "MATRIX_INCOMPLETE"
+
+
+def _anchor_matrix(*pairs: tuple[str, str, int]) -> DistanceMatrix:
+    """Directed matrix (no auto-reverse) — anchor legs are direction-limited by design."""
+    entries = {(o, d): MatrixEntry(o, d, t * 80, t) for o, d, t in pairs}
+    return DistanceMatrix(entries, TransportMode.WALK, _NOW)
+
+
+@pytest.mark.unit
+class TestOptimizeRouteAnchors:
+    """End-to-end anchor behaviour: geometry only, no leak into public steps/skipped."""
+
+    async def test_no_anchors_behaves_as_before(self, test_db, google_routes_manager):
+        docs = [_place("p1"), _place("p2")]
+        matrix = _full_matrix(("p1", "p2", 600))
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(place_ids=["p1", "p2"], transport_mode=TransportMode.WALK)
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert len(result.steps) == 2
+        assert result.travel_to_end_s == 0
+
+    async def test_start_only_first_step_travels_from_anchor(self, test_db, google_routes_manager):
+        docs = [_place("p1"), _place("p2")]
+        matrix = _anchor_matrix(
+            ("__start__", "p1", 400),
+            ("__start__", "p2", 900),
+            ("p1", "p2", 600),
+            ("p2", "p1", 600),
+        )
+        mock_get_matrix = AsyncMock(return_value=(matrix, "OK", None))
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=mock_get_matrix),
+        ):
+            request = OptimizeRequest(
+                place_ids=["p1", "p2"], transport_mode=TransportMode.WALK, start_lat=50.0, start_lng=20.0
+            )
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        # __start__/__end__ must never leak into the public step list
+        assert {s.place_id for s in result.steps} == {"p1", "p2"}
+        # p1 is closer to the anchor (400s) — the pinned start must route there first
+        assert result.steps[0].place_id == "p1"
+        assert result.steps[0].travel_from_previous_s == 400
+        assert result.travel_to_end_s == 0
+        # get_matrix must have been called with the anchor forwarded, not silently dropped
+        assert mock_get_matrix.call_args.kwargs["start_anchor"] == ("__start__", 50.0, 20.0)
+        assert mock_get_matrix.call_args.kwargs["end_anchor"] is None
+
+    async def test_end_only_last_leg_captured_in_travel_to_end_s(self, test_db, google_routes_manager):
+        docs = [_place("p1"), _place("p2")]
+        matrix = _anchor_matrix(
+            ("p1", "p2", 600),
+            ("p2", "p1", 600),
+            ("p1", "__end__", 900),
+            ("p2", "__end__", 200),
+        )
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(place_ids=["p1", "p2"], transport_mode=TransportMode.WALK, end_lat=51.0, end_lng=21.0)
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert {s.place_id for s in result.steps} == {"p1", "p2"}
+        # p2 is closer to the anchor (200s) — must be visited last to minimize the final leg
+        assert result.steps[-1].place_id == "p2"
+        assert result.travel_to_end_s == 200
+        assert result.total_travel_time_s == 600 + 200
+
+    async def test_start_and_end_same_coordinates_round_trip(self, test_db, google_routes_manager):
+        """START == END (the future 'hotel' case): two distinct internal legs, not one node."""
+        docs = [_place("p1"), _place("p2")]
+        matrix = _anchor_matrix(
+            ("__start__", "p1", 300),
+            ("__start__", "p2", 700),
+            ("p1", "p2", 500),
+            ("p2", "p1", 500),
+            ("p1", "__end__", 700),
+            ("p2", "__end__", 300),
+        )
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(
+                place_ids=["p1", "p2"],
+                transport_mode=TransportMode.WALK,
+                start_lat=50.0,
+                start_lng=20.0,
+                end_lat=50.0,
+                end_lng=20.0,
+            )
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert {s.place_id for s in result.steps} == {"p1", "p2"}
+        assert result.steps[0].place_id == "p1"
+        assert result.steps[0].travel_from_previous_s == 300
+        assert result.steps[-1].place_id == "p2"
+        assert result.travel_to_end_s == 300
+        assert result.total_travel_time_s == 300 + 500 + 300
+
+    async def test_single_place_no_anchors(self, test_db, google_routes_manager):
+        docs = [_place("p1")]
+        matrix = DistanceMatrix({}, TransportMode.WALK, _NOW)
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(place_ids=["p1"], transport_mode=TransportMode.WALK)
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert len(result.steps) == 1
+        assert result.steps[0].place_id == "p1"
+        assert result.steps[0].travel_from_previous_s == 0
+        assert result.travel_to_end_s == 0
+
+    async def test_single_place_start_only(self, test_db, google_routes_manager):
+        docs = [_place("p1")]
+        matrix = _anchor_matrix(("__start__", "p1", 500))
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(place_ids=["p1"], transport_mode=TransportMode.WALK, start_lat=50.0, start_lng=20.0)
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert len(result.steps) == 1
+        assert result.steps[0].place_id == "p1"
+        assert result.steps[0].travel_from_previous_s == 500
+        assert result.travel_to_end_s == 0
+
+    async def test_single_place_end_only(self, test_db, google_routes_manager):
+        docs = [_place("p1")]
+        matrix = _anchor_matrix(("p1", "__end__", 700))
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(place_ids=["p1"], transport_mode=TransportMode.WALK, end_lat=51.0, end_lng=21.0)
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert len(result.steps) == 1
+        assert result.steps[0].place_id == "p1"
+        assert result.steps[0].travel_from_previous_s == 0
+        assert result.travel_to_end_s == 700
+
+    async def test_single_place_with_anchors_has_nonzero_travel(self, test_db, google_routes_manager):
+        """Regression: a day with exactly one place must not teleport — see multi_day_service fix."""
+        docs = [_place("p1")]
+        matrix = _anchor_matrix(("__start__", "p1", 500), ("p1", "__end__", 700))
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(
+                place_ids=["p1"],
+                transport_mode=TransportMode.WALK,
+                start_lat=50.0,
+                start_lng=20.0,
+                end_lat=51.0,
+                end_lng=21.0,
+            )
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        assert len(result.steps) == 1
+        assert result.steps[0].place_id == "p1"
+        assert result.steps[0].travel_from_previous_s == 500
+        assert result.travel_to_end_s == 700
+        assert result.total_travel_time_s == 500 + 700
+
+    async def test_anchor_never_appears_in_skipped(self, test_db, google_routes_manager):
+        """Anchor ids must never leak into SkippedPlace/DROPPED_LOW_PRIORITY across any tier."""
+        docs = [
+            _place("m1", visit_min=20, priority="must_see"),
+            _place("o1", visit_min=20, priority="optional"),
+        ]
+        matrix = _anchor_matrix(
+            ("__start__", "m1", 100),
+            ("__start__", "o1", 100),
+            ("m1", "o1", 100),
+            ("o1", "m1", 100),
+            ("m1", "__end__", 100),
+            ("o1", "__end__", 100),
+        )
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(
+                place_ids=["m1", "o1"],
+                transport_mode=TransportMode.WALK,
+                day_start_hour=9,
+                day_end_hour=10,
+                start_lat=50.0,
+                start_lng=20.0,
+                end_lat=51.0,
+                end_lng=21.0,
+            )
+            result = await optimize_route(test_db, google_routes_manager, request)
+
+        skipped_ids = {s.place_id for s in result.skipped}
+        assert "__start__" not in skipped_ids
+        assert "__end__" not in skipped_ids
+        step_ids = {s.place_id for s in result.steps}
+        assert "__start__" not in step_ids
+        assert "__end__" not in step_ids

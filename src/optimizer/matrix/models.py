@@ -56,6 +56,11 @@ class DistanceMatrix:
         entry = self._entries[(origin_id, dest_id)]
         return entry.distance_m
 
+    @property
+    def entries(self) -> dict[tuple[str, str], MatrixEntry]:
+        """Raw (origin_id, dest_id) -> MatrixEntry mapping, for merging with other matrices."""
+        return self._entries
+
     def __len__(self) -> int:
         return len(self._entries)
 

@@ -97,6 +97,7 @@ def nearest_neighbor(
     day_start_s: int,
     day_end_s: int,
     weights: dict[str, int] | None = None,
+    end_anchor: str | None = None,
 ) -> tuple[list[str], list[str]]:
     """Build an initial route using the Nearest Neighbor heuristic.
 
@@ -104,6 +105,8 @@ def nearest_neighbor(
     total priority weight (node count when weights is None); among ties, prefers
     the shortest total travel time. Nodes that cannot be reached within their
     time window are left out and returned in the skipped list.
+
+    end_anchor, when given, is appended as a forced final stop (see nn_from_start).
 
     Returns:
         (route, skipped_ids)
@@ -116,7 +119,9 @@ def nearest_neighbor(
     best_time = _LARGE
 
     for start in nodes:
-        route, _ = _nn_from_start(start, nodes, matrix, time_windows, visit_durations_s, day_start_s, day_end_s)
+        route, _ = nn_from_start(
+            start, nodes, matrix, time_windows, visit_durations_s, day_start_s, day_end_s, end_anchor=end_anchor
+        )
         t = _route_travel_time(route, matrix)
         score = _route_score(route, weights)
         if score > best_score or (score == best_score and t < best_time):
@@ -129,7 +134,7 @@ def nearest_neighbor(
     return best_route, skipped
 
 
-def _nn_from_start(
+def nn_from_start(
     start: str,
     nodes: list[str],
     matrix: DistanceMatrix,
@@ -137,6 +142,7 @@ def _nn_from_start(
     visit_durations_s: dict[str, int],
     day_start_s: int,
     day_end_s: int,
+    end_anchor: str | None = None,
 ) -> tuple[list[str], list[str]]:
     """Run Nearest Neighbor with Earliest Deadline First from a fixed starting node.
 
@@ -144,6 +150,12 @@ def _nn_from_start(
     When close times are equal (e.g. all unconstrained nodes sharing day_end_s),
     the shortest travel time breaks the tie — preserving classic NN behaviour.
     Returns an empty route when the start node itself cannot be visited.
+
+    end_anchor, when given, must be the final stop of the day (e.g. a hotel). A
+    candidate is rejected during construction if visiting it would leave no way to
+    still reach end_anchor by day_end_s — the anchor is never added mid-route, only
+    appended once no further real place can be visited. If end_anchor turns out to
+    be unreachable at all, the whole attempt is infeasible (empty route).
     """
     route = [start]
     unvisited = set(nodes) - {start}
@@ -175,13 +187,20 @@ def _nn_from_start(
             tw = time_windows.get(candidate)
             visit_s_cand = visit_durations_s.get(candidate, 0)
             if tw is not None:
-                if tw.earliest_start(arrival, visit_s_cand) is None:
+                effective_start_cand = tw.earliest_start(arrival, visit_s_cand)
+                if effective_start_cand is None:
                     continue
                 close_s = tw.close_s  # last deadline, used for EDF ordering
             else:
                 if arrival > day_end_s:
                     continue
+                effective_start_cand = max(arrival, day_start_s)
                 close_s = day_end_s
+
+            if end_anchor is not None:
+                end_entry = matrix.get(candidate, end_anchor)
+                if end_entry is None or effective_start_cand + visit_s_cand + end_entry.duration_s > day_end_s:
+                    continue  # visiting this candidate would strand the route before reaching end_anchor
 
             if close_s < best_close or (close_s == best_close and travel < best_travel):
                 best_close = close_s
@@ -210,6 +229,13 @@ def _nn_from_start(
         current_s = next_departure
 
     skipped = list(unvisited)
+
+    if end_anchor is not None:
+        end_entry = matrix.get(route[-1], end_anchor)
+        if end_entry is None or current_s + end_entry.duration_s > day_end_s:
+            return [], list(nodes)
+        route.append(end_anchor)
+
     return route, skipped
 
 
@@ -221,12 +247,18 @@ def two_opt(
     day_start_s: int,
     day_end_s: int,
     max_iterations: int = 100,
+    pin_end: bool = False,
 ) -> list[str]:
     """Improve a route using the 2-opt local search.
 
     For each pair of edges (i, i+1) and (j, j+1), reverse the segment
     between i+1 and j. Accept the swap only if the new route is both
     feasible (all time windows satisfied) and strictly shorter.
+
+    Position 0 is structurally never moved by this loop (i always starts at 0,
+    so route[:i+1] is always copied unchanged) — a fixed start needs no extra
+    handling. pin_end additionally excludes the last position from j's range,
+    so a fixed end anchor is never reordered out of its final slot.
 
     Returns the improved route (or the original if no improvement was found).
     """
@@ -235,6 +267,7 @@ def two_opt(
 
     improved = True
     iterations = 0
+    j_upper = len(route) - 1 if pin_end else len(route)
 
     while improved and iterations < max_iterations:
         improved = False
@@ -242,7 +275,7 @@ def two_opt(
         current_time = _route_travel_time(route, matrix)
 
         for i in range(len(route) - 1):
-            for j in range(i + 2, len(route)):
+            for j in range(i + 2, j_upper):
                 candidate = route[: i + 1] + list(reversed(route[i + 1 : j + 1])) + route[j + 1 :]
                 candidate_time = _route_travel_time(candidate, matrix)
 

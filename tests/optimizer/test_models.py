@@ -1,12 +1,12 @@
 """Unit tests for optimizer models: TransportMode, MatrixEntry, DistanceMatrix, OptimizeRequest."""
 
-from datetime import UTC, datetime, timezone
+from datetime import UTC, date, datetime, timezone
 
 import pytest
 from pydantic import ValidationError
 
 from src.optimizer.matrix.models import DistanceMatrix, MatrixEntry, TransportMode
-from src.optimizer.solver.models import OptimizeRequest
+from src.optimizer.solver.models import DayConfig, MultiDayRequest, OptimizeRequest, PlaceDayPreference
 
 
 @pytest.mark.unit
@@ -89,6 +89,86 @@ class TestOptimizeRequestPlaceIdsLimit:
         with pytest.raises(ValidationError, match="place_ids"):
             OptimizeRequest(place_ids=[f"p{i}" for i in range(51)])
 
-    def test_rejects_fewer_than_two_places(self):
+    def test_accepts_single_place(self):
+        request = OptimizeRequest(place_ids=["p1"])
+        assert len(request.place_ids) == 1
+
+    def test_rejects_empty_list(self):
         with pytest.raises(ValidationError, match="place_ids"):
-            OptimizeRequest(place_ids=["p1"])
+            OptimizeRequest(place_ids=[])
+
+
+@pytest.mark.unit
+class TestOptimizeRequestEndLocation:
+    def test_neither_end_field_set_by_default(self):
+        request = OptimizeRequest(place_ids=["p1", "p2"])
+        assert request.end_lat is None
+        assert request.end_lng is None
+
+    def test_both_end_fields_accepted(self):
+        request = OptimizeRequest(place_ids=["p1", "p2"], end_lat=50.0, end_lng=20.0)
+        assert request.end_lat == 50.0
+        assert request.end_lng == 20.0
+
+    def test_end_lat_without_lng_rejected(self):
+        with pytest.raises(ValidationError, match="end_lat"):
+            OptimizeRequest(place_ids=["p1", "p2"], end_lat=50.0)
+
+    def test_end_lng_without_lat_rejected(self):
+        with pytest.raises(ValidationError, match="end_lat"):
+            OptimizeRequest(place_ids=["p1", "p2"], end_lng=20.0)
+
+    def test_start_and_end_independent(self):
+        """A valid start pair alongside an incomplete end pair must still fail."""
+        with pytest.raises(ValidationError, match="end_lat"):
+            OptimizeRequest(place_ids=["p1", "p2"], start_lat=1.0, start_lng=2.0, end_lat=3.0)
+
+
+@pytest.mark.unit
+class TestDayConfigAnchors:
+    def test_start_and_end_optional_by_default(self):
+        cfg = DayConfig(date=date(2026, 6, 1))
+        assert cfg.start_lat is None
+        assert cfg.end_lat is None
+
+    def test_full_anchors_accepted(self):
+        cfg = DayConfig(date=date(2026, 6, 1), start_lat=1.0, start_lng=2.0, end_lat=3.0, end_lng=4.0)
+        assert cfg.start_lat == 1.0
+        assert cfg.end_lat == 3.0
+
+    def test_start_lat_without_lng_rejected(self):
+        with pytest.raises(ValidationError, match="start_lat"):
+            DayConfig(date=date(2026, 6, 1), start_lat=1.0)
+
+    def test_end_lat_without_lng_rejected(self):
+        with pytest.raises(ValidationError, match="end_lat"):
+            DayConfig(date=date(2026, 6, 1), end_lat=1.0)
+
+    def test_start_and_end_validated_independently(self):
+        """A valid start pair with an incomplete end pair must still fail."""
+        with pytest.raises(ValidationError, match="end_lat"):
+            DayConfig(date=date(2026, 6, 1), start_lat=1.0, start_lng=2.0, end_lat=3.0)
+
+
+@pytest.mark.unit
+class TestMultiDayRequestEndLocation:
+    @staticmethod
+    def _base_kwargs() -> dict:
+        return {
+            "days": [DayConfig(date=date(2026, 6, 1))],
+            "places": [PlaceDayPreference(place_id="p1"), PlaceDayPreference(place_id="p2")],
+        }
+
+    def test_neither_end_field_set_by_default(self):
+        request = MultiDayRequest(**self._base_kwargs())
+        assert request.end_lat is None
+        assert request.end_lng is None
+
+    def test_both_end_fields_accepted(self):
+        request = MultiDayRequest(**self._base_kwargs(), end_lat=1.0, end_lng=2.0)
+        assert request.end_lat == 1.0
+        assert request.end_lng == 2.0
+
+    def test_end_lat_without_lng_rejected(self):
+        with pytest.raises(ValidationError, match="end_lat"):
+            MultiDayRequest(**self._base_kwargs(), end_lat=1.0)

@@ -75,12 +75,14 @@ class TimeWindow:
 class OptimizeRequest(BaseModel):
     """Request body for a TSP route optimization."""
 
-    place_ids: list[str] = Field(min_length=2, max_length=50)
+    place_ids: list[str] = Field(min_length=1, max_length=50)
     transport_mode: TransportMode = TransportMode.WALK
     day_start_hour: int = Field(default=9, ge=0, le=23)
     day_end_hour: int = Field(default=21, ge=1, le=24)
     start_lat: float | None = None
     start_lng: float | None = None
+    end_lat: float | None = None
+    end_lng: float | None = None
     departure_date: date | None = None
 
     @model_validator(mode="after")
@@ -93,6 +95,12 @@ class OptimizeRequest(BaseModel):
     def validate_start_location(self) -> OptimizeRequest:
         if (self.start_lat is None) != (self.start_lng is None):
             raise ValueError("start_lat and start_lng must both be provided or both omitted")
+        return self
+
+    @model_validator(mode="after")
+    def validate_end_location(self) -> OptimizeRequest:
+        if (self.end_lat is None) != (self.end_lng is None):
+            raise ValueError("end_lat and end_lng must both be provided or both omitted")
         return self
 
 
@@ -127,6 +135,7 @@ class OptimizeResponse(BaseModel):
     total_wait_min: int
     transport_mode: TransportMode
     skipped: list[SkippedPlace]
+    travel_to_end_s: int = 0
 
 
 class DaySlot(BaseModel):
@@ -156,11 +165,27 @@ class DayConfig(BaseModel):
     date: date
     day_start_hour: int = Field(default=9, ge=0, le=23)
     day_end_hour: int = Field(default=21, ge=1, le=24)
+    start_lat: float | None = None
+    start_lng: float | None = None
+    end_lat: float | None = None
+    end_lng: float | None = None
 
     @model_validator(mode="after")
     def validate_day_range(self) -> DayConfig:
         if self.day_start_hour >= self.day_end_hour:
             raise ValueError("day_start_hour must be less than day_end_hour")
+        return self
+
+    @model_validator(mode="after")
+    def validate_start_location(self) -> DayConfig:
+        if (self.start_lat is None) != (self.start_lng is None):
+            raise ValueError("start_lat and start_lng must both be provided or both omitted")
+        return self
+
+    @model_validator(mode="after")
+    def validate_end_location(self) -> DayConfig:
+        if (self.end_lat is None) != (self.end_lng is None):
+            raise ValueError("end_lat and end_lng must both be provided or both omitted")
         return self
 
 
@@ -172,6 +197,8 @@ class MultiDayRequest(BaseModel):
     transport_mode: TransportMode = TransportMode.WALK
     start_lat: float | None = None
     start_lng: float | None = None
+    end_lat: float | None = None
+    end_lng: float | None = None
 
     @model_validator(mode="after")
     def validate_no_transit(self) -> MultiDayRequest:
@@ -201,6 +228,12 @@ class MultiDayRequest(BaseModel):
             raise ValueError("start_lat and start_lng must both be provided or both omitted")
         return self
 
+    @model_validator(mode="after")
+    def validate_end_location(self) -> MultiDayRequest:
+        if (self.end_lat is None) != (self.end_lng is None):
+            raise ValueError("end_lat and end_lng must both be provided or both omitted")
+        return self
+
 
 class DayPlan(BaseModel):
     """Optimized route for a single day within a multi-day trip."""
@@ -212,6 +245,7 @@ class DayPlan(BaseModel):
     total_visit_time_min: int
     total_wait_min: int
     skipped: list[SkippedPlace]
+    travel_to_end_s: int = 0
 
 
 class MultiDayResponse(BaseModel):
