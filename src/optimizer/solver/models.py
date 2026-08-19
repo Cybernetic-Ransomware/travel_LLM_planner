@@ -4,6 +4,7 @@ from datetime import date, time
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.accommodations.models import AccommodationStay, validate_no_stay_overlaps
 from src.optimizer.matrix.models import TransportMode
 
 _TRANSIT_MULTI_DAY_ERROR = (
@@ -199,6 +200,7 @@ class MultiDayRequest(BaseModel):
     start_lng: float | None = None
     end_lat: float | None = None
     end_lng: float | None = None
+    accommodations: list[AccommodationStay] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_no_transit(self) -> MultiDayRequest:
@@ -232,6 +234,11 @@ class MultiDayRequest(BaseModel):
     def validate_end_location(self) -> MultiDayRequest:
         if (self.end_lat is None) != (self.end_lng is None):
             raise ValueError("end_lat and end_lng must both be provided or both omitted")
+        return self
+
+    @model_validator(mode="after")
+    def validate_accommodations(self) -> MultiDayRequest:
+        validate_no_stay_overlaps(self.accommodations)
         return self
 
 

@@ -2,24 +2,33 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import UTC, date, datetime, time
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 
-from src.optimizer.matrix.models import TransportMode
+from src.accommodations.models import AccommodationStay
+from src.accommodations.resolver import DayAccommodationAnchors
+from src.optimizer.matrix.models import DistanceMatrix, MatrixEntry, TransportMode
 from src.optimizer.solver.models import (
     DayConfig,
     DaySlot,
     MultiDayRequest,
     MultiDayResponse,
+    OptimizeRequest,
     OptimizeResponse,
     PlaceDayPreference,
     RouteStep,
     SkippedPlace,
 )
-from src.optimizer.solver.multi_day_service import _open_day_indices, _partition_places, optimize_trip
+from src.optimizer.solver.multi_day_service import (
+    _is_accommodation_transition_day,
+    _open_day_indices,
+    _partition_places,
+    optimize_trip,
+)
+from src.optimizer.solver.service import optimize_route as solve_single_day
 
 
 def _day_config(d: date = date(2026, 6, 1), **kwargs) -> DayConfig:
@@ -581,3 +590,259 @@ class TestOptimizeTripAnchors:
         day0_request = mock_optimize.call_args_list[0][0][2]
         assert day0_request.start_lat is None
         assert day0_request.end_lat is None
+
+
+def _stay(name: str, check_in: date, check_out: date, *, lat: float = 1.0, lng: float = 2.0) -> AccommodationStay:
+    return AccommodationStay(name=name, lat=lat, lng=lng, check_in_date=check_in, check_out_date=check_out)
+
+
+# 06-12 is the changeover day: START resolves to Tokyo, END resolves to Kyoto.
+TOKYO = _stay("Tokyo Hotel", date(2026, 6, 10), date(2026, 6, 12), lat=10.0, lng=20.0)
+KYOTO = _stay("Kyoto Hotel", date(2026, 6, 12), date(2026, 6, 14), lat=30.0, lng=40.0)
+
+
+@pytest.mark.unit
+class TestAccommodationAnchorPrecedence:
+    async def test_accommodation_derived_anchors_used_when_no_explicit_dayconfig(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 11))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.start_lat, day0_request.start_lng) == (10.0, 20.0)
+        assert (day0_request.end_lat, day0_request.end_lng) == (10.0, 20.0)
+
+    async def test_explicit_dayconfig_anchor_overrides_accommodation(self):
+        """Manual override: sleeping at the Tokyo hotel, but this day explicitly starts at the airport."""
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[DayConfig(date=date(2026, 6, 11), start_lat=99.0, start_lng=98.0)],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.start_lat, day0_request.start_lng) == (99.0, 98.0)
+
+    async def test_accommodation_overrides_global_anchor_when_dayconfig_unset(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 11))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+                start_lat=1.0,
+                start_lng=1.0,
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.start_lat, day0_request.start_lng) == (10.0, 20.0)
+
+    async def test_global_anchor_used_when_no_accommodation_and_no_dayconfig(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 11))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                start_lat=1.0,
+                start_lng=2.0,
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.start_lat, day0_request.start_lng) == (1.0, 2.0)
+
+    async def test_no_anchor_anywhere_resolves_to_none(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 11))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert day0_request.start_lat is None
+        assert day0_request.end_lat is None
+
+
+@pytest.mark.unit
+class TestIsAccommodationTransitionDay:
+    def test_same_stay_on_both_sides_is_not_a_transition(self):
+        anchors = DayAccommodationAnchors(start=TOKYO, end=TOKYO)
+        assert _is_accommodation_transition_day(anchors) is False
+
+    def test_different_stays_is_a_transition(self):
+        anchors = DayAccommodationAnchors(start=TOKYO, end=KYOTO)
+        assert _is_accommodation_transition_day(anchors) is True
+
+    def test_missing_start_is_not_a_transition(self):
+        assert _is_accommodation_transition_day(DayAccommodationAnchors(start=None, end=KYOTO)) is False
+
+    def test_missing_end_is_not_a_transition(self):
+        assert _is_accommodation_transition_day(DayAccommodationAnchors(start=TOKYO, end=None)) is False
+
+    def test_both_none_is_not_a_transition(self):
+        assert _is_accommodation_transition_day(DayAccommodationAnchors(start=None, end=None)) is False
+
+
+def _anchor_matrix(*pairs: tuple[str, str, int]) -> DistanceMatrix:
+    """Directed matrix (no auto-reverse) — anchor legs are direction-limited by design."""
+    entries = {(o, d): MatrixEntry(o, d, t * 80, t) for o, d, t in pairs}
+    return DistanceMatrix(entries, TransportMode.WALK, datetime(2026, 1, 1, tzinfo=UTC))
+
+
+@pytest.mark.unit
+class TestTransitionDaySafety:
+    """Regression coverage: an unconditional accommodation END on a changeover day must not be wired through."""
+
+    async def test_transition_day_does_not_inject_accommodation_end_anchor(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert day0_request.end_lat is None
+        assert day0_request.end_lng is None
+
+    async def test_transition_day_still_applies_accommodation_start_anchor(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.start_lat, day0_request.start_lng) == (10.0, 20.0)
+
+    async def test_transition_day_explicit_dayconfig_end_override_still_respected(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[DayConfig(date=date(2026, 6, 12), end_lat=77.0, end_lng=78.0)],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.end_lat, day0_request.end_lng) == (77.0, 78.0)
+
+    async def test_transition_day_explicit_global_end_anchor_still_applied(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+                end_lat=55.0,
+                end_lng=56.0,
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.end_lat, day0_request.end_lng) == (55.0, 56.0)
+
+    async def test_ordinary_day_end_anchor_unaffected_by_transition_day_policy(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 11))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.end_lat, day0_request.end_lng) == (10.0, 20.0)
+
+    async def test_naive_end_anchor_would_have_stranded_a_reachable_place(self):
+        """Proves the risk this branch avoids is real: a far-away END as a hard deadline strands reachable places."""
+        docs = [_place("p1"), _place("p2")]
+        matrix = _anchor_matrix(
+            ("p1", "p2", 300),
+            ("p2", "p1", 300),
+            ("p1", "__end__", 41400),  # 11h30 — a plausible Tokyo-to-Kyoto leg under WALK/DRIVE
+            ("p2", "__end__", 41400),
+        )
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(
+                place_ids=["p1", "p2"],
+                transport_mode=TransportMode.WALK,
+                end_lat=KYOTO.lat,
+                end_lng=KYOTO.lng,
+            )
+            result = await solve_single_day(_mock_db(), _mock_manager(), request)
+
+        assert len(result.steps) == 1
+        assert len(result.skipped) == 1

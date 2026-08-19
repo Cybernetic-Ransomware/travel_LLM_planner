@@ -165,3 +165,71 @@ class TestMultiDayRouteEndpoint:
         assert response.status_code == 200
         total_skipped = sum(len(d["skipped"]) for d in body["days"])
         assert total_skipped > 0
+
+
+@pytest.mark.integration
+class TestMultiDayRouteAccommodations:
+    async def test_accommodations_field_accepted_returns_200(self, client):
+        payload = {
+            **_VALID_PAYLOAD,
+            "accommodations": [
+                {
+                    "name": "Tokyo Hotel",
+                    "lat": 35.6895,
+                    "lng": 139.6917,
+                    "check_in_date": "2026-06-01",
+                    "check_out_date": "2026-06-03",
+                }
+            ],
+        }
+        with (
+            patch(
+                "src.optimizer.solver.multi_day_service.fetch_places_by_ids",
+                new=AsyncMock(return_value=_canned_docs()),
+            ),
+            patch(
+                "src.optimizer.solver.multi_day_service.optimize_route",
+                new=AsyncMock(return_value=_canned_single_day()),
+            ),
+        ):
+            response = await client.post(f"{_BASE}/trip", json=payload)
+
+        assert response.status_code == 200
+
+    async def test_overlapping_accommodations_returns_422(self, client):
+        payload = {
+            **_VALID_PAYLOAD,
+            "accommodations": [
+                {
+                    "name": "Tokyo Hotel",
+                    "lat": 35.6895,
+                    "lng": 139.6917,
+                    "check_in_date": "2026-06-01",
+                    "check_out_date": "2026-06-03",
+                },
+                {
+                    "name": "Kyoto Hotel",
+                    "lat": 35.0116,
+                    "lng": 135.7681,
+                    "check_in_date": "2026-06-02",
+                    "check_out_date": "2026-06-05",
+                },
+            ],
+        }
+        response = await client.post(f"{_BASE}/trip", json=payload)
+        assert response.status_code == 422
+
+    async def test_request_without_accommodations_field_still_works(self, client):
+        with (
+            patch(
+                "src.optimizer.solver.multi_day_service.fetch_places_by_ids",
+                new=AsyncMock(return_value=_canned_docs()),
+            ),
+            patch(
+                "src.optimizer.solver.multi_day_service.optimize_route",
+                new=AsyncMock(return_value=_canned_single_day()),
+            ),
+        ):
+            response = await client.post(f"{_BASE}/trip", json=_VALID_PAYLOAD)
+
+        assert response.status_code == 200

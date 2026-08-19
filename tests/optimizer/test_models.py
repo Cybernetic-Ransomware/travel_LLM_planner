@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, timezone
 import pytest
 from pydantic import ValidationError
 
+from src.accommodations.models import AccommodationStay
 from src.optimizer.matrix.models import DistanceMatrix, MatrixEntry, TransportMode
 from src.optimizer.solver.models import DayConfig, MultiDayRequest, OptimizeRequest, PlaceDayPreference
 
@@ -172,3 +173,45 @@ class TestMultiDayRequestEndLocation:
     def test_end_lat_without_lng_rejected(self):
         with pytest.raises(ValidationError, match="end_lat"):
             MultiDayRequest(**self._base_kwargs(), end_lat=1.0)
+
+
+@pytest.mark.unit
+class TestMultiDayRequestAccommodations:
+    @staticmethod
+    def _base_kwargs() -> dict:
+        return {
+            "days": [DayConfig(date=date(2026, 10, 5))],
+            "places": [PlaceDayPreference(place_id="p1"), PlaceDayPreference(place_id="p2")],
+        }
+
+    @staticmethod
+    def _stay(name: str, check_in: date, check_out: date) -> AccommodationStay:
+        return AccommodationStay(name=name, lat=35.0, lng=139.0, check_in_date=check_in, check_out_date=check_out)
+
+    def test_default_accommodations_is_empty_list(self):
+        request = MultiDayRequest(**self._base_kwargs())
+        assert request.accommodations == []
+
+    def test_touching_stays_are_valid(self):
+        stays = [
+            self._stay("Tokyo Hotel", date(2026, 10, 5), date(2026, 10, 10)),
+            self._stay("Kyoto Hotel", date(2026, 10, 10), date(2026, 10, 14)),
+        ]
+        request = MultiDayRequest(**self._base_kwargs(), accommodations=stays)
+        assert len(request.accommodations) == 2
+
+    def test_overlapping_stays_rejected(self):
+        stays = [
+            self._stay("Tokyo Hotel", date(2026, 10, 5), date(2026, 10, 11)),
+            self._stay("Kyoto Hotel", date(2026, 10, 10), date(2026, 10, 14)),
+        ]
+        with pytest.raises(ValidationError, match="overlap"):
+            MultiDayRequest(**self._base_kwargs(), accommodations=stays)
+
+    def test_gap_between_stays_is_valid(self):
+        stays = [
+            self._stay("Tokyo Hotel", date(2026, 10, 5), date(2026, 10, 10)),
+            self._stay("Kyoto Hotel", date(2026, 10, 11), date(2026, 10, 14)),
+        ]
+        request = MultiDayRequest(**self._base_kwargs(), accommodations=stays)
+        assert len(request.accommodations) == 2
