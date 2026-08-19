@@ -55,9 +55,16 @@ class TestSaveTrip:
         response = await client.post(f"{ENDPOINT}/", json=payload)
         assert response.status_code == 422
 
-    async def test_single_place_in_optimizer_request_returns_422(self, client: AsyncClient):
+    async def test_single_place_in_optimizer_request_accepted(self, client: AsyncClient):
+        """place_ids min_length was relaxed to 1 so single-place days (with anchors) can be optimized."""
         payload = _payload()
         payload["optimizer_request"]["place_ids"] = ["only-one"]
+        response = await client.post(f"{ENDPOINT}/", json=payload)
+        assert response.status_code == 201
+
+    async def test_empty_place_ids_in_optimizer_request_returns_422(self, client: AsyncClient):
+        payload = _payload()
+        payload["optimizer_request"]["place_ids"] = []
         response = await client.post(f"{ENDPOINT}/", json=payload)
         assert response.status_code == 422
 

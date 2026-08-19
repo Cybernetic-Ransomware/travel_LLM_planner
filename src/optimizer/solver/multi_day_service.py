@@ -14,9 +14,8 @@ from src.optimizer.solver.models import (
     MultiDayResponse,
     OptimizeRequest,
     PlaceDayPreference,
-    SkippedPlace,
 )
-from src.optimizer.solver.service import _google_weekday, _seconds_to_time, optimize_route
+from src.optimizer.solver.service import _google_weekday, optimize_route
 
 
 def _open_day_indices(doc: dict, day_configs: list[DayConfig]) -> list[int]:
@@ -99,49 +98,6 @@ def _partition_places(
     return buckets
 
 
-def _build_single_place_plan(
-    day_idx: int,
-    cfg: DayConfig,
-    place_id: str,
-    doc: dict | None,
-) -> DayPlan:
-    """Build a DayPlan for a day that has only one place (TSP is not applicable)."""
-    from src.optimizer.solver.models import RouteStep
-
-    if doc is None or not doc.get("lat") or not doc.get("lng"):
-        return DayPlan(
-            day_index=day_idx,
-            date=cfg.date,
-            steps=[],
-            total_travel_time_s=0,
-            total_visit_time_min=0,
-            total_wait_min=0,
-            skipped=[SkippedPlace(place_id=place_id, name=doc.get("name") if doc else None, reason="NO_COORDINATES")],
-        )
-
-    visit_min = doc.get("visit_duration_min") or 30
-    open_s = cfg.day_start_hour * 3600
-    step = RouteStep(
-        place_id=place_id,
-        name=doc.get("name"),
-        lat=doc.get("lat"),
-        lng=doc.get("lng"),
-        arrival_time=_seconds_to_time(open_s),
-        departure_time=_seconds_to_time(open_s + visit_min * 60),
-        travel_from_previous_s=0,
-        visit_duration_min=visit_min,
-    )
-    return DayPlan(
-        day_index=day_idx,
-        date=cfg.date,
-        steps=[step],
-        total_travel_time_s=0,
-        total_visit_time_min=visit_min,
-        total_wait_min=0,
-        skipped=[],
-    )
-
-
 async def optimize_trip(
     db: AsyncDatabase,
     manager: GoogleRoutesManager,
@@ -184,11 +140,6 @@ async def optimize_trip(
             )
             continue
 
-        if len(day_place_ids) == 1:
-            pid = day_place_ids[0]
-            day_plans.append(_build_single_place_plan(day_idx, cfg, pid, doc_map.get(pid)))
-            continue
-
         day_docs: list[dict] = []
         for pid in day_place_ids:
             if pid not in doc_map:
@@ -208,8 +159,10 @@ async def optimize_trip(
             day_start_hour=cfg.day_start_hour,
             day_end_hour=cfg.day_end_hour,
             departure_date=cfg.date,
-            start_lat=request.start_lat,
-            start_lng=request.start_lng,
+            start_lat=cfg.start_lat if cfg.start_lat is not None else request.start_lat,
+            start_lng=cfg.start_lng if cfg.start_lng is not None else request.start_lng,
+            end_lat=cfg.end_lat if cfg.end_lat is not None else request.end_lat,
+            end_lng=cfg.end_lng if cfg.end_lng is not None else request.end_lng,
         )
 
         single_result = await optimize_route(db, manager, day_request, docs=day_docs)
@@ -223,6 +176,7 @@ async def optimize_trip(
                 total_visit_time_min=single_result.total_visit_time_min,
                 total_wait_min=single_result.total_wait_min,
                 skipped=single_result.skipped,
+                travel_to_end_s=single_result.travel_to_end_s,
             )
         )
 

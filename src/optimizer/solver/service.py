@@ -12,7 +12,7 @@ from src.gmaps import fetch_places_by_ids
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.optimizer.matrix.models import DistanceMatrix
 from src.optimizer.matrix.service import get_matrix
-from src.optimizer.solver.engine import nearest_neighbor, schedule_route, two_opt
+from src.optimizer.solver.engine import nearest_neighbor, nn_from_start, schedule_route, two_opt
 from src.optimizer.solver.models import (
     OptimizeRequest,
     OptimizeResponse,
@@ -27,6 +27,10 @@ logger = setup_logger(__name__, "optimizer")
 # lower-priority places. This holds as long as a route has fewer than 1000 places;
 # OptimizeRequest and MultiDayRequest cap requests at 50 places.
 _PRIORITY_WEIGHTS = {"must_see": 1_000_000, "normal": 1_000, "optional": 1}
+
+# Internal day-start/day-end anchor ids (e.g. a hotel) — never real Google Place ids, never exposed publicly.
+_START_ANCHOR_ID = "__start__"
+_END_ANCHOR_ID = "__end__"
 
 
 def _google_weekday(d: date) -> int:
@@ -100,6 +104,8 @@ def _solve_with_priorities(
     day_start_s: int,
     day_end_s: int,
     priorities: dict[str, str],
+    start_anchor: str | None = None,
+    end_anchor: str | None = None,
 ) -> tuple[list[str], list[str], list[str], list[str]]:
     """Solve the route with a hard must-see guarantee.
 
@@ -109,6 +115,12 @@ def _solve_with_priorities(
     A must-see that is physically infeasible even alone cannot improve any attempt,
     so the best earlier attempt wins and the place stays in solver_skipped for
     standard reason classification.
+
+    When start_anchor is given, NN is pinned to start there instead of trying every
+    node as a candidate start. end_anchor, when given, is threaded through so it is
+    appended as the route's forced final stop (see engine.nn_from_start). Returned
+    routes may include start_anchor/end_anchor as regular elements — callers must
+    exclude them from anything keyed by node_ids (they are not real places).
 
     Returns:
         (route, solver_skipped, dropped_low_priority, final_candidates)
@@ -128,10 +140,22 @@ def _solve_with_priorities(
         if prev_size is not None and len(tier) == prev_size:
             continue  # tier removes nothing — rerun would produce the same result
         prev_size = len(tier)
-        route, solver_skipped = nearest_neighbor(
-            tier, matrix, time_windows, visit_durations_s, day_start_s, day_end_s, weights
-        )
-        score = sum(weights[n] for n in route)
+        if start_anchor is not None:
+            route, solver_skipped = nn_from_start(
+                start_anchor,
+                tier,
+                matrix,
+                time_windows,
+                visit_durations_s,
+                day_start_s,
+                day_end_s,
+                end_anchor=end_anchor,
+            )
+        else:
+            route, solver_skipped = nearest_neighbor(
+                tier, matrix, time_windows, visit_durations_s, day_start_s, day_end_s, weights, end_anchor=end_anchor
+            )
+        score = sum(weights.get(n, 0) for n in route)
         if score > best_score:
             best_score = score
             best = (route, solver_skipped, tier)
@@ -232,7 +256,20 @@ async def optimize_route(
             skipped=skipped,
         )
 
-    matrix, status, error = await get_matrix(db, manager, coords, request.transport_mode, departure_time)
+    start_anchor: tuple[str, float, float] | None = None
+    if request.start_lat is not None and request.start_lng is not None:
+        start_anchor = (_START_ANCHOR_ID, request.start_lat, request.start_lng)
+
+    end_anchor: tuple[str, float, float] | None = None
+    if request.end_lat is not None and request.end_lng is not None:
+        end_anchor = (_END_ANCHOR_ID, request.end_lat, request.end_lng)
+
+    start_anchor_id = start_anchor[0] if start_anchor is not None else None
+    end_anchor_id = end_anchor[0] if end_anchor is not None else None
+
+    matrix, status, error = await get_matrix(
+        db, manager, coords, request.transport_mode, departure_time, start_anchor=start_anchor, end_anchor=end_anchor
+    )
 
     if matrix is None:
         logger.error("Distance matrix unavailable: status=%s error=%s", status, error)
@@ -241,9 +278,19 @@ async def optimize_route(
     node_ids = [pid for pid, _, _ in coords]
     priorities = {pid: (doc_map[pid].get("priority") or "normal") for pid in node_ids}
     route, solver_skipped, dropped, final_candidates = _solve_with_priorities(
-        node_ids, matrix, time_windows, visit_durations_s, day_start_s, day_end_s, priorities
+        node_ids,
+        matrix,
+        time_windows,
+        visit_durations_s,
+        day_start_s,
+        day_end_s,
+        priorities,
+        start_anchor=start_anchor_id,
+        end_anchor=end_anchor_id,
     )
-    route = two_opt(route, matrix, time_windows, visit_durations_s, day_start_s, day_end_s)
+    route = two_opt(
+        route, matrix, time_windows, visit_durations_s, day_start_s, day_end_s, pin_end=end_anchor_id is not None
+    )
 
     for place_id in dropped:
         skipped.append(SkippedPlace(place_id=place_id, name=doc_map[place_id].get("name"), reason="DROPPED_LOW_PRIORITY"))
@@ -269,8 +316,17 @@ async def optimize_route(
     total_travel_s = 0
     total_visit_min = 0
     total_wait_min = 0
+    travel_to_end_s = 0
 
     for place_id, arrival_s, departure_s, travel_s in schedule:
+        total_travel_s += travel_s
+
+        if place_id == end_anchor_id:
+            travel_to_end_s = travel_s
+            continue
+        if place_id == start_anchor_id:
+            continue
+
         doc = doc_map[place_id]
         visit_s = visit_durations_s[place_id]
         wait_s = max(0, departure_s - visit_s - arrival_s)
@@ -288,7 +344,6 @@ async def optimize_route(
                 wait_min=wait_s // 60,
             )
         )
-        total_travel_s += travel_s
         total_visit_min += visit_s // 60
         total_wait_min += wait_s // 60
 
@@ -299,4 +354,5 @@ async def optimize_route(
         total_wait_min=total_wait_min,
         transport_mode=request.transport_mode,
         skipped=skipped,
+        travel_to_end_s=travel_to_end_s,
     )
