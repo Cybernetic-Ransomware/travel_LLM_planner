@@ -1,4 +1,4 @@
-"""Derives per-day START/END accommodation anchors from stay dates. No knowledge of the solver."""
+"""Deliberately solver-agnostic — callers decide what's safe to feed into a hard constraint, see ADR-15."""
 
 from __future__ import annotations
 

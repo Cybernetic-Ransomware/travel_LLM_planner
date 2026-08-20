@@ -100,7 +100,7 @@ def _partition_places(
 
 
 def _is_accommodation_transition_day(anchors: DayAccommodationAnchors) -> bool:
-    """True when START/END resolve to two different stays — see ADR-15 for why END is then not auto-applied."""
+    """True when START/END resolve to two different stays — neither is then auto-applied, see ADR-15."""
     return anchors.start is not None and anchors.end is not None and anchors.start is not anchors.end
 
 
@@ -161,9 +161,9 @@ async def optimize_trip(
             day_docs.append(doc)
 
         anchors = day_anchors[day_idx]
-        accommodation_start = anchors.start
-        # Autoderived END is suppressed on a changeover day — see _is_accommodation_transition_day.
-        accommodation_end = None if _is_accommodation_transition_day(anchors) else anchors.end
+        is_transition_day = _is_accommodation_transition_day(anchors)
+        accommodation_start = None if is_transition_day else anchors.start
+        accommodation_end = None if is_transition_day else anchors.end
 
         day_request = OptimizeRequest(
             place_ids=day_place_ids,

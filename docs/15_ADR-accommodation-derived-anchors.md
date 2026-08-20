@@ -28,11 +28,19 @@ are perfectly visitable, silently making results *worse* than not having the fea
    no special-casing.
 3. **Changeover-day safety policy.** A day is a *transition day* when `resolve_day_anchors`
    returns two different stay objects for START and END (`multi_day_service._is_accommodation_transition_day`,
-   compared by object identity, not by `name` — stay names are not unique). On a transition day the
-   accommodation-derived START is still applied (safe: START has no "must arrive by" semantics),
-   but the accommodation-derived END is deliberately **not** forwarded to the per-day
-   `OptimizeRequest`; it falls through to an explicit `DayConfig`/global anchor if the caller set
-   one, or to `None` otherwise.
+   compared by object identity, not by `name` — stay names are not unique). On a transition day
+   **neither** the accommodation-derived START nor END is forwarded to the per-day
+   `OptimizeRequest`; each independently falls through to an explicit `DayConfig`/global anchor if
+   the caller set one, or to `None` otherwise. An earlier draft of this decision kept the
+   accommodation-derived START on transition days on the reasoning that only END is a hard
+   "must-arrive-by" deadline in `nn_from_start`. That reasoning was incorrect in practice: `_partition_places`
+   assigns places to days with no geographic awareness, so a destination-city place can land on the
+   transition day while START still pins the route to the previous city. The day begins at the fixed
+   `day_start_hour`, and a very long START→first-place leg pushes `arrival_s` past that place's time
+   window close just as effectively as the END-reachability check does — the failure mode is
+   different in mechanism (ordinary time-window infeasibility vs. the explicit END-reachability
+   check) but identical in outcome (a reachable place gets dropped). Both sides are therefore
+   suppressed together.
 4. **Non-goals.** `check_in_from`/`check_out_by` are represented on `AccommodationStay` but are not
    read by the resolver or the solver in this slice — they are not persisted anywhere either, since
    nothing in `src/trips/` persists multi-day trips yet. No `Transfer`/leg model is introduced;
@@ -45,6 +53,11 @@ are perfectly visitable, silently making results *worse* than not having the fea
   that motivated decision 3. `nn_from_start`'s END-reachability check would reject any place whose
   visit would leave insufficient time to still reach a distant END, which can empty out an
   otherwise normal morning in the departure city.
+- **Wire the accommodation END through unconditionally but keep auto-deriving START** — the
+  original shape of decision 3, rejected after review: a long START→first-place leg is just as
+  capable of pushing a destination-city place's arrival past its time window as the END check is,
+  since `_partition_places` can place destination-city attractions on the transition day with no
+  knowledge that START still points at the previous city.
 - **Fake the changeover by giving each half of the day its own `day_start_hour`/`day_end_hour`**
   (e.g. "Tokyo ends at 10:00, Kyoto starts at 15:00") — rejected: `OptimizeRequest`/`DayConfig`
   model one day as one contiguous window with one START and one END; splitting it in two would
@@ -96,7 +109,7 @@ are perfectly visitable, silently making results *worse* than not having the fea
   knowledge).
 
 ### Challenges & Mitigation
-- A transition day gets no automatic END constraint, which means an unrealistic changeover
+- A transition day gets no automatic START or END constraint, which means an unrealistic changeover
   (e.g. a "walk" from Tokyo to Kyoto) is not flagged, just silently unconstrained. Mitigated by
   documenting this explicitly rather than pretending the day is solved; a real fix requires the
   deferred `Transfer` model.

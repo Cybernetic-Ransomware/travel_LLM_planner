@@ -26,10 +26,10 @@ class TestResolveDayAnchors:
         assert anchors.start is TOKYO
         assert anchors.end is TOKYO
 
-    def test_check_in_day_has_end_only_no_start(self):
-        [anchors] = resolve_day_anchors([date(2026, 10, 10)], [TOKYO, KYOTO])
-        # 10.10 is Kyoto's check-in day: the traveller woke up in Tokyo, not Kyoto.
-        assert anchors.start is TOKYO
+    def test_isolated_check_in_day_has_no_start(self):
+        """Only Kyoto (10-14) exists: on its own check-in day (10.10) nobody has a START yet."""
+        [anchors] = resolve_day_anchors([date(2026, 10, 10)], [KYOTO])
+        assert anchors.start is None
         assert anchors.end is KYOTO
 
     def test_check_out_day_has_start_only_no_end(self):
@@ -52,11 +52,19 @@ class TestResolveDayAnchors:
         [anchors] = resolve_day_anchors([date(2026, 10, 14)], [TOKYO, KYOTO])
         assert anchors.end is None
 
-    def test_gap_day_resolves_to_no_anchor_either_side(self):
+    def test_checkout_day_before_gap_has_start_but_no_end(self):
         tokyo = _stay("Tokyo Hotel", date(2026, 10, 5), date(2026, 10, 10))
         kyoto = _stay("Kyoto Hotel", date(2026, 10, 11), date(2026, 10, 14))
         [anchors] = resolve_day_anchors([date(2026, 10, 10)], [tokyo, kyoto])
         assert anchors.start is tokyo
+        assert anchors.end is None
+
+    def test_day_fully_inside_a_gap_resolves_to_no_anchor_either_side(self):
+        """A two-night gap (Tokyo checks out 10.10, Kyoto checks in 12.10): 11.10 touches neither stay."""
+        tokyo = _stay("Tokyo Hotel", date(2026, 10, 5), date(2026, 10, 10))
+        kyoto = _stay("Kyoto Hotel", date(2026, 10, 12), date(2026, 10, 14))
+        [anchors] = resolve_day_anchors([date(2026, 10, 11)], [tokyo, kyoto])
+        assert anchors.start is None
         assert anchors.end is None
 
     def test_no_accommodations_resolves_all_days_to_none(self):

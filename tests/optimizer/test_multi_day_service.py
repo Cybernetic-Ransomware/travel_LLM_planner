@@ -748,7 +748,8 @@ class TestTransitionDaySafety:
         assert day0_request.end_lat is None
         assert day0_request.end_lng is None
 
-    async def test_transition_day_still_applies_accommodation_start_anchor(self):
+    async def test_transition_day_does_not_inject_accommodation_start_anchor(self):
+        """A fixed START also consumes the day's budget via its travel leg — equally dangerous as END."""
         docs = [_place("p1"), _place("p2")]
         mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
 
@@ -764,7 +765,46 @@ class TestTransitionDaySafety:
             await optimize_trip(_mock_db(), _mock_manager(), req)
 
         day0_request = mock_optimize.call_args_list[0][0][2]
-        assert (day0_request.start_lat, day0_request.start_lng) == (10.0, 20.0)
+        assert day0_request.start_lat is None
+        assert day0_request.start_lng is None
+
+    async def test_transition_day_explicit_dayconfig_start_override_still_respected(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[DayConfig(date=date(2026, 6, 12), start_lat=11.0, start_lng=12.0)],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.start_lat, day0_request.start_lng) == (11.0, 12.0)
+
+    async def test_transition_day_explicit_global_start_anchor_still_applied(self):
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+                start_lat=33.0,
+                start_lng=34.0,
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.start_lat, day0_request.start_lng) == (33.0, 34.0)
 
     async def test_transition_day_explicit_dayconfig_end_override_still_respected(self):
         docs = [_place("p1"), _place("p2")]
@@ -841,6 +881,31 @@ class TestTransitionDaySafety:
                 transport_mode=TransportMode.WALK,
                 end_lat=KYOTO.lat,
                 end_lng=KYOTO.lng,
+            )
+            result = await solve_single_day(_mock_db(), _mock_manager(), request)
+
+        assert len(result.steps) == 1
+        assert len(result.skipped) == 1
+
+    async def test_naive_start_anchor_would_have_stranded_a_reachable_place(self):
+        """Symmetric to the END proof: a far-away fixed START consumes the day's budget just as badly."""
+        docs = [_place("p1"), _place("p2")]
+        matrix = _anchor_matrix(
+            ("__start__", "p1", 41400),  # 11h30 — a plausible Tokyo-to-Kyoto leg under WALK/DRIVE
+            ("__start__", "p2", 41400),
+            ("p1", "p2", 300),
+            ("p2", "p1", 300),
+        )
+
+        with (
+            patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+        ):
+            request = OptimizeRequest(
+                place_ids=["p1", "p2"],
+                transport_mode=TransportMode.WALK,
+                start_lat=TOKYO.lat,
+                start_lng=TOKYO.lng,
             )
             result = await solve_single_day(_mock_db(), _mock_manager(), request)
 
