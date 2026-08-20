@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pymongo.asynchronous.database import AsyncDatabase
 
+from src.accommodations.resolver import DayAccommodationAnchors, resolve_day_anchors
 from src.gmaps import fetch_places_by_ids
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.optimizer.solver.models import (
@@ -98,6 +99,11 @@ def _partition_places(
     return buckets
 
 
+def _is_accommodation_transition_day(anchors: DayAccommodationAnchors) -> bool:
+    """True when START/END resolve to two different stays — neither is then auto-applied, see ADR-15."""
+    return anchors.start is not None and anchors.end is not None and anchors.start is not anchors.end
+
+
 async def optimize_trip(
     db: AsyncDatabase,
     manager: GoogleRoutesManager,
@@ -120,6 +126,7 @@ async def optimize_trip(
             slot_map[(p.place_id, slot.day_index)] = slot
 
     buckets = _partition_places(request.places, len(request.days), request.days, doc_map)
+    day_anchors = resolve_day_anchors([cfg.date for cfg in request.days], request.accommodations)
 
     day_plans: list[DayPlan] = []
 
@@ -153,16 +160,29 @@ async def optimize_trip(
                     doc["preferred_hour_to"] = slot.preferred_hour_to
             day_docs.append(doc)
 
+        anchors = day_anchors[day_idx]
+        is_transition_day = _is_accommodation_transition_day(anchors)
+        accommodation_start = None if is_transition_day else anchors.start
+        accommodation_end = None if is_transition_day else anchors.end
+
         day_request = OptimizeRequest(
             place_ids=day_place_ids,
             transport_mode=request.transport_mode,
             day_start_hour=cfg.day_start_hour,
             day_end_hour=cfg.day_end_hour,
             departure_date=cfg.date,
-            start_lat=cfg.start_lat if cfg.start_lat is not None else request.start_lat,
-            start_lng=cfg.start_lng if cfg.start_lng is not None else request.start_lng,
-            end_lat=cfg.end_lat if cfg.end_lat is not None else request.end_lat,
-            end_lng=cfg.end_lng if cfg.end_lng is not None else request.end_lng,
+            start_lat=cfg.start_lat
+            if cfg.start_lat is not None
+            else (accommodation_start.lat if accommodation_start is not None else request.start_lat),
+            start_lng=cfg.start_lng
+            if cfg.start_lng is not None
+            else (accommodation_start.lng if accommodation_start is not None else request.start_lng),
+            end_lat=cfg.end_lat
+            if cfg.end_lat is not None
+            else (accommodation_end.lat if accommodation_end is not None else request.end_lat),
+            end_lng=cfg.end_lng
+            if cfg.end_lng is not None
+            else (accommodation_end.lng if accommodation_end is not None else request.end_lng),
         )
 
         single_result = await optimize_route(db, manager, day_request, docs=day_docs)
