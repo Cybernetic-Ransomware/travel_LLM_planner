@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, time, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -122,6 +122,12 @@ class TestDayConfig:
     def test_day_end_hour_24_with_day_end_time_rejected(self):
         with pytest.raises(ValidationError, match="cannot be combined with day_end_hour=24"):
             DayConfig(date=date(2026, 6, 1), day_end_hour=24, day_end_time=time(23, 30))
+
+    @pytest.mark.parametrize("field", ["day_start_time", "day_end_time"])
+    def test_timezone_aware_time_rejected(self, field):
+        """Offset-aware time must be a controlled 422, never a naive-vs-aware TypeError."""
+        with pytest.raises(ValidationError, match="naive local wall-clock time"):
+            DayConfig(date=date(2026, 6, 1), **{field: time(10, 0, tzinfo=timezone(timedelta(hours=9)))})
 
 
 @pytest.mark.unit

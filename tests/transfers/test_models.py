@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, time, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
 
 from src.transfers.models import TransferBlock
+
+JST = timezone(timedelta(hours=9))
 
 
 def _transfer(departure: time = time(10, 0), arrival: time = time(15, 0), **kwargs) -> TransferBlock:
@@ -40,3 +42,16 @@ class TestTransferBlockValidation:
         """22:00 -> 06:00 next day is out of scope for this slice — see ADR-16."""
         with pytest.raises(ValidationError, match="overnight transfers are not supported"):
             _transfer(departure=time(22, 0), arrival=time(6, 0))
+
+    @pytest.mark.parametrize(
+        ("departure", "arrival"),
+        [
+            (time(10, 0, tzinfo=JST), time(15, 0)),
+            (time(10, 0), time(15, 0, tzinfo=JST)),
+            (time(10, 0, tzinfo=JST), time(15, 0, tzinfo=JST)),
+        ],
+    )
+    def test_timezone_aware_time_rejected(self, departure, arrival):
+        """Offset-aware time must be a controlled 422, never a naive-vs-aware TypeError."""
+        with pytest.raises(ValidationError, match="naive local wall-clock time"):
+            _transfer(departure=departure, arrival=arrival)

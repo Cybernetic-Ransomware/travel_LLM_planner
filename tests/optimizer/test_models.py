@@ -259,6 +259,12 @@ class TestOptimizeRequestTimePrecision:
         assert request.day_start_time == time(9, 15)
         assert request.day_end_time == time(9, 45)
 
+    @pytest.mark.parametrize("field", ["day_start_time", "day_end_time"])
+    def test_timezone_aware_time_rejected(self, field):
+        """Offset-aware time must be a controlled 422, never a naive-vs-aware TypeError."""
+        with pytest.raises(ValidationError, match="naive local wall-clock time"):
+            OptimizeRequest(place_ids=["p1"], **{field: time(10, 0, tzinfo=timezone(timedelta(hours=9)))})
+
 
 @pytest.mark.unit
 class TestMultiDayRequestDaysLimit:

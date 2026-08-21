@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 from src.accommodations.models import AccommodationStay, validate_no_stay_overlaps
 from src.accommodations.resolver import DayAccommodationAnchors, resolve_day_anchors
 from src.optimizer.matrix.models import TransportMode
+from src.time_validation import NaiveTime
 from src.transfers.models import TransferBlock
 
 _TRANSIT_MULTI_DAY_ERROR = (
@@ -100,8 +101,8 @@ class OptimizeRequest(BaseModel):
     transport_mode: TransportMode = TransportMode.WALK
     day_start_hour: int = Field(default=9, ge=0, le=23)
     day_end_hour: int = Field(default=21, ge=1, le=24)
-    day_start_time: time | None = None
-    day_end_time: time | None = None
+    day_start_time: NaiveTime | None = None
+    day_end_time: NaiveTime | None = None
     start_lat: float | None = None
     start_lng: float | None = None
     end_lat: float | None = None
@@ -200,8 +201,8 @@ class DayConfig(BaseModel):
     date: date
     day_start_hour: int = Field(default=9, ge=0, le=23)
     day_end_hour: int = Field(default=21, ge=1, le=24)
-    day_start_time: time | None = None
-    day_end_time: time | None = None
+    day_start_time: NaiveTime | None = None
+    day_end_time: NaiveTime | None = None
     start_lat: float | None = None
     start_lng: float | None = None
     end_lat: float | None = None

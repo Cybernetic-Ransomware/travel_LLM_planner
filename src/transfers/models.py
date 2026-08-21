@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date
 
 from pydantic import BaseModel, Field, model_validator
+
+from src.time_validation import NaiveTime
 
 
 class TransferBlock(BaseModel):
     """A same-day, fixed-time journey between two accommodation stays — see ADR-16."""
 
     date: date
-    departure_time: time
-    arrival_time: time
+    departure_time: NaiveTime
+    arrival_time: NaiveTime
     label: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")

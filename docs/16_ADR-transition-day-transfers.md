@@ -63,10 +63,11 @@ the day rather than an ignored field.
    start)`, in seconds.** A traveller who arrives before check-in waits (mirroring how
    `TimeWindow.earliest_start` already lets a solver wait for a place to open); a
    traveller can never be shown starting sightseeing before they actually arrived,
-   since `max()` is monotonic in `arrival_time`. `check_out_by` is read but not
-   enforced — a late checkout with luggage storage is a legitimate real-world case this
-   model doesn't yet represent, and is deliberately left advisory-only rather than
-   blocking a request over it.
+   since `max()` is monotonic in `arrival_time`. `check_out_by` is represented on
+   `AccommodationStay` but is not consumed by transfer planning or enforced as a
+   constraint in this slice — a late checkout with luggage storage is a legitimate
+   real-world case this model doesn't yet represent, and the field is deliberately left
+   unused rather than blocking a request over it.
 6. **Minute precision is threaded through the whole pipeline, not just the request
    model.** `OptimizeRequest`/`DayConfig` gain additive `day_start_time`/`day_end_time:
    time | None` fields; a shared `resolve_day_bound_s(hour, explicit_time)` /
