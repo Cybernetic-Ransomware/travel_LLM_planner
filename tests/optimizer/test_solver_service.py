@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -250,6 +250,51 @@ async def test_optimize_departure_date_forwarded_to_get_matrix(test_db, google_r
     departure_time = mock_get_matrix.call_args[0][4]
     assert departure_time is not None
     assert departure_time.date().isoformat() == "2026-06-15"
+
+
+@pytest.mark.unit
+@freeze_time("2026-06-01")
+async def test_day_start_time_overrides_hour_in_departure_time(test_db, google_routes_manager):
+    """Minute precision must reach Google Routes' departure_time, not just the request model."""
+    docs = [_place("p1"), _place("p2")]
+    matrix = _make_matrix(("p1", "p2", 300), ("p2", "p1", 300))
+    mock_get_matrix = AsyncMock(return_value=(matrix, "OK", None))
+
+    with (
+        patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+        patch("src.optimizer.solver.service.get_matrix", new=mock_get_matrix),
+    ):
+        request = OptimizeRequest(
+            place_ids=["p1", "p2"],
+            transport_mode=TransportMode.TRANSIT,
+            departure_date=date(2026, 6, 15),
+            day_start_hour=9,
+            day_start_time=time(9, 15),
+        )
+        await optimize_route(test_db, google_routes_manager, request)
+
+    departure_time = mock_get_matrix.call_args[0][4]
+    assert (departure_time.hour, departure_time.minute) == (9, 15)
+
+
+@pytest.mark.unit
+async def test_minute_precision_not_rounded_in_route_step_arrival(test_db, google_routes_manager):
+    docs = [_place("p1")]
+    matrix = _make_matrix()
+
+    with (
+        patch("src.optimizer.solver.service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+        patch("src.optimizer.solver.service.get_matrix", new=AsyncMock(return_value=(matrix, "OK", None))),
+    ):
+        request = OptimizeRequest(
+            place_ids=["p1"],
+            transport_mode=TransportMode.WALK,
+            day_start_hour=9,
+            day_start_time=time(9, 15),
+        )
+        result = await optimize_route(test_db, google_routes_manager, request)
+
+    assert result.steps[0].arrival_time.minute == 15
 
 
 @pytest.mark.unit

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date
 
 from pydantic import BaseModel, Field, model_validator
+
+from src.time_validation import NaiveTime
 
 
 class AccommodationStay(BaseModel):
@@ -15,8 +17,8 @@ class AccommodationStay(BaseModel):
     check_in_date: date
     check_out_date: date
 
-    check_in_from: time | None = None
-    check_out_by: time | None = None
+    check_in_from: NaiveTime | None = None
+    check_out_by: NaiveTime | None = None
 
     @model_validator(mode="after")
     def validate_stay_covers_at_least_one_night(self) -> AccommodationStay:

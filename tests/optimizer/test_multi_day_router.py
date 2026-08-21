@@ -233,3 +233,108 @@ class TestMultiDayRouteAccommodations:
             response = await client.post(f"{_BASE}/trip", json=_VALID_PAYLOAD)
 
         assert response.status_code == 200
+
+
+_TOKYO_KYOTO_ACCOMMODATIONS = [
+    {
+        "name": "Tokyo Hotel",
+        "lat": 35.6895,
+        "lng": 139.6917,
+        "check_in_date": "2026-05-30",
+        "check_out_date": "2026-06-01",
+        "check_out_by": "10:00:00",
+    },
+    {
+        "name": "Kyoto Hotel",
+        "lat": 35.0116,
+        "lng": 135.7681,
+        "check_in_date": "2026-06-01",
+        "check_out_date": "2026-06-03",
+        "check_in_from": "15:00:00",
+    },
+]
+
+_TRANSFER_PAYLOAD = {
+    "days": [{"date": "2026-06-01", "day_start_hour": 9, "day_end_hour": 21}],
+    "places": [{"place_id": "p1"}, {"place_id": "p2"}],
+    "transport_mode": "WALK",
+    "accommodations": _TOKYO_KYOTO_ACCOMMODATIONS,
+    "transfers": [
+        {"date": "2026-06-01", "departure_time": "10:00:00", "arrival_time": "15:00:00", "label": "Shinkansen Tokyo→Kyoto"}
+    ],
+}
+
+
+def _kyoto_docs() -> list[dict]:
+    return [
+        {"_id": "p1", "name": "Fushimi Inari", "lat": 34.9671, "lng": 135.7727, "visit_duration_min": 60},
+        {"_id": "p2", "name": "Kinkaku-ji", "lat": 35.0394, "lng": 135.7292, "visit_duration_min": 60},
+    ]
+
+
+@pytest.mark.integration
+class TestMultiDayRouteTransfers:
+    """End-to-end Tokyo→Kyoto transfer scenario through POST /trip — see ADR-16."""
+
+    async def test_transfer_scenario_returns_transfer_segment_and_post_transfer_steps(self, client):
+        with (
+            patch(
+                "src.optimizer.solver.multi_day_service.fetch_places_by_ids",
+                new=AsyncMock(return_value=_kyoto_docs()),
+            ),
+            patch(
+                "src.optimizer.solver.multi_day_service.optimize_route",
+                new=AsyncMock(return_value=_canned_single_day()),
+            ),
+        ):
+            response = await client.post(f"{_BASE}/trip", json=_TRANSFER_PAYLOAD)
+
+        assert response.status_code == 200
+        body = response.json()
+        day0 = body["days"][0]
+        assert day0["transfer"] is not None
+        assert day0["transfer"]["origin"]["name"] == "Tokyo Hotel"
+        assert day0["transfer"]["destination"]["name"] == "Kyoto Hotel"
+        assert day0["transfer"]["duration_s"] == 18000
+        assert len(day0["steps"]) > 0
+
+    async def test_sibling_request_without_transfer_keeps_pre_branch_behavior(self, client):
+        """Backward compatibility: same fixture minus `transfers` behaves exactly like ADR-15."""
+        payload = {k: v for k, v in _TRANSFER_PAYLOAD.items() if k != "transfers"}
+
+        with (
+            patch(
+                "src.optimizer.solver.multi_day_service.fetch_places_by_ids",
+                new=AsyncMock(return_value=_kyoto_docs()),
+            ),
+            patch(
+                "src.optimizer.solver.multi_day_service.optimize_route",
+                new=AsyncMock(return_value=_canned_single_day()),
+            ),
+        ):
+            response = await client.post(f"{_BASE}/trip", json=payload)
+
+        assert response.status_code == 200
+        assert response.json()["days"][0]["transfer"] is None
+
+    async def test_transfer_on_non_transition_day_returns_422(self, client):
+        payload = {**_TRANSFER_PAYLOAD, "accommodations": []}
+        response = await client.post(f"{_BASE}/trip", json=payload)
+        assert response.status_code == 422
+
+    async def test_transfer_with_explicit_day_config_anchor_returns_422(self, client):
+        """Guards against silently teleporting the post-transfer segment — see ADR-16."""
+        payload = {
+            **_TRANSFER_PAYLOAD,
+            "days": [
+                {
+                    "date": "2026-06-01",
+                    "day_start_hour": 9,
+                    "day_end_hour": 21,
+                    "start_lat": 0.0,
+                    "start_lng": 0.0,
+                }
+            ],
+        }
+        response = await client.post(f"{_BASE}/trip", json=payload)
+        assert response.status_code == 422

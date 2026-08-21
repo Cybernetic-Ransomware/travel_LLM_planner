@@ -212,9 +212,7 @@ async def test_build_enrichment_update_missing_location_leaves_coordinates_unset
 @pytest.mark.unit
 async def test_build_enrichment_update_falls_back_to_search(httpx_mock, manager):
     httpx_mock.add_response(url=_PLACE_URL, status_code=404, json={"error": {"status": "NOT_FOUND"}})
-    httpx_mock.add_response(
-        url=_SEARCH_URL, json={"places": [{"id": "ChIresolved", "formattedAddress": "ul. Nowa 2"}]}
-    )
+    httpx_mock.add_response(url=_SEARCH_URL, json={"places": [{"id": "ChIresolved", "formattedAddress": "ul. Nowa 2"}]})
     httpx_mock.add_response(
         url="https://places.googleapis.com/v1/places/ChIresolved",
         json={"id": "ChIresolved", "formattedAddress": "ul. Nowa 2", "location": {"latitude": 1.0, "longitude": 2.0}},

@@ -1,13 +1,21 @@
 """Unit tests for optimizer models: TransportMode, MatrixEntry, DistanceMatrix, OptimizeRequest."""
 
-from datetime import UTC, date, datetime, timezone
+from datetime import UTC, date, datetime, time, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
 
 from src.accommodations.models import AccommodationStay
 from src.optimizer.matrix.models import DistanceMatrix, MatrixEntry, TransportMode
-from src.optimizer.solver.models import DayConfig, MultiDayRequest, OptimizeRequest, PlaceDayPreference
+from src.optimizer.solver.models import (
+    DayConfig,
+    MultiDayRequest,
+    OptimizeRequest,
+    PlaceDayPreference,
+    resolve_day_bound_s,
+    seconds_to_time,
+)
+from src.transfers.models import TransferBlock
 
 
 @pytest.mark.unit
@@ -215,3 +223,200 @@ class TestMultiDayRequestAccommodations:
         ]
         request = MultiDayRequest(**self._base_kwargs(), accommodations=stays)
         assert len(request.accommodations) == 2
+
+
+@pytest.mark.unit
+class TestOptimizeRequestTimePrecision:
+    def test_day_start_time_and_day_end_time_default_to_none(self):
+        request = OptimizeRequest(place_ids=["p1"])
+        assert request.day_start_time is None
+        assert request.day_end_time is None
+
+    def test_explicit_times_accepted(self):
+        request = OptimizeRequest(place_ids=["p1"], day_start_time=time(9, 30), day_end_time=time(20, 45))
+        assert request.day_start_time == time(9, 30)
+        assert request.day_end_time == time(20, 45)
+
+    def test_day_end_time_midnight_rejected(self):
+        with pytest.raises(ValidationError, match="cannot represent midnight"):
+            OptimizeRequest(place_ids=["p1"], day_end_time=time(0, 0))
+
+    def test_day_end_hour_24_with_day_end_time_rejected(self):
+        with pytest.raises(ValidationError, match="cannot be combined with day_end_hour=24"):
+            OptimizeRequest(place_ids=["p1"], day_end_hour=24, day_end_time=time(23, 30))
+
+    def test_day_end_hour_24_without_day_end_time_is_valid(self):
+        request = OptimizeRequest(place_ids=["p1"], day_end_hour=24)
+        assert request.day_end_time is None
+
+    def test_effective_start_after_effective_end_rejected_even_when_hours_alone_would_pass(self):
+        """day_start_hour=9 < day_end_hour=21 passes the naive hour check, but 22:30 > 21:00 effectively."""
+        with pytest.raises(ValidationError, match="effective day start"):
+            OptimizeRequest(place_ids=["p1"], day_start_hour=9, day_start_time=time(22, 30), day_end_hour=21)
+
+    def test_minute_precision_not_rounded_to_hour(self):
+        request = OptimizeRequest(place_ids=["p1"], day_start_time=time(9, 15), day_end_time=time(9, 45))
+        assert request.day_start_time == time(9, 15)
+        assert request.day_end_time == time(9, 45)
+
+    @pytest.mark.parametrize("field", ["day_start_time", "day_end_time"])
+    def test_timezone_aware_time_rejected(self, field):
+        """Offset-aware time must be a controlled 422, never a naive-vs-aware TypeError."""
+        with pytest.raises(ValidationError, match="naive local wall-clock time"):
+            OptimizeRequest(place_ids=["p1"], **{field: time(10, 0, tzinfo=timezone(timedelta(hours=9)))})
+
+
+@pytest.mark.unit
+class TestMultiDayRequestDaysLimit:
+    @staticmethod
+    def _days(n: int) -> list[DayConfig]:
+        return [DayConfig(date=date(2026, 1, 1) + timedelta(days=i)) for i in range(n)]
+
+    def test_accepts_thirty_one_days(self):
+        request = MultiDayRequest(
+            days=self._days(31), places=[PlaceDayPreference(place_id="p1"), PlaceDayPreference(place_id="p2")]
+        )
+        assert len(request.days) == 31
+
+    def test_rejects_thirty_two_days(self):
+        with pytest.raises(ValidationError, match="days"):
+            MultiDayRequest(
+                days=self._days(32), places=[PlaceDayPreference(place_id="p1"), PlaceDayPreference(place_id="p2")]
+            )
+
+
+@pytest.mark.unit
+class TestMultiDayRequestUniqueDayDates:
+    def test_duplicate_day_dates_rejected(self):
+        with pytest.raises(ValidationError, match="duplicate date"):
+            MultiDayRequest(
+                days=[DayConfig(date=date(2026, 6, 1)), DayConfig(date=date(2026, 6, 1))],
+                places=[PlaceDayPreference(place_id="p1"), PlaceDayPreference(place_id="p2")],
+            )
+
+
+@pytest.mark.unit
+class TestMultiDayRequestTransfers:
+    @staticmethod
+    def _stay(name: str, check_in: date, check_out: date) -> AccommodationStay:
+        return AccommodationStay(name=name, lat=35.0, lng=139.0, check_in_date=check_in, check_out_date=check_out)
+
+    @staticmethod
+    def _transfer(day: date, **kwargs) -> TransferBlock:
+        defaults: dict = {"departure_time": time(10, 0), "arrival_time": time(15, 0)}
+        return TransferBlock(date=day, **{**defaults, **kwargs})
+
+    def _base_kwargs(self) -> dict:
+        return {
+            "days": [DayConfig(date=date(2026, 10, d)) for d in (9, 10, 11)],
+            "places": [PlaceDayPreference(place_id="p1"), PlaceDayPreference(place_id="p2")],
+            "accommodations": [
+                self._stay("Tokyo Hotel", date(2026, 10, 5), date(2026, 10, 10)),
+                self._stay("Kyoto Hotel", date(2026, 10, 10), date(2026, 10, 14)),
+            ],
+        }
+
+    def test_default_transfers_is_empty_list(self):
+        request = MultiDayRequest(
+            days=[DayConfig(date=date(2026, 6, 1))],
+            places=[PlaceDayPreference(place_id="p1"), PlaceDayPreference(place_id="p2")],
+        )
+        assert request.transfers == []
+
+    def test_transfer_on_transition_day_accepted(self):
+        request = MultiDayRequest(**self._base_kwargs(), transfers=[self._transfer(date(2026, 10, 10))])
+        assert len(request.transfers) == 1
+
+    def test_transfer_on_non_transition_day_rejected(self):
+        with pytest.raises(ValidationError, match="not a transition day"):
+            MultiDayRequest(**self._base_kwargs(), transfers=[self._transfer(date(2026, 10, 9))])
+
+    def test_transfer_without_accommodations_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["accommodations"] = []
+        with pytest.raises(ValidationError, match="not a transition day"):
+            MultiDayRequest(**kwargs, transfers=[self._transfer(date(2026, 10, 10))])
+
+    def test_transfer_date_outside_days_rejected(self):
+        with pytest.raises(ValidationError, match="not among request.days dates"):
+            MultiDayRequest(**self._base_kwargs(), transfers=[self._transfer(date(2026, 10, 20))])
+
+    def test_duplicate_transfer_dates_rejected(self):
+        kwargs = self._base_kwargs()
+        kwargs["days"] = [DayConfig(date=date(2026, 10, d)) for d in (9, 10, 11, 12)]
+        kwargs["accommodations"] = [
+            self._stay("Tokyo Hotel", date(2026, 10, 5), date(2026, 10, 10)),
+            self._stay("Kyoto Hotel", date(2026, 10, 10), date(2026, 10, 14)),
+        ]
+        with pytest.raises(ValidationError, match="duplicate date"):
+            MultiDayRequest(
+                **kwargs,
+                transfers=[
+                    self._transfer(date(2026, 10, 10), label="first"),
+                    self._transfer(date(2026, 10, 10), label="second"),
+                ],
+            )
+
+
+@pytest.mark.unit
+class TestMultiDayRequestTransferDayConfigConflict:
+    @staticmethod
+    def _stay(name: str, check_in: date, check_out: date) -> AccommodationStay:
+        return AccommodationStay(name=name, lat=35.0, lng=139.0, check_in_date=check_in, check_out_date=check_out)
+
+    def _base_kwargs(self, transition_day_cfg: DayConfig) -> dict:
+        return {
+            "days": [DayConfig(date=date(2026, 10, 9)), transition_day_cfg, DayConfig(date=date(2026, 10, 11))],
+            "places": [PlaceDayPreference(place_id="p1"), PlaceDayPreference(place_id="p2")],
+            "accommodations": [
+                self._stay("Tokyo Hotel", date(2026, 10, 5), date(2026, 10, 10)),
+                self._stay("Kyoto Hotel", date(2026, 10, 10), date(2026, 10, 14)),
+            ],
+            "transfers": [TransferBlock(date=date(2026, 10, 10), departure_time=time(10, 0), arrival_time=time(15, 0))],
+        }
+
+    def test_explicit_start_anchor_with_transfer_rejected(self):
+        cfg = DayConfig(date=date(2026, 10, 10), start_lat=35.0, start_lng=139.0)
+        with pytest.raises(ValidationError, match="cannot set explicit start/end anchors"):
+            MultiDayRequest(**self._base_kwargs(cfg))
+
+    def test_explicit_end_anchor_with_transfer_rejected(self):
+        cfg = DayConfig(date=date(2026, 10, 10), end_lat=35.0, end_lng=139.0)
+        with pytest.raises(ValidationError, match="cannot set explicit start/end anchors"):
+            MultiDayRequest(**self._base_kwargs(cfg))
+
+    def test_transfer_with_plain_day_config_is_valid(self):
+        cfg = DayConfig(date=date(2026, 10, 10))
+        request = MultiDayRequest(**self._base_kwargs(cfg))
+        assert len(request.transfers) == 1
+
+    def test_global_anchor_alongside_transfer_is_valid(self):
+        """Global MultiDayRequest anchors remain a fallback below transfer-derived anchors — no conflict."""
+        cfg = DayConfig(date=date(2026, 10, 10))
+        kwargs = self._base_kwargs(cfg)
+        request = MultiDayRequest(**kwargs, start_lat=0.0, start_lng=0.0, end_lat=0.0, end_lng=0.0)
+        assert request.start_lat == 0.0
+
+
+@pytest.mark.unit
+class TestResolveDayBoundS:
+    def test_explicit_time_wins_over_hour(self):
+        assert resolve_day_bound_s(9, time(22, 30)) == 22 * 3600 + 30 * 60
+
+    def test_falls_back_to_hour_when_time_is_none(self):
+        assert resolve_day_bound_s(14, None) == 14 * 3600
+
+    def test_minute_and_second_precision_preserved(self):
+        assert resolve_day_bound_s(0, time(9, 15, 42)) == 9 * 3600 + 15 * 60 + 42
+
+    def test_hour_24_without_explicit_time_means_midnight(self):
+        assert resolve_day_bound_s(24, None) == 86400
+
+
+@pytest.mark.unit
+class TestSecondsToTime:
+    def test_round_trip_with_resolve_day_bound_s(self):
+        assert seconds_to_time(resolve_day_bound_s(0, time(15, 42))) == time(15, 42)
+
+    def test_not_rounded_to_hour(self):
+        assert seconds_to_time(9 * 3600 + 15 * 60) == time(9, 15)

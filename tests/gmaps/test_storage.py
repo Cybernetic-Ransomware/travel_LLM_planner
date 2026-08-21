@@ -156,9 +156,7 @@ class TestFindAndUpdatePlace:
 
     async def test_mixed_set_and_unset_in_one_call(self, test_db, sample_place):
         await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_to=17))
-        doc = await find_and_update_place(
-            test_db, sample_place, PlacePatch(visit_duration_min=45, preferred_hour_to=None)
-        )
+        doc = await find_and_update_place(test_db, sample_place, PlacePatch(visit_duration_min=45, preferred_hour_to=None))
         assert doc is not None
         assert doc["visit_duration_min"] == 45
         assert "preferred_hour_to" not in doc
@@ -190,9 +188,7 @@ class TestFindAndUpdatePlace:
 
     async def test_hour_patch_paired_with_null_counterpart_succeeds(self, test_db, sample_place):
         await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_from=9, preferred_hour_to=17))
-        doc = await find_and_update_place(
-            test_db, sample_place, PlacePatch(preferred_hour_from=18, preferred_hour_to=None)
-        )
+        doc = await find_and_update_place(test_db, sample_place, PlacePatch(preferred_hour_from=18, preferred_hour_to=None))
         assert doc is not None
         assert doc["preferred_hour_from"] == 18
         assert "preferred_hour_to" not in doc
@@ -223,16 +219,24 @@ class TestFetchEnrichmentCandidates:
 
     async def test_never_attempted_returned_before_stale(self, test_db):
         now = pendulum.now("UTC")
-        await test_db[GMAPS_COLLECTION].insert_many([
-            {
-                "name": "Stale", "gmaps_place_id": "ChIStale", "address": None,
-                "enriched_at": now.subtract(hours=48), "details_status": "OK",
-            },
-            {
-                "name": "Fresh", "gmaps_place_id": "ChIFresh", "address": None,
-                "enriched_at": None, "details_status": None,
-            },
-        ])
+        await test_db[GMAPS_COLLECTION].insert_many(
+            [
+                {
+                    "name": "Stale",
+                    "gmaps_place_id": "ChIStale",
+                    "address": None,
+                    "enriched_at": now.subtract(hours=48),
+                    "details_status": "OK",
+                },
+                {
+                    "name": "Fresh",
+                    "gmaps_place_id": "ChIFresh",
+                    "address": None,
+                    "enriched_at": None,
+                    "details_status": None,
+                },
+            ]
+        )
         result = await fetch_enrichment_candidates(test_db, limit=2)
         assert len(result) == 2
         assert result[0]["name"] == "Fresh"
@@ -240,80 +244,110 @@ class TestFetchEnrichmentCandidates:
 
     async def test_recent_failure_excluded(self, test_db):
         now = pendulum.now("UTC")
-        await test_db[GMAPS_COLLECTION].insert_many([
-            {
-                "name": "A", "gmaps_place_id": "ChIA", "address": None,
-                "enriched_at": now.subtract(hours=1), "details_status": "NOT_FOUND",
-            },
-            {
-                "name": "B", "gmaps_place_id": "ChIB", "address": None,
-                "enriched_at": now.subtract(hours=1), "details_status": "HTTP_404",
-            },
-        ])
+        await test_db[GMAPS_COLLECTION].insert_many(
+            [
+                {
+                    "name": "A",
+                    "gmaps_place_id": "ChIA",
+                    "address": None,
+                    "enriched_at": now.subtract(hours=1),
+                    "details_status": "NOT_FOUND",
+                },
+                {
+                    "name": "B",
+                    "gmaps_place_id": "ChIB",
+                    "address": None,
+                    "enriched_at": now.subtract(hours=1),
+                    "details_status": "HTTP_404",
+                },
+            ]
+        )
         result = await fetch_enrichment_candidates(test_db, limit=10)
         assert result == []
 
     async def test_backoff_expires_after_24h(self, test_db):
         now = pendulum.now("UTC")
-        await test_db[GMAPS_COLLECTION].insert_one({
-            "name": "OldFail", "gmaps_place_id": "ChIOld", "address": None,
-            "enriched_at": now.subtract(hours=25), "details_status": "NOT_FOUND",
-        })
+        await test_db[GMAPS_COLLECTION].insert_one(
+            {
+                "name": "OldFail",
+                "gmaps_place_id": "ChIOld",
+                "address": None,
+                "enriched_at": now.subtract(hours=25),
+                "details_status": "NOT_FOUND",
+            }
+        )
         result = await fetch_enrichment_candidates(test_db, limit=10)
         assert len(result) == 1
 
     async def test_recent_ok_not_excluded(self, test_db):
         now = pendulum.now("UTC")
-        await test_db[GMAPS_COLLECTION].insert_one({
-            "name": "OkPlace", "gmaps_place_id": "ChIOk", "address": None,
-            "enriched_at": now.subtract(hours=1), "details_status": "OK",
-        })
+        await test_db[GMAPS_COLLECTION].insert_one(
+            {
+                "name": "OkPlace",
+                "gmaps_place_id": "ChIOk",
+                "address": None,
+                "enriched_at": now.subtract(hours=1),
+                "details_status": "OK",
+            }
+        )
         result = await fetch_enrichment_candidates(test_db, limit=10)
         assert len(result) == 1
 
     async def test_tier1_sorted_by_enriched_at_asc(self, test_db):
         now = pendulum.now("UTC")
-        await test_db[GMAPS_COLLECTION].insert_many([
-            {
-                "name": "C", "gmaps_place_id": "ChIC", "address": None,
-                "enriched_at": now.subtract(hours=36), "details_status": "NOT_FOUND",
-            },
-            {
-                "name": "A", "gmaps_place_id": "ChIA", "address": None,
-                "enriched_at": now.subtract(hours=72), "details_status": "NOT_FOUND",
-            },
-            {
-                "name": "B", "gmaps_place_id": "ChIB", "address": None,
-                "enriched_at": now.subtract(hours=48), "details_status": "NOT_FOUND",
-            },
-        ])
+        await test_db[GMAPS_COLLECTION].insert_many(
+            [
+                {
+                    "name": "C",
+                    "gmaps_place_id": "ChIC",
+                    "address": None,
+                    "enriched_at": now.subtract(hours=36),
+                    "details_status": "NOT_FOUND",
+                },
+                {
+                    "name": "A",
+                    "gmaps_place_id": "ChIA",
+                    "address": None,
+                    "enriched_at": now.subtract(hours=72),
+                    "details_status": "NOT_FOUND",
+                },
+                {
+                    "name": "B",
+                    "gmaps_place_id": "ChIB",
+                    "address": None,
+                    "enriched_at": now.subtract(hours=48),
+                    "details_status": "NOT_FOUND",
+                },
+            ]
+        )
         result = await fetch_enrichment_candidates(test_db, limit=3)
         assert [r["name"] for r in result] == ["A", "B", "C"]
 
     async def test_places_with_address_excluded(self, test_db):
-        await test_db[GMAPS_COLLECTION].insert_many([
-            {"name": "HasAddress", "gmaps_place_id": "ChIHas", "address": "ul. Testowa 1",
-             "enriched_at": None},
-            {"name": "NoAddress", "gmaps_place_id": "ChINo", "address": None,
-             "enriched_at": None},
-        ])
+        await test_db[GMAPS_COLLECTION].insert_many(
+            [
+                {"name": "HasAddress", "gmaps_place_id": "ChIHas", "address": "ul. Testowa 1", "enriched_at": None},
+                {"name": "NoAddress", "gmaps_place_id": "ChINo", "address": None, "enriched_at": None},
+            ]
+        )
         result = await fetch_enrichment_candidates(test_db, limit=10)
         assert len(result) == 1
         assert result[0]["name"] == "NoAddress"
 
     async def test_null_place_id_excluded(self, test_db):
-        await test_db[GMAPS_COLLECTION].insert_many([
-            {"name": "NullId", "gmaps_place_id": None, "address": None, "enriched_at": None},
-            {"name": "HasId", "gmaps_place_id": "ChIHas", "address": None, "enriched_at": None},
-        ])
+        await test_db[GMAPS_COLLECTION].insert_many(
+            [
+                {"name": "NullId", "gmaps_place_id": None, "address": None, "enriched_at": None},
+                {"name": "HasId", "gmaps_place_id": "ChIHas", "address": None, "enriched_at": None},
+            ]
+        )
         result = await fetch_enrichment_candidates(test_db, limit=10)
         assert len(result) == 1
         assert result[0]["name"] == "HasId"
 
     async def test_limit_respected(self, test_db):
-        await test_db[GMAPS_COLLECTION].insert_many([
-            {"name": f"P{i}", "gmaps_place_id": f"ChI{i}", "address": None, "enriched_at": None}
-            for i in range(5)
-        ])
+        await test_db[GMAPS_COLLECTION].insert_many(
+            [{"name": f"P{i}", "gmaps_place_id": f"ChI{i}", "address": None, "enriched_at": None} for i in range(5)]
+        )
         result = await fetch_enrichment_candidates(test_db, limit=3)
         assert len(result) == 3

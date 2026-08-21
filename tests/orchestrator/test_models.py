@@ -103,6 +103,7 @@ class TestAgentState:
 
     def test_state_is_typed_dict(self):
         from typing import get_type_hints
+
         hints = get_type_hints(AgentState)
         assert "messages" in hints
         assert "place_context" in hints

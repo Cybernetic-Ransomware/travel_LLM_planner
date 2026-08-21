@@ -5,11 +5,32 @@ from datetime import date, time
 from pydantic import BaseModel, Field, model_validator
 
 from src.accommodations.models import AccommodationStay, validate_no_stay_overlaps
+from src.accommodations.resolver import DayAccommodationAnchors, resolve_day_anchors
 from src.optimizer.matrix.models import TransportMode
+from src.time_validation import NaiveTime
+from src.transfers.models import TransferBlock
 
 _TRANSIT_MULTI_DAY_ERROR = (
     "TRANSIT mode is not supported for multi-day trips; the distance matrix cache does not track departure_date per day"
 )
+
+
+def resolve_day_bound_s(hour: int, explicit_time: time | None) -> int:
+    """Effective seconds-from-midnight for a day bound: explicit_time wins when set."""
+    if explicit_time is not None:
+        return explicit_time.hour * 3600 + explicit_time.minute * 60 + explicit_time.second
+    return hour * 3600
+
+
+def seconds_to_time(s: int) -> time:
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return time(hour=h % 24, minute=m, second=sec)
+
+
+def _is_transition_day(anchors: DayAccommodationAnchors) -> bool:
+    """True when START/END resolve to two different stays — mirrors multi_day_service, see ADR-15/16."""
+    return anchors.start is not None and anchors.end is not None and anchors.start is not anchors.end
 
 
 class TimeWindow:
@@ -80,6 +101,8 @@ class OptimizeRequest(BaseModel):
     transport_mode: TransportMode = TransportMode.WALK
     day_start_hour: int = Field(default=9, ge=0, le=23)
     day_end_hour: int = Field(default=21, ge=1, le=24)
+    day_start_time: NaiveTime | None = None
+    day_end_time: NaiveTime | None = None
     start_lat: float | None = None
     start_lng: float | None = None
     end_lat: float | None = None
@@ -87,9 +110,19 @@ class OptimizeRequest(BaseModel):
     departure_date: date | None = None
 
     @model_validator(mode="after")
+    def validate_day_end_time_semantics(self) -> OptimizeRequest:
+        if self.day_end_time == time(0, 0):
+            raise ValueError("day_end_time cannot represent midnight; use day_end_hour=24 instead")
+        if self.day_end_hour == 24 and self.day_end_time is not None:
+            raise ValueError("day_end_time cannot be combined with day_end_hour=24")
+        return self
+
+    @model_validator(mode="after")
     def validate_day_range(self) -> OptimizeRequest:
-        if self.day_start_hour >= self.day_end_hour:
-            raise ValueError("day_start_hour must be less than day_end_hour")
+        start_s = resolve_day_bound_s(self.day_start_hour, self.day_start_time)
+        end_s = resolve_day_bound_s(self.day_end_hour, self.day_end_time)
+        if start_s >= end_s:
+            raise ValueError("effective day start must be before effective day end")
         return self
 
     @model_validator(mode="after")
@@ -124,7 +157,9 @@ class SkippedPlace(BaseModel):
 
     place_id: str
     name: str | None
-    reason: str  # NO_COORDINATES | TIME_WINDOW_INFEASIBLE | NO_MATRIX_ENTRY | MATRIX_INCOMPLETE | DROPPED_LOW_PRIORITY
+    # NO_COORDINATES | TIME_WINDOW_INFEASIBLE | NO_MATRIX_ENTRY | MATRIX_INCOMPLETE | DROPPED_LOW_PRIORITY
+    # | TRANSFER_DAY_GEOGRAPHY_MISMATCH | TRANSFER_WINDOW_INFEASIBLE | CAPACITY_EXCEEDED
+    reason: str
 
 
 class OptimizeResponse(BaseModel):
@@ -166,15 +201,27 @@ class DayConfig(BaseModel):
     date: date
     day_start_hour: int = Field(default=9, ge=0, le=23)
     day_end_hour: int = Field(default=21, ge=1, le=24)
+    day_start_time: NaiveTime | None = None
+    day_end_time: NaiveTime | None = None
     start_lat: float | None = None
     start_lng: float | None = None
     end_lat: float | None = None
     end_lng: float | None = None
 
     @model_validator(mode="after")
+    def validate_day_end_time_semantics(self) -> DayConfig:
+        if self.day_end_time == time(0, 0):
+            raise ValueError("day_end_time cannot represent midnight; use day_end_hour=24 instead")
+        if self.day_end_hour == 24 and self.day_end_time is not None:
+            raise ValueError("day_end_time cannot be combined with day_end_hour=24")
+        return self
+
+    @model_validator(mode="after")
     def validate_day_range(self) -> DayConfig:
-        if self.day_start_hour >= self.day_end_hour:
-            raise ValueError("day_start_hour must be less than day_end_hour")
+        start_s = resolve_day_bound_s(self.day_start_hour, self.day_start_time)
+        end_s = resolve_day_bound_s(self.day_end_hour, self.day_end_time)
+        if start_s >= end_s:
+            raise ValueError("effective day start must be before effective day end")
         return self
 
     @model_validator(mode="after")
@@ -193,7 +240,7 @@ class DayConfig(BaseModel):
 class MultiDayRequest(BaseModel):
     """Request body for a multi-day TSP trip optimization."""
 
-    days: list[DayConfig] = Field(min_length=1, max_length=14)
+    days: list[DayConfig] = Field(min_length=1, max_length=31)
     places: list[PlaceDayPreference] = Field(min_length=2, max_length=50)
     transport_mode: TransportMode = TransportMode.WALK
     start_lat: float | None = None
@@ -201,6 +248,7 @@ class MultiDayRequest(BaseModel):
     end_lat: float | None = None
     end_lng: float | None = None
     accommodations: list[AccommodationStay] = Field(default_factory=list)
+    transfers: list[TransferBlock] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_no_transit(self) -> MultiDayRequest:
@@ -241,6 +289,68 @@ class MultiDayRequest(BaseModel):
         validate_no_stay_overlaps(self.accommodations)
         return self
 
+    @model_validator(mode="after")
+    def validate_unique_day_dates(self) -> MultiDayRequest:
+        dates = [cfg.date for cfg in self.days]
+        if len(dates) != len(set(dates)):
+            raise ValueError("duplicate date found in days list")
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_transfer_dates(self) -> MultiDayRequest:
+        dates = [t.date for t in self.transfers]
+        if len(dates) != len(set(dates)):
+            raise ValueError("duplicate date found in transfers list")
+        return self
+
+    @model_validator(mode="after")
+    def validate_transfers_on_transition_days(self) -> MultiDayRequest:
+        if not self.transfers:
+            return self
+        day_dates = [cfg.date for cfg in self.days]
+        for transfer in self.transfers:
+            if transfer.date not in day_dates:
+                raise ValueError(f"transfer date {transfer.date} is not among request.days dates")
+        anchors_by_date = dict(zip(day_dates, resolve_day_anchors(day_dates, self.accommodations), strict=True))
+        for transfer in self.transfers:
+            if not _is_transition_day(anchors_by_date[transfer.date]):
+                raise ValueError(
+                    f"transfer date {transfer.date} is not a transition day "
+                    "(no accommodation check-in/check-out changeover on that date)"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_transfer_day_config_conflict(self) -> MultiDayRequest:
+        transfer_dates = {t.date for t in self.transfers}
+        for cfg in self.days:
+            if cfg.date in transfer_dates and (cfg.start_lat is not None or cfg.end_lat is not None):
+                raise ValueError(
+                    f"DayConfig for {cfg.date} cannot set explicit start/end anchors when a transfer exists "
+                    "for that date — this slice models the transfer as door-to-door "
+                    "(origin accommodation -> destination accommodation)"
+                )
+        return self
+
+
+class TransferEndpoint(BaseModel):
+    """Display data for a transfer's origin/destination — not a persisted identifier, see ADR-16."""
+
+    name: str
+    lat: float
+    lng: float
+
+
+class TransferSegment(BaseModel):
+    """A resolved, time-consuming transfer between two accommodation stays within a DayPlan."""
+
+    origin: TransferEndpoint
+    destination: TransferEndpoint
+    departure_time: time
+    arrival_time: time
+    duration_s: int
+    label: str | None = None
+
 
 class DayPlan(BaseModel):
     """Optimized route for a single day within a multi-day trip."""
@@ -253,6 +363,7 @@ class DayPlan(BaseModel):
     total_wait_min: int
     skipped: list[SkippedPlace]
     travel_to_end_s: int = 0
+    transfer: TransferSegment | None = None
 
 
 class MultiDayResponse(BaseModel):

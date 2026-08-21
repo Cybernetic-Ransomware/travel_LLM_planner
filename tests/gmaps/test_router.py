@@ -119,9 +119,7 @@ class TestPatchPlace:
             f"/api/v1/core/gmaps/places/{sample_place}",
             json={"preferred_hour_from": 9, "preferred_hour_to": 17},
         )
-        response = await client.patch(
-            f"/api/v1/core/gmaps/places/{sample_place}", json={"preferred_hour_from": None}
-        )
+        response = await client.patch(f"/api/v1/core/gmaps/places/{sample_place}", json={"preferred_hour_from": None})
         assert response.status_code == 200
         data = response.json()
         assert data["preferred_hour_from"] is None
@@ -261,15 +259,17 @@ class TestEnrichPlaces:
 class TestEnrichBackoff:
     async def test_backoff_excluded_place_not_scanned(self, test_db, client):
         now = pendulum.now("UTC")
-        await test_db[GMAPS_COLLECTION].insert_one({
-            "name": "Failed",
-            "gmaps_place_id": "ChIfailed",
-            "address": None,
-            "enriched_at": now.subtract(hours=1),
-            "details_status": "NOT_FOUND",
-            "lat": 52.0,
-            "lng": 21.0,
-        })
+        await test_db[GMAPS_COLLECTION].insert_one(
+            {
+                "name": "Failed",
+                "gmaps_place_id": "ChIfailed",
+                "address": None,
+                "enriched_at": now.subtract(hours=1),
+                "details_status": "NOT_FOUND",
+                "lat": 52.0,
+                "lng": 21.0,
+            }
+        )
         response = await client.post("/api/v1/core/gmaps/enrich", json={"limit": 10})
         assert response.status_code == 200
         assert response.json()["scanned"] == 0
@@ -303,9 +303,7 @@ class TestEnrichPlace:
         assert data["lat"] == 50.054
         assert data["lng"] == 19.935
 
-    async def test_does_not_touch_other_places(
-        self, client, test_db, place_without_coordinates, httpx_mock: HTTPXMock
-    ):
+    async def test_does_not_touch_other_places(self, client, test_db, place_without_coordinates, httpx_mock: HTTPXMock):
         other = await test_db[GMAPS_COLLECTION].insert_one(
             {"name": "Other Place", "gmaps_place_id": "ChIother", "address": None, "lat": None, "lng": None}
         )

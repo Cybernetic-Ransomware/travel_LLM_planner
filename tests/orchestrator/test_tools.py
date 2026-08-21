@@ -745,18 +745,14 @@ class TestGetPlacePricingErrors:
     async def test_missing_api_key_returns_message(self):
         places_manager = _make_pricing_manager(search_result=(None, "MISSING_API_KEY", None))
 
-        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
-            {"query": "Magia Cafe"}
-        )
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke({"query": "Magia Cafe"})
 
         assert "API key not configured" in result
 
     async def test_search_api_error_returns_error_string(self):
         places_manager = _make_pricing_manager(search_result=(None, "REQUEST_DENIED", "API key invalid"))
 
-        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
-            {"query": "Magia Cafe"}
-        )
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke({"query": "Magia Cafe"})
 
         assert "Search failed" in result
         assert "API key invalid" in result
@@ -766,9 +762,7 @@ class TestGetPlacePricingErrors:
         places_manager.search_place_id = AsyncMock(return_value=("ChIabc123", "OK", None))
         places_manager.fetch_place_details = AsyncMock(return_value=(None, "HTTP_500", "boom"))
 
-        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke(
-            {"query": "Magia Cafe"}
-        )
+        result = await _tool_by_name("get_place_pricing", places_manager=places_manager).ainvoke({"query": "Magia Cafe"})
 
         assert "Could not retrieve pricing details" in result
         assert "boom" in result

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, time, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
 
 from src.accommodations.models import AccommodationStay, validate_no_stay_overlaps
+
+JST = timezone(timedelta(hours=9))
 
 
 def _stay(name: str = "Hotel", check_in: date = date(2026, 10, 5), check_out: date = date(2026, 10, 10), **kwargs):
@@ -31,6 +33,12 @@ class TestAccommodationStayValidation:
         stay = _stay(check_in_from=time(15, 0), check_out_by=time(10, 0))
         assert stay.check_in_from == time(15, 0)
         assert stay.check_out_by == time(10, 0)
+
+    @pytest.mark.parametrize("field", ["check_in_from", "check_out_by"])
+    def test_timezone_aware_time_rejected(self, field):
+        """Offset-aware time must be a controlled 422, never a naive-vs-aware TypeError."""
+        with pytest.raises(ValidationError, match="naive local wall-clock time"):
+            _stay(**{field: time(10, 0, tzinfo=JST)})
 
     def test_check_out_equal_check_in_rejected(self):
         with pytest.raises(ValidationError, match="check_out_date"):

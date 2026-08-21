@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, time, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
 
+from src.accommodations.models import AccommodationStay
 from src.optimizer.matrix.models import TransportMode
 from src.optimizer.solver.models import (
     DayConfig,
@@ -17,7 +18,10 @@ from src.optimizer.solver.models import (
     PlaceDayPreference,
     RouteStep,
     SkippedPlace,
+    TransferEndpoint,
+    TransferSegment,
 )
+from src.transfers.models import TransferBlock
 
 
 def _day_config(**kwargs) -> DayConfig:
@@ -95,12 +99,35 @@ class TestDayConfig:
         assert cfg.day_end_hour == 18
 
     def test_start_greater_than_end_raises(self):
-        with pytest.raises(ValidationError, match="day_start_hour"):
+        with pytest.raises(ValidationError, match="effective day start"):
             DayConfig(date=date(2026, 6, 1), day_start_hour=18, day_end_hour=10)
 
     def test_start_equal_to_end_raises(self):
-        with pytest.raises(ValidationError, match="day_start_hour"):
+        with pytest.raises(ValidationError, match="effective day start"):
             DayConfig(date=date(2026, 6, 1), day_start_hour=9, day_end_hour=9)
+
+    def test_day_start_time_and_day_end_time_default_to_none(self):
+        cfg = DayConfig(date=date(2026, 6, 1))
+        assert cfg.day_start_time is None
+        assert cfg.day_end_time is None
+
+    def test_explicit_times_override_hours_for_range_check(self):
+        with pytest.raises(ValidationError, match="effective day start"):
+            DayConfig(date=date(2026, 6, 1), day_start_hour=9, day_start_time=time(22, 30), day_end_hour=21)
+
+    def test_day_end_time_midnight_rejected(self):
+        with pytest.raises(ValidationError, match="cannot represent midnight"):
+            DayConfig(date=date(2026, 6, 1), day_end_time=time(0, 0))
+
+    def test_day_end_hour_24_with_day_end_time_rejected(self):
+        with pytest.raises(ValidationError, match="cannot be combined with day_end_hour=24"):
+            DayConfig(date=date(2026, 6, 1), day_end_hour=24, day_end_time=time(23, 30))
+
+    @pytest.mark.parametrize("field", ["day_start_time", "day_end_time"])
+    def test_timezone_aware_time_rejected(self, field):
+        """Offset-aware time must be a controlled 422, never a naive-vs-aware TypeError."""
+        with pytest.raises(ValidationError, match="naive local wall-clock time"):
+            DayConfig(date=date(2026, 6, 1), **{field: time(10, 0, tzinfo=timezone(timedelta(hours=9)))})
 
 
 @pytest.mark.unit
@@ -189,3 +216,49 @@ class TestDayPlanAndResponse:
             unassigned=[SkippedPlace(place_id="p1", name="X", reason="TIME_WINDOW_INFEASIBLE")],
         )
         assert len(resp.unassigned) == 1
+
+    def test_transfer_defaults_to_none(self):
+        plan = DayPlan(
+            day_index=0,
+            date=date(2026, 6, 1),
+            steps=[],
+            total_travel_time_s=0,
+            total_visit_time_min=0,
+            total_wait_min=0,
+            skipped=[],
+        )
+        assert plan.transfer is None
+
+    def test_transfer_segment_carries_full_origin_and_destination(self):
+        segment = TransferSegment(
+            origin=TransferEndpoint(name="Tokyo Hotel", lat=35.6812, lng=139.7671),
+            destination=TransferEndpoint(name="Kyoto Hotel", lat=34.9855, lng=135.7588),
+            departure_time=time(10, 0),
+            arrival_time=time(15, 0),
+            duration_s=18000,
+            label="Shinkansen Tokyo→Kyoto",
+        )
+        plan = DayPlan(
+            day_index=0,
+            date=date(2026, 10, 10),
+            steps=[],
+            total_travel_time_s=0,
+            total_visit_time_min=0,
+            total_wait_min=0,
+            skipped=[],
+            transfer=segment,
+        )
+        assert plan.transfer is not None
+        assert plan.transfer.origin.name == "Tokyo Hotel"
+        assert plan.transfer.destination.name == "Kyoto Hotel"
+        assert plan.transfer.duration_s == 18000
+
+    def test_transfer_segment_label_optional(self):
+        segment = TransferSegment(
+            origin=TransferEndpoint(name="A", lat=0.0, lng=0.0),
+            destination=TransferEndpoint(name="B", lat=1.0, lng=1.0),
+            departure_time=time(10, 0),
+            arrival_time=time(15, 0),
+            duration_s=18000,
+        )
+        assert segment.label is None
