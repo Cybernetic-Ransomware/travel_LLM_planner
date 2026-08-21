@@ -23,12 +23,15 @@ from src.optimizer.solver.models import (
     SkippedPlace,
 )
 from src.optimizer.solver.multi_day_service import (
+    TransferDayContext,
     _is_accommodation_transition_day,
     _open_day_indices,
     _partition_places,
+    _transition_day_eligibility,
     optimize_trip,
 )
 from src.optimizer.solver.service import optimize_route as solve_single_day
+from src.transfers.models import TransferBlock
 
 
 def _day_config(d: date = date(2026, 6, 1), **kwargs) -> DayConfig:
@@ -96,7 +99,7 @@ class TestPlacePartitioning:
         configs = [_day_config(), _day_config(date(2026, 6, 2))]
         doc_map = {"p1": _place("p1"), "p2": _place("p2")}
 
-        buckets = _partition_places(places, 2, configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, configs, doc_map)
 
         assert "p1" in buckets[0]
         assert "p2" in buckets[1]
@@ -106,7 +109,7 @@ class TestPlacePartitioning:
         configs = [_day_config(), _day_config(date(2026, 6, 2))]
         doc_map = {f"p{i}": _place(f"p{i}") for i in range(1, 5)}
 
-        buckets = _partition_places(places, 2, configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, configs, doc_map)
 
         assert sum(len(v) for v in buckets.values()) == 4
         assert all(len(buckets[i]) > 0 for i in range(2))
@@ -116,7 +119,7 @@ class TestPlacePartitioning:
         configs = [_day_config()]
         doc_map = {"p1": _place("p1"), "p2": _place("p2")}
 
-        buckets = _partition_places(places, 1, configs, doc_map)
+        buckets, _, _ = _partition_places(places, 1, configs, doc_map)
 
         assert set(buckets[0]) == {"p1", "p2"}
 
@@ -125,7 +128,7 @@ class TestPlacePartitioning:
         configs = [_day_config(date(2026, 6, d)) for d in range(1, 5)]
         doc_map = {"p1": _place("p1"), "p2": _place("p2")}
 
-        buckets = _partition_places(places, 4, configs, doc_map)
+        buckets, _, _ = _partition_places(places, 4, configs, doc_map)
 
         assert sum(len(v) for v in buckets.values()) == 2
 
@@ -134,7 +137,7 @@ class TestPlacePartitioning:
         configs = [_day_config(), _day_config(date(2026, 6, 2))]
         doc_map = {f"p{i}": _place(f"p{i}") for i in range(1, 4)}
 
-        buckets = _partition_places(places, 2, configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, configs, doc_map)
 
         assert "p1" in buckets[0]
         assert sum(len(v) for v in buckets.values()) == 3
@@ -150,7 +153,7 @@ class TestPlacePartitioning:
         ]
         doc_map = {"p1": _place("p1"), "p2": _place("p2")}
 
-        buckets = _partition_places(places, 2, configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, configs, doc_map)
 
         assert "p1" in buckets[0]
         assert "p2" in buckets[1]
@@ -174,7 +177,7 @@ class TestPartitionPriorityOrder:
             "m1": _place("m1", visit_min=150, priority="must_see"),
         }
 
-        buckets = _partition_places(places, 2, self._configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, self._configs, doc_map)
 
         assert "m1" in buckets[0]
         assert "o1" in buckets[1]
@@ -189,7 +192,7 @@ class TestPartitionPriorityOrder:
             "m1": _place("m1", visit_min=150, priority="must_see"),
         }
 
-        buckets = _partition_places(places, 2, self._configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, self._configs, doc_map)
 
         assert "m1" in buckets[0]
         assert "o1" in buckets[1]
@@ -202,7 +205,7 @@ class TestPartitionPriorityOrder:
             "p2": _place("p2", visit_min=150),
         }
 
-        buckets = _partition_places(places, 2, self._configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, self._configs, doc_map)
 
         assert "p1" in buckets[0]
         assert "p2" in buckets[1]
@@ -255,7 +258,7 @@ class TestPartitionOpeningHoursAware:
         places = [_pref("museum")]
         doc_map = {"museum": doc}
 
-        buckets = _partition_places(places, 2, configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, configs, doc_map)
 
         assert "museum" in buckets[1], "museum should be assigned to Tuesday (day index 1)"
         assert "museum" not in buckets[0]
@@ -267,7 +270,7 @@ class TestPartitionOpeningHoursAware:
         places = [_pref_flexible("p1", DaySlot(day_index=0), DaySlot(day_index=1))]
         doc_map = {"p1": doc}
 
-        buckets = _partition_places(places, 2, configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, configs, doc_map)
 
         assert "p1" in buckets[1]
         assert "p1" not in buckets[0]
@@ -279,7 +282,7 @@ class TestPartitionOpeningHoursAware:
         places = [_pref_flexible("p1", DaySlot(day_index=0), DaySlot(day_index=1))]
         doc_map = {"p1": doc}
 
-        buckets = _partition_places(places, 2, configs, doc_map)
+        buckets, _, _ = _partition_places(places, 2, configs, doc_map)
 
         assert "p1" in buckets[0] or "p1" in buckets[1]
 
@@ -911,3 +914,310 @@ class TestTransitionDaySafety:
 
         assert len(result.steps) == 1
         assert len(result.skipped) == 1
+
+
+def _transfer_ctx(
+    *, effective_start_s: int = 15 * 3600, visit_budget_min: int = 360, transfer_date: date = date(2026, 6, 12)
+) -> TransferDayContext:
+    return TransferDayContext(
+        transfer=TransferBlock(date=transfer_date, departure_time=time(10, 0), arrival_time=time(15, 0)),
+        origin=TOKYO,
+        destination=KYOTO,
+        effective_start_s=effective_start_s,
+        visit_budget_min=visit_budget_min,
+    )
+
+
+@pytest.mark.unit
+class TestTransitionDayEligibility:
+    def test_place_closer_to_destination_is_eligible(self):
+        doc = _place("kyoto_place", lat=KYOTO.lat + 0.1, lng=KYOTO.lng + 0.1)
+        assert _transition_day_eligibility(doc, TOKYO, KYOTO) == "ELIGIBLE"
+
+    def test_place_closer_to_origin_is_geography_mismatch(self):
+        doc = _place("tokyo_place", lat=TOKYO.lat + 0.1, lng=TOKYO.lng + 0.1)
+        assert _transition_day_eligibility(doc, TOKYO, KYOTO) == "GEOGRAPHY_MISMATCH"
+
+    def test_missing_coordinates_is_no_coordinates_not_geography_mismatch(self):
+        """A place without lat/lng says nothing about which city it's closer to — must not be conflated."""
+        doc = {"_id": "no_coords", "name": "Mystery Place"}
+        assert _transition_day_eligibility(doc, TOKYO, KYOTO) == "NO_COORDINATES"
+
+
+@pytest.mark.unit
+class TestPartitionPlacesTransferAware:
+    """Direct unit tests of _partition_places with transfer_contexts — see ADR-16."""
+
+    def test_auto_place_exceeding_visit_budget_is_unassigned_not_force_packed(self):
+        ctx = _transfer_ctx(visit_budget_min=360)
+        doc = _place("big_attraction", lat=KYOTO.lat, lng=KYOTO.lng, visit_min=400)
+        configs = [_day_config(date(2026, 6, 12))]
+
+        buckets, unassigned, pre_solver_skipped_by_day = _partition_places(
+            [_pref("big_attraction")], 1, configs, {"big_attraction": doc}, {0: ctx}
+        )
+
+        assert "big_attraction" not in buckets[0]
+        assert len(unassigned) == 1
+        assert unassigned[0].reason == "CAPACITY_EXCEEDED"
+        assert pre_solver_skipped_by_day[0] == []
+
+    def test_auto_place_within_visit_budget_is_assigned(self):
+        ctx = _transfer_ctx(visit_budget_min=360)
+        doc = _place("small_attraction", lat=KYOTO.lat, lng=KYOTO.lng, visit_min=60)
+        configs = [_day_config(date(2026, 6, 12))]
+
+        buckets, unassigned, _ = _partition_places(
+            [_pref("small_attraction")], 1, configs, {"small_attraction": doc}, {0: ctx}
+        )
+
+        assert "small_attraction" in buckets[0]
+        assert unassigned == []
+
+    def test_pinned_place_closer_to_origin_is_pre_solver_skipped_not_bucketed(self):
+        """Pinning must not bypass eligibility — a pinned Tokyo place cannot become Kyoto sightseeing."""
+        ctx = _transfer_ctx()
+        doc = _place("tokyo_tower", lat=TOKYO.lat, lng=TOKYO.lng)
+        configs = [_day_config(date(2026, 6, 12))]
+
+        buckets, unassigned, pre_solver_skipped_by_day = _partition_places(
+            [_pref("tokyo_tower", day_index=0)], 1, configs, {"tokyo_tower": doc}, {0: ctx}
+        )
+
+        assert "tokyo_tower" not in buckets[0]
+        assert unassigned == []
+        assert len(pre_solver_skipped_by_day[0]) == 1
+        assert pre_solver_skipped_by_day[0][0].reason == "TRANSFER_DAY_GEOGRAPHY_MISMATCH"
+
+    def test_pinned_place_without_coordinates_is_skipped_as_no_coordinates(self):
+        ctx = _transfer_ctx()
+        doc = {"_id": "mystery", "name": "Mystery Place"}
+        configs = [_day_config(date(2026, 6, 12))]
+
+        _, _, pre_solver_skipped_by_day = _partition_places(
+            [_pref("mystery", day_index=0)], 1, configs, {"mystery": doc}, {0: ctx}
+        )
+
+        assert pre_solver_skipped_by_day[0][0].reason == "NO_COORDINATES"
+
+    def test_rejected_pinned_place_does_not_consume_fill_before_auto_place_is_packed(self):
+        """Regression: pinned eligibility must be checked before fill is touched, not after (see ADR-16)."""
+        ctx = _transfer_ctx(visit_budget_min=60)
+        rejected_pinned = _place("tokyo_tower", lat=TOKYO.lat, lng=TOKYO.lng, visit_min=60)
+        auto_kyoto_place = _place("kyoto_shrine", lat=KYOTO.lat, lng=KYOTO.lng, visit_min=60)
+        configs = [_day_config(date(2026, 6, 12))]
+        doc_map = {"tokyo_tower": rejected_pinned, "kyoto_shrine": auto_kyoto_place}
+
+        buckets, unassigned, pre_solver_skipped_by_day = _partition_places(
+            [_pref("tokyo_tower", day_index=0), _pref("kyoto_shrine")], 1, configs, doc_map, {0: ctx}
+        )
+
+        assert "kyoto_shrine" in buckets[0]
+        assert unassigned == []
+        assert pre_solver_skipped_by_day[0][0].place_id == "tokyo_tower"
+
+    def test_flexible_place_filters_admissible_candidates_before_picking_best_day(self):
+        """Regression: naive best-day-first selection would wrongly unassign this place (see ADR-16)."""
+        transfer_ctx = _transfer_ctx(visit_budget_min=1000)  # roomiest day by raw ranking
+        configs = [_day_config(date(2026, 6, 12)), _day_config(date(2026, 6, 13))]
+        doc = _place("tokyo_place", lat=TOKYO.lat, lng=TOKYO.lng, visit_min=30)
+
+        buckets, unassigned, _ = _partition_places(
+            [_pref_flexible("tokyo_place", DaySlot(day_index=0), DaySlot(day_index=1))],
+            2,
+            configs,
+            {"tokyo_place": doc},
+            {0: transfer_ctx},
+        )
+
+        assert "tokyo_place" in buckets[1]
+        assert "tokyo_place" not in buckets[0]
+        assert unassigned == []
+
+    def test_non_transfer_day_capacity_remains_ranking_only_heuristic(self):
+        """No transfer_contexts entry: today's unconstrained behavior, unaffected by this feature."""
+        configs = [_day_config(date(2026, 6, 12))]
+        doc = _place("any_place", visit_min=10_000)  # absurdly large — would exceed any real capacity
+
+        buckets, unassigned, _ = _partition_places([_pref("any_place")], 1, configs, {"any_place": doc}, None)
+
+        assert "any_place" in buckets[0]
+        assert unassigned == []
+
+
+@pytest.mark.unit
+class TestOptimizeTripTransfer:
+    def _stay_with_check_in_from(self, *, check_in_from: time) -> AccommodationStay:
+        return AccommodationStay(
+            name="Kyoto Hotel",
+            lat=KYOTO.lat,
+            lng=KYOTO.lng,
+            check_in_date=date(2026, 6, 12),
+            check_out_date=date(2026, 6, 14),
+            check_in_from=check_in_from,
+        )
+
+    async def test_start_and_end_both_resolve_to_destination_hotel(self):
+        docs = [_place("p1", lat=KYOTO.lat, lng=KYOTO.lng), _place("p2", lat=KYOTO.lat, lng=KYOTO.lng)]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+                transfers=[TransferBlock(date=date(2026, 6, 12), departure_time=time(10, 0), arrival_time=time(15, 0))],
+            )
+            result = await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert (day0_request.start_lat, day0_request.start_lng) == (KYOTO.lat, KYOTO.lng)
+        assert (day0_request.end_lat, day0_request.end_lng) == (KYOTO.lat, KYOTO.lng)
+        assert result.days[0].transfer is not None
+        assert result.days[0].transfer.origin.name == "Tokyo Hotel"
+        assert result.days[0].transfer.destination.name == "Kyoto Hotel"
+        assert result.days[0].transfer.duration_s == 18000
+
+    async def test_arrival_before_check_in_from_waits_until_check_in(self):
+        """arrival 13:17 + check-in 15:00 -> first activity not before 15:00."""
+        kyoto = self._stay_with_check_in_from(check_in_from=time(15, 0))
+        docs = [_place("p1", lat=KYOTO.lat, lng=KYOTO.lng), _place("p2", lat=KYOTO.lat, lng=KYOTO.lng)]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, kyoto],
+                transfers=[TransferBlock(date=date(2026, 6, 12), departure_time=time(10, 0), arrival_time=time(13, 17))],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert day0_request.day_start_time == time(15, 0)
+
+    async def test_arrival_after_check_in_from_never_earlier_than_arrival(self):
+        """arrival 16:20 + check-in 15:00 -> first activity not before 16:20 (never faked earlier than arrival)."""
+        kyoto = self._stay_with_check_in_from(check_in_from=time(15, 0))
+        docs = [_place("p1", lat=KYOTO.lat, lng=KYOTO.lng), _place("p2", lat=KYOTO.lat, lng=KYOTO.lng)]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, kyoto],
+                transfers=[TransferBlock(date=date(2026, 6, 12), departure_time=time(10, 0), arrival_time=time(16, 20))],
+            )
+            await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert day0_request.day_start_time == time(16, 20)
+
+    async def test_no_transition_day_transfer_still_suppresses_both_anchors(self):
+        """Backward compatibility: transition day without a transfer keeps exact ADR-15 behavior."""
+        docs = [_place("p1"), _place("p2")]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1", "p2"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+            )
+            result = await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day0_request = mock_optimize.call_args_list[0][0][2]
+        assert day0_request.start_lat is None
+        assert day0_request.end_lat is None
+        assert result.days[0].transfer is None
+
+    async def test_arrival_after_day_end_skips_solver_and_marks_pinned_place_window_infeasible(self):
+        """arrival 22:15 vs day_end 21:00 -> no viable window; pinned place must not vanish, just be skipped."""
+        docs = [_place("p1", lat=KYOTO.lat, lng=KYOTO.lng), _place("p2", lat=KYOTO.lat, lng=KYOTO.lng)]
+        mock_optimize = AsyncMock(return_value=_single_day_response("p1"))
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12), day_end_hour=21)],
+                places=[_pref("p1", day_index=0), _pref("p2", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+                transfers=[TransferBlock(date=date(2026, 6, 12), departure_time=time(20, 0), arrival_time=time(22, 15))],
+            )
+            result = await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        assert mock_optimize.call_count == 0
+        assert result.days[0].steps == []
+        assert result.days[0].transfer is not None
+        assert len(result.days[0].skipped) == 2
+        assert all(s.reason == "TRANSFER_WINDOW_INFEASIBLE" for s in result.days[0].skipped)
+
+    async def test_transfer_day_with_no_attractions_is_not_degenerate(self):
+        """A transfer-only day (zero auto-assigned places) must still show the transfer, not collapse to empty."""
+        # both closer to origin -> excluded, end up unassigned; no place is left to actually reach the solver
+        docs = [_place("p1", lat=TOKYO.lat, lng=TOKYO.lng), _place("p2", lat=TOKYO.lat, lng=TOKYO.lng)]
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch(
+                "src.optimizer.solver.multi_day_service.optimize_route",
+                new=AsyncMock(side_effect=AssertionError("optimize_route must not be called")),
+            ),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("p1"), _pref("p2")],
+                accommodations=[TOKYO, KYOTO],
+                transfers=[TransferBlock(date=date(2026, 6, 12), departure_time=time(10, 0), arrival_time=time(15, 0))],
+            )
+            result = await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        assert result.days[0].steps == []
+        assert result.days[0].transfer is not None
+        assert any(u.reason == "TRANSFER_DAY_GEOGRAPHY_MISMATCH" for u in result.unassigned)
+
+    async def test_pinned_geography_mismatch_merges_with_solver_skip_in_day_plan(self):
+        """Two independent skip sources must both survive into DayPlan.skipped — nothing silently disappears."""
+        docs = [
+            _place("tokyo_tower", lat=TOKYO.lat, lng=TOKYO.lng),
+            _place("kyoto_place", lat=KYOTO.lat, lng=KYOTO.lng),
+        ]
+        solver_response = OptimizeResponse(
+            steps=[],
+            total_travel_time_s=0,
+            total_visit_time_min=0,
+            total_wait_min=0,
+            transport_mode=TransportMode.WALK,
+            skipped=[SkippedPlace(place_id="kyoto_place", name="Kyoto Place", reason="TIME_WINDOW_INFEASIBLE")],
+        )
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=AsyncMock(return_value=solver_response)),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[_pref("tokyo_tower", day_index=0), _pref("kyoto_place", day_index=0)],
+                accommodations=[TOKYO, KYOTO],
+                transfers=[TransferBlock(date=date(2026, 6, 12), departure_time=time(10, 0), arrival_time=time(15, 0))],
+            )
+            result = await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        reasons = {s.place_id: s.reason for s in result.days[0].skipped}
+        assert reasons["tokyo_tower"] == "TRANSFER_DAY_GEOGRAPHY_MISMATCH"
+        assert reasons["kyoto_place"] == "TIME_WINDOW_INFEASIBLE"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime
 
 from pymongo.asynchronous.database import AsyncDatabase
 
@@ -19,6 +19,8 @@ from src.optimizer.solver.models import (
     RouteStep,
     SkippedPlace,
     TimeWindow,
+    resolve_day_bound_s,
+    seconds_to_time,
 )
 
 logger = setup_logger(__name__, "optimizer")
@@ -169,13 +171,6 @@ def _solve_with_priorities(
     return route, solver_skipped, dropped, candidates
 
 
-def _seconds_to_time(s: int) -> time:
-    """Convert integer seconds-from-midnight to a datetime.time object."""
-    h, rem = divmod(s, 3600)
-    m, sec = divmod(rem, 60)
-    return time(hour=h % 24, minute=m, second=sec)
-
-
 async def optimize_route(
     db: AsyncDatabase,
     manager: GoogleRoutesManager,
@@ -194,19 +189,14 @@ async def optimize_route(
         docs: Pre-fetched place documents. When supplied the DB fetch is skipped,
               allowing callers to apply in-memory overrides before optimization.
     """
-    day_start_s = request.day_start_hour * 3600
-    day_end_s = request.day_end_hour * 3600
+    day_start_s = resolve_day_bound_s(request.day_start_hour, request.day_start_time)
+    day_end_s = resolve_day_bound_s(request.day_end_hour, request.day_end_time)
     google_weekday = _google_weekday(request.departure_date) if request.departure_date else None
 
     departure_time: datetime | None = None
     if request.departure_date is not None:
-        departure_time = datetime(
-            request.departure_date.year,
-            request.departure_date.month,
-            request.departure_date.day,
-            request.day_start_hour,
-            tzinfo=UTC,
-        )
+        # tzinfo=UTC is a naive stand-in for local wall-clock time — see ADR-16 timezone non-goal.
+        departure_time = datetime.combine(request.departure_date, seconds_to_time(day_start_s), tzinfo=UTC)
         now = datetime.now(UTC)
         if departure_time < now:
             logger.warning(
@@ -337,8 +327,8 @@ async def optimize_route(
                 name=doc.get("name"),
                 lat=doc.get("lat"),
                 lng=doc.get("lng"),
-                arrival_time=_seconds_to_time(arrival_s),
-                departure_time=_seconds_to_time(departure_s),
+                arrival_time=seconds_to_time(arrival_s),
+                departure_time=seconds_to_time(departure_s),
                 travel_from_previous_s=travel_s,
                 visit_duration_min=visit_s // 60,
                 wait_min=wait_s // 60,

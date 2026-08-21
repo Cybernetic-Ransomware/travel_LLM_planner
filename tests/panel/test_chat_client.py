@@ -85,11 +85,13 @@ class TestStreamChat:
         return "\n".join(lines).encode()
 
     def test_yields_content_tokens(self, httpx_mock):
-        body = self._make_sse_body([
-            {"session_id": "s1"},
-            {"content": "Hello"},
-            {"content": " world"},
-        ])
+        body = self._make_sse_body(
+            [
+                {"session_id": "s1"},
+                {"content": "Hello"},
+                {"content": " world"},
+            ]
+        )
         httpx_mock.add_response(content=body)
 
         h = ChatHistory()
@@ -141,10 +143,12 @@ class TestStreamChat:
         assert payload["place_ids"] == []
 
     def test_raises_runtime_error_on_error_event(self, httpx_mock):
-        body = self._make_sse_body([
-            {"session_id": "s"},
-            {"error": "Stream interrupted"},
-        ])
+        body = self._make_sse_body(
+            [
+                {"session_id": "s"},
+                {"error": "Stream interrupted"},
+            ]
+        )
         httpx_mock.add_response(content=body)
 
         h = ChatHistory()
@@ -152,10 +156,12 @@ class TestStreamChat:
             list(stream_chat(h, place_ids=None))
 
     def test_skips_non_content_events(self, httpx_mock):
-        body = self._make_sse_body([
-            {"session_id": "s"},
-            {"content": "Token"},
-        ])
+        body = self._make_sse_body(
+            [
+                {"session_id": "s"},
+                {"content": "Token"},
+            ]
+        )
         httpx_mock.add_response(content=body)
 
         h = ChatHistory()

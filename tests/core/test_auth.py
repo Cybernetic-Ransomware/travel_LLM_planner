@@ -168,9 +168,7 @@ class TestValidToken:
 
     async def test_email_claim_extracted(self, auth_settings, keypair):
         private_jwk, keyset = keypair
-        token = _make_token(
-            private_jwk, aud="test-audience", iss="https://test.auth0.com/", email="user@example.com"
-        )
+        token = _make_token(private_jwk, aud="test-audience", iss="https://test.auth0.com/", email="user@example.com")
 
         async def mock_get(url, *, force_refresh=False):
             return keyset
@@ -240,9 +238,7 @@ class TestInvalidToken:
 
     async def test_expired_token_raises_401(self, auth_settings, keypair):
         private_jwk, keyset = keypair
-        token = _make_token(
-            private_jwk, aud="test-audience", iss="https://test.auth0.com/", exp_offset=-10
-        )
+        token = _make_token(private_jwk, aud="test-audience", iss="https://test.auth0.com/", exp_offset=-10)
 
         async def mock_get(url, *, force_refresh=False):
             return keyset
@@ -255,9 +251,7 @@ class TestInvalidToken:
 
     async def test_wrong_audience_raises_401(self, auth_settings, keypair):
         private_jwk, keyset = keypair
-        token = _make_token(
-            private_jwk, aud="wrong-audience", iss="https://test.auth0.com/"
-        )
+        token = _make_token(private_jwk, aud="wrong-audience", iss="https://test.auth0.com/")
 
         async def mock_get(url, *, force_refresh=False):
             return keyset
@@ -270,9 +264,7 @@ class TestInvalidToken:
 
     async def test_wrong_issuer_raises_401(self, auth_settings, keypair):
         private_jwk, keyset = keypair
-        token = _make_token(
-            private_jwk, aud="test-audience", iss="https://evil.example.com/"
-        )
+        token = _make_token(private_jwk, aud="test-audience", iss="https://evil.example.com/")
 
         async def mock_get(url, *, force_refresh=False):
             return keyset

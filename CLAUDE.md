@@ -89,6 +89,7 @@ Coverage depth expectations:
 ```
 src/
 ├── accommodations/  # Accommodation stay domain: derives per-day START/END anchors from hotel check-in/check-out dates (ADR-15)
+├── transfers/  # Transfer domain: fixed-time journeys between accommodation stays on transition days (ADR-16)
 ├── config/     # Startup configuration: Settings (Pydantic), logger, FastAPI lifespan
 ├── core/       # Cross-cutting concerns: DB manager, exceptions, dependency injection
 │   └── db/     # MongoDBManager, FastAPI deps (get_db, mongo_session, mongo_transaction)
@@ -159,6 +160,7 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 13 | Accepted | JWT RS256 authentication via authlib — `get_current_user` dependency, AUTH_ENABLED flag |
 | 14 | Accepted | Astro + Svelte islands spike (`apps/astro-frontend`) as alternative frontend shell |
 | 15 | Accepted | Accommodation-derived daily START/END anchors — `src/accommodations/` module, precedence policy, changeover-day safety |
+| 16 | Accepted | Transition-day transfers — `src/transfers/` module, minute-precision day bounds, transfer-derived anchor precedence, transfer-day eligibility/admission-budget partitioning |
 | — | — | [Frontend split roadmap](docs/frontend-roadmap.md) — Astro/SvelteKit decision rule and upcoming PRs |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.
