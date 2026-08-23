@@ -1610,6 +1610,45 @@ class TestOptimizeTripTransitionDayTotals:
         assert day.total_wait_min == post_segment.total_wait_min
         assert day.travel_to_end_s == post_segment.travel_to_end_s
 
+    async def test_no_place_has_contradictory_outcome_across_visited_skipped_unassigned(self):
+        """Regression: a union-of-outcomes check alone would miss a contradictory double-appearance."""
+        docs = [
+            _place("tokyo_tower", lat=TOKYO.lat, lng=TOKYO.lng),
+            _place("fushimi_inari", lat=KYOTO.lat, lng=KYOTO.lng),
+            {"_id": "mystery_place", "name": "Mystery Place", "visit_duration_min": 30},
+            _place("overbooked_landmark", lat=TOKYO.lat, lng=TOKYO.lng, visit_min=10_000),
+        ]
+        mock_optimize = AsyncMock(side_effect=[_single_day_response("tokyo_tower"), _single_day_response("fushimi_inari")])
+
+        with (
+            patch("src.optimizer.solver.multi_day_service.fetch_places_by_ids", new=AsyncMock(return_value=docs)),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            req = _req(
+                days=[_day_config(date(2026, 6, 12))],
+                places=[
+                    _pref("tokyo_tower", day_index=0),
+                    _pref("fushimi_inari", day_index=0),
+                    _pref("mystery_place", day_index=0),
+                    _pref("overbooked_landmark"),
+                ],
+                accommodations=[TOKYO, KYOTO],
+                transfers=[TransferBlock(date=date(2026, 6, 12), departure_time=time(11, 0), arrival_time=time(15, 0))],
+            )
+            result = await optimize_trip(_mock_db(), _mock_manager(), req)
+
+        day = result.days[0]
+        visited_ids = {step.place_id for seg in day.route_segments for step in seg.steps}
+        skipped_ids = {s.place_id for s in day.skipped}
+        unassigned_ids = {u.place_id for u in result.unassigned}
+
+        assert visited_ids == {"tokyo_tower", "fushimi_inari"}
+        assert skipped_ids == {"mystery_place"}
+        assert unassigned_ids == {"overbooked_landmark"}
+        assert visited_ids.isdisjoint(skipped_ids)
+        assert visited_ids.isdisjoint(unassigned_ids)
+        assert skipped_ids.isdisjoint(unassigned_ids)
+
     async def test_route_segments_always_has_exactly_two_entries_when_transfer_present(self):
         """Transfer-only day with no resolvable places still gets [PRE_TRANSFER, POST_TRANSFER], not []."""
         with (

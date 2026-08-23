@@ -38,10 +38,14 @@ anchored at the destination after it (POST), and exposes both in the response.
    The solver itself is still never invoked with an empty `place_ids` list — the
    segment's emptiness is structural, the underlying `optimize_route` call is simply
    skipped.
-3. **`route_segments` is the authoritative full-day view for a transition day;
-   `DayPlan`'s top-level `steps`/`total_travel_time_s`/`total_visit_time_min`/
-   `total_wait_min`/`travel_to_end_s` are a compatibility projection of exactly the
-   `POST_TRANSFER` segment**, unchanged in meaning from ADR-16. Both representations
+3. **The authoritative full transition-day representation is `route_segments[0]`
+   (PRE) + `DayPlan.transfer` + `route_segments[1]` (POST) — three parts, not one.**
+   `route_segments` alone is the authoritative *route* view (it does not carry the
+   transfer itself, which lives only in `DayPlan.transfer`); combined with
+   `DayPlan.transfer` it gives the complete day. `DayPlan`'s top-level `steps`/
+   `total_travel_time_s`/`total_visit_time_min`/`total_wait_min`/`travel_to_end_s`
+   are a compatibility projection of exactly the `POST_TRANSFER` segment, unchanged
+   in meaning from ADR-16. Both representations
    are built from the same `DayRouteSegment` object — `DayPlan.steps =
    route_segments[1].steps`, and likewise for every other projected field — never
    from two independent computations. A client that only knows the pre-ADR-17 shape
