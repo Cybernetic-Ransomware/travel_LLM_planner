@@ -23,19 +23,22 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 	let prefill: OptimizerPrefill | null = null;
 	let prefillFailed = false;
 	if (tripResult && fromTripId) {
-		if (tripResult.ok) {
+		if (tripResult.ok && tripResult.data.plan_type === 'SINGLE_DAY') {
+			const trip = tripResult.data;
 			prefill = {
 				tripId: fromTripId,
-				tripName: tripResult.data.name,
-				tripDate: tripResult.data.date,
-				selectedPlaceIds: tripResult.data.selected_place_ids,
-				transportMode: tripResult.data.transport_mode,
-				dayStartHour: tripResult.data.day_start_hour,
-				dayEndHour: tripResult.data.day_end_hour
+				tripName: trip.name,
+				tripDate: trip.date,
+				selectedPlaceIds: trip.selected_place_ids,
+				transportMode: trip.transport_mode,
+				dayStartHour: trip.day_start_hour,
+				dayEndHour: trip.day_end_hour
 			};
-		} else {
+		} else if (!tripResult.ok) {
 			prefillFailed = true;
 		}
+		// else: the trip resolved but is MULTI_DAY — /optimizer only understands single-day
+		// trips, so prefill is silently skipped rather than crashing or misrendering.
 	}
 
 	if (!placesResult.ok) {

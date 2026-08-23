@@ -66,6 +66,7 @@ const mockResult: OptimizeResponse = {
 };
 
 const updatedTrip: TripOut = {
+	plan_type: 'SINGLE_DAY',
 	id: 'trip-1',
 	name: 'Weekend in Kraków',
 	date: '2026-07-11',

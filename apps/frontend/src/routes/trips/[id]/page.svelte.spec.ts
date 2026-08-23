@@ -4,7 +4,7 @@ import { userEvent } from 'vitest/browser';
 import Page from './+page.svelte';
 import { deleteTrip } from '$lib/api/trips.js';
 import { goto } from '$app/navigation';
-import type { TripOut } from '$lib/types/index.js';
+import type { SingleDayTripOut, MultiDayTripOut } from '$lib/types/index.js';
 
 vi.mock('$lib/api/trips.js', () => ({
 	deleteTrip: vi.fn().mockResolvedValue(undefined)
@@ -14,7 +14,8 @@ vi.mock('$app/navigation', () => ({
 	goto: vi.fn().mockResolvedValue(undefined)
 }));
 
-const mockTrip: TripOut = {
+const mockTrip: SingleDayTripOut = {
+	plan_type: 'SINGLE_DAY',
 	id: 'abc',
 	name: 'Weekend in Kraków',
 	date: '2025-06-01',
@@ -37,6 +38,17 @@ const mockTrip: TripOut = {
 		transport_mode: 'WALK',
 		skipped: []
 	}
+};
+
+const mockMultiDayTrip: MultiDayTripOut = {
+	plan_type: 'MULTI_DAY',
+	id: 'multi-1',
+	name: 'Kraków then Warsaw',
+	start_date: '2025-08-01',
+	end_date: '2025-08-03',
+	num_days: 3,
+	created_at: '2025-08-01T10:00:00Z',
+	transport_mode: 'WALK'
 };
 
 describe('/trips/[id] page', () => {
@@ -152,5 +164,42 @@ describe('/trips/[id] page', () => {
 		await userEvent.click(getByRole('button', { name: 'Usuń', exact: true }));
 		expect(getByText('Nie udało się usunąć trasy. Spróbuj ponownie.')).toBeTruthy();
 		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('single-day rendering is unchanged (regression guard)', async () => {
+		const { getByText, getByRole } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+		});
+		expect(getByText('Weekend in Kraków')).toBeTruthy();
+		expect(getByText(/2025-06-01/)).toBeTruthy();
+		expect(getByText('WALK')).toBeTruthy();
+		expect(getByText('9:00 – 21:00')).toBeTruthy();
+		expect(getByRole('link', { name: 'Otwórz w planerze trasy' })).toBeTruthy();
+	});
+
+	it('renders a minimal read-only fallback for a multi-day trip', async () => {
+		const { getByText } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+		});
+		expect(getByText('Kraków then Warsaw')).toBeTruthy();
+		expect(getByText(/2025-08-01 – 2025-08-03/)).toBeTruthy();
+		expect(getByText('3')).toBeTruthy();
+		expect(getByText('WALK')).toBeTruthy();
+	});
+
+	it('multi-day detail does not access single-day-only fields', async () => {
+		const { getByText } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+		});
+		expect(getByText('Kraków then Warsaw')).toBeTruthy();
+		expect(getByText('30m').query()).toBeNull();
+		expect(getByText('90 min').query()).toBeNull();
+	});
+
+	it('hides the open-in-optimizer action for a multi-day trip', async () => {
+		const { getByRole } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+		});
+		expect(getByRole('link', { name: 'Otwórz w planerze trasy' }).query()).toBeNull();
 	});
 });

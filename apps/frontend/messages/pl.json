@@ -119,6 +119,8 @@
 	"trips_empty": "Nie masz jeszcze zapisanych tras.",
 	"trip_created_at": "Utworzono",
 	"trip_date": "Data trasy",
+	"trip_date_range": "Zakres dat",
+	"trip_multi_day_notice": "To tylko podgląd. Pełny widok podróży wielodniowej pojawi się w kolejnym etapie.",
 	"trip_time_window": "Okno dnia",
 	"trip_saved_route": "Zapisana trasa",
 	"trip_open_in_optimizer": "Otwórz w planerze trasy",

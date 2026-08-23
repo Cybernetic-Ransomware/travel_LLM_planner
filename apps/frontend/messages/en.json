@@ -119,6 +119,8 @@
 	"trips_empty": "No saved trips yet.",
 	"trip_created_at": "Created",
 	"trip_date": "Date",
+	"trip_date_range": "Date range",
+	"trip_multi_day_notice": "This is a read-only summary. The full multi-day itinerary view is coming in a later stage.",
 	"trip_time_window": "Day window",
 	"trip_saved_route": "Saved route",
 	"trip_open_in_optimizer": "Open in route planner",

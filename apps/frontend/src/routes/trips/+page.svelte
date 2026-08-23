@@ -52,9 +52,16 @@
 					class="flex flex-col gap-1 rounded-lg border border-zinc-200 bg-white p-4 text-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
 				>
 					<span class="text-base font-semibold text-zinc-900 dark:text-zinc-100">{trip.name}</span>
-					<span class="text-zinc-500 dark:text-zinc-400">
-						{m.trip_date()}: {trip.date}
-					</span>
+					{#if trip.plan_type === 'SINGLE_DAY'}
+						<span class="text-zinc-500 dark:text-zinc-400">
+							{m.trip_date()}: {trip.date}
+						</span>
+					{:else}
+						<span class="text-zinc-500 dark:text-zinc-400">
+							{m.trip_date_range()}: {trip.start_date} – {trip.end_date} ({trip.num_days}
+							{m.trip_days()})
+						</span>
+					{/if}
 					<span class="text-zinc-400 dark:text-zinc-500">
 						{m.trip_created_at()}: {formatDateTime(trip.created_at)}
 					</span>
