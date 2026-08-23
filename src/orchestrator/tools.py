@@ -90,6 +90,88 @@ def _format_pricing(payload: dict, label: str) -> str:
     return "\n".join(lines)
 
 
+def _format_steps(steps: list, indent: str = "") -> list[str]:
+    lines = []
+    for i, step in enumerate(steps, 1):
+        travel = f", {step.travel_from_previous_s // 60} min travel" if step.travel_from_previous_s else ""
+        lines.append(
+            f"{indent}{i}. {step.name or step.place_id} — "
+            f"arrive {step.arrival_time.strftime('%H:%M')}, "
+            f"depart {step.departure_time.strftime('%H:%M')}, "
+            f"{step.visit_duration_min} min visit{travel}"
+        )
+    return lines
+
+
+def _format_single_day_trip(trip) -> str:
+    header = (
+        f"Trip '{trip.name}' ({trip.date})\n"
+        f"Transport: {trip.transport_mode.value}, window: "
+        f"{trip.day_start_hour}:00–{trip.day_end_hour}:00\n"
+    )
+
+    steps = trip.optimizer_response.steps
+    if not steps:
+        return header + "No places in route."
+
+    place_lines = _format_steps(steps)
+
+    resp = trip.optimizer_response
+    skipped_section = "Skipped: none"
+    if resp.skipped:
+        names = [s.name or s.place_id for s in resp.skipped]
+        skipped_section = "Skipped: " + ", ".join(names)
+
+    summary = (
+        f"Total: {resp.total_travel_time_s // 60} min travel, "
+        f"{resp.total_visit_time_min} min visits, "
+        f"{resp.total_wait_min} min wait"
+    )
+
+    return header + "\n".join(place_lines) + "\n" + summary + "\n" + skipped_section
+
+
+def _format_multi_day_trip(trip) -> str:
+    lines = [
+        f"Trip '{trip.name}' (multi-day, {trip.start_date} to {trip.end_date}, {trip.num_days} days)",
+        f"Transport: {trip.transport_mode.value}",
+    ]
+    for day in trip.multi_day_response.days:
+        lines.append(f"\nDay {day.day_index + 1} ({day.date}):")
+        segments_by_kind = {segment.kind: segment for segment in day.route_segments}
+        pre = segments_by_kind.get("PRE_TRANSFER")
+        post = segments_by_kind.get("POST_TRANSFER")
+        if pre is not None or post is not None:
+            if pre is not None:
+                lines.append("  Before transfer:")
+                lines.extend(_format_steps(pre.steps, indent="    ") or ["    (nothing scheduled)"])
+            if day.transfer is not None:
+                t = day.transfer
+                label = f" ({t.label})" if t.label else ""
+                lines.append(
+                    f"  Transfer: {t.origin.name} -> {t.destination.name}, "
+                    f"depart {t.departure_time.strftime('%H:%M')}, "
+                    f"arrive {t.arrival_time.strftime('%H:%M')}{label}"
+                )
+            if post is not None:
+                lines.append("  After transfer:")
+                lines.extend(_format_steps(post.steps, indent="    ") or ["    (nothing scheduled)"])
+        else:
+            lines.extend(_format_steps(day.steps, indent="  ") or ["  No places in route."])
+        lines.append(
+            f"  Total: {day.total_travel_time_s // 60} min travel, "
+            f"{day.total_visit_time_min} min visits, {day.total_wait_min} min wait"
+        )
+        if day.skipped:
+            lines.append("  Skipped: " + ", ".join(s.name or s.place_id for s in day.skipped))
+
+    if trip.multi_day_response.unassigned:
+        names = [s.name or s.place_id for s in trip.multi_day_response.unassigned]
+        lines.append("\nCould not be scheduled on any day: " + ", ".join(names))
+
+    return "\n".join(lines)
+
+
 def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None = None) -> list:
     """Return the list of LLM-callable tools with the database connection closure-bound.
 
@@ -286,7 +368,13 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
             return f"Failed to retrieve trips: {exc}"
         if not trips:
             return "No saved trips found."
-        lines = [f"- id={t.id}, name='{t.name}', date={t.date}" for t in trips]
+
+        def _format_summary_line(t) -> str:
+            if getattr(t, "plan_type", "SINGLE_DAY") == "MULTI_DAY":
+                return f"- id={t.id}, name='{t.name}', {t.start_date} to {t.end_date} ({t.num_days} days)"
+            return f"- id={t.id}, name='{t.name}', date={t.date}"
+
+        lines = [_format_summary_line(t) for t in trips]
         return "Saved trips:\n" + "\n".join(lines)
 
     @tool
@@ -307,39 +395,9 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
         if trip is None:
             return f"Trip '{trip_id}' not found."
 
-        header = (
-            f"Trip '{trip.name}' ({trip.date})\n"
-            f"Transport: {trip.transport_mode.value}, window: "
-            f"{trip.day_start_hour}:00–{trip.day_end_hour}:00\n"
-        )
-
-        steps = trip.optimizer_response.steps
-        if not steps:
-            return header + "No places in route."
-
-        place_lines = []
-        for i, step in enumerate(steps, 1):
-            travel = f", {step.travel_from_previous_s // 60} min travel" if step.travel_from_previous_s else ""
-            place_lines.append(
-                f"{i}. {step.name or step.place_id} — "
-                f"arrive {step.arrival_time.strftime('%H:%M')}, "
-                f"depart {step.departure_time.strftime('%H:%M')}, "
-                f"{step.visit_duration_min} min visit{travel}"
-            )
-
-        resp = trip.optimizer_response
-        skipped_section = "Skipped: none"
-        if resp.skipped:
-            names = [s.name or s.place_id for s in resp.skipped]
-            skipped_section = "Skipped: " + ", ".join(names)
-
-        summary = (
-            f"Total: {resp.total_travel_time_s // 60} min travel, "
-            f"{resp.total_visit_time_min} min visits, "
-            f"{resp.total_wait_min} min wait"
-        )
-
-        return header + "\n".join(place_lines) + "\n" + summary + "\n" + skipped_section
+        if getattr(trip, "plan_type", "SINGLE_DAY") == "MULTI_DAY":
+            return _format_multi_day_trip(trip)
+        return _format_single_day_trip(trip)
 
     tools.append(list_saved_trips)
     tools.append(get_trip_details)

@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.post("/", response_model=TripDetailOut, status_code=201)
 async def save_trip(body: SaveTripRequest, trips: TripsDep) -> TripDetailOut:
-    """Persist an optimizer result as a named trip."""
+    """Persist an optimizer result (single-day or multi-day) as a named trip."""
     return await trips.save(body)
 
 
@@ -29,7 +29,7 @@ async def get_trip(trip_id: str, trips: TripsDep) -> TripDetailOut:
 
 @router.put("/{trip_id}", response_model=TripDetailOut)
 async def update_trip(trip_id: str, body: SaveTripRequest, trips: TripsDep) -> TripDetailOut:
-    """Replace a saved trip's name, date and optimizer data."""
+    """Replace a saved trip's content. Rejects changing plan_type (409)."""
     trip = await trips.update(trip_id, body)
     if trip is None:
         raise HTTPException(status_code=404, detail=f"Trip {trip_id!r} not found")

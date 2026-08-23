@@ -6,10 +6,33 @@ from bson import ObjectId
 from pymongo import ReturnDocument
 from pymongo.asynchronous.database import AsyncDatabase
 
-from src.optimizer.solver.models import OptimizeRequest, OptimizeResponse
-from src.trips.models import SaveTripRequest, TripDetailOut, TripSummaryOut
+from src.core.exceptions import TripPlanTypeConflictError
+from src.optimizer.solver.models import (
+    MultiDayRequest,
+    MultiDayResponse,
+    OptimizeRequest,
+    OptimizeResponse,
+)
+from src.trips.models import (
+    SCHEMA_VERSION,
+    MultiDayTripDetailOut,
+    MultiDayTripSummaryOut,
+    SaveTripRequest,
+    SingleDayTripDetailOut,
+    SingleDayTripSummaryOut,
+    TripDetailOut,
+    TripSummaryOut,
+)
 
 TRIPS_COLLECTION = "trips"
+
+_LIST_PROJECTION = {
+    "name": 1,
+    "date": 1,
+    "plan_type": 1,
+    "created_at": 1,
+    "multi_day_request.days.date": 1,
+}
 
 
 class TripsManager:
@@ -18,21 +41,21 @@ class TripsManager:
 
     async def save(self, request: SaveTripRequest) -> TripDetailOut:
         doc = request.model_dump(mode="json")
+        doc["schema_version"] = SCHEMA_VERSION
         doc["created_at"] = datetime.now(UTC)
         result = await self._collection.insert_one(doc)
         return _to_trip_detail_out({**doc, "_id": result.inserted_id})
 
     async def list_all(self) -> list[TripSummaryOut]:
-        cursor = self._collection.find({}, sort=[("created_at", -1)])
+        cursor = self._collection.find({}, _LIST_PROJECTION, sort=[("created_at", -1)])
         trips: list[TripSummaryOut] = []
         async for doc in cursor:
             trips.append(_to_trip_summary_out(doc))
         return trips
 
     async def find_by_id(self, trip_id: str) -> TripDetailOut | None:
-        try:
-            oid = ObjectId(trip_id)
-        except Exception:
+        oid = _parse_object_id(trip_id)
+        if oid is None:
             return None
         doc = await self._collection.find_one({"_id": oid})
         if doc is None:
@@ -40,11 +63,18 @@ class TripsManager:
         return _to_trip_detail_out(doc)
 
     async def update(self, trip_id: str, request: SaveTripRequest) -> TripDetailOut | None:
-        try:
-            oid = ObjectId(trip_id)
-        except Exception:
+        oid = _parse_object_id(trip_id)
+        if oid is None:
             return None
+        existing = await self._collection.find_one({"_id": oid}, {"plan_type": 1})
+        if existing is None:
+            return None
+        existing_plan_type = existing.get("plan_type", "SINGLE_DAY")
+        if existing_plan_type != request.plan_type:
+            raise TripPlanTypeConflictError(trip_id, existing_plan_type, request.plan_type)
+
         update = request.model_dump(mode="json")
+        update["schema_version"] = SCHEMA_VERSION
         update["updated_at"] = datetime.now(UTC)
         doc = await self._collection.find_one_and_update(
             {"_id": oid}, {"$set": update}, return_document=ReturnDocument.AFTER
@@ -54,16 +84,34 @@ class TripsManager:
         return _to_trip_detail_out(doc)
 
     async def delete(self, trip_id: str) -> bool:
-        try:
-            oid = ObjectId(trip_id)
-        except Exception:
+        oid = _parse_object_id(trip_id)
+        if oid is None:
             return False
         result = await self._collection.delete_one({"_id": oid})
         return result.deleted_count > 0
 
 
+def _parse_object_id(trip_id: str) -> ObjectId | None:
+    try:
+        return ObjectId(trip_id)
+    except Exception:
+        return None
+
+
 def _to_trip_summary_out(doc: dict) -> TripSummaryOut:
-    return TripSummaryOut(
+    plan_type = doc.get("plan_type", "SINGLE_DAY")
+    if plan_type == "MULTI_DAY":
+        days_raw = doc["multi_day_request"]["days"]
+        dates = [d["date"] for d in days_raw]
+        return MultiDayTripSummaryOut(
+            id=str(doc["_id"]),
+            name=doc["name"],
+            created_at=doc["created_at"].isoformat(),
+            start_date=min(dates),
+            end_date=max(dates),
+            num_days=len(days_raw),
+        )
+    return SingleDayTripSummaryOut(
         id=str(doc["_id"]),
         name=doc["name"],
         date=str(doc["date"]),
@@ -72,9 +120,26 @@ def _to_trip_summary_out(doc: dict) -> TripSummaryOut:
 
 
 def _to_trip_detail_out(doc: dict) -> TripDetailOut:
+    plan_type = doc.get("plan_type", "SINGLE_DAY")
+    if plan_type == "MULTI_DAY":
+        req = MultiDayRequest.model_validate(doc["multi_day_request"])
+        resp = MultiDayResponse.model_validate(doc["multi_day_response"])
+        dates = [d.date for d in req.days]
+        return MultiDayTripDetailOut(
+            id=str(doc["_id"]),
+            name=doc["name"],
+            created_at=doc["created_at"].isoformat(),
+            updated_at=doc["updated_at"].isoformat() if doc.get("updated_at") else None,
+            start_date=str(min(dates)),
+            end_date=str(max(dates)),
+            num_days=len(req.days),
+            transport_mode=req.transport_mode,
+            multi_day_request=req,
+            multi_day_response=resp,
+        )
     req = OptimizeRequest.model_validate(doc["optimizer_request"])
     resp = OptimizeResponse.model_validate(doc["optimizer_response"])
-    return TripDetailOut(
+    return SingleDayTripDetailOut(
         id=str(doc["_id"]),
         name=doc["name"],
         date=str(doc["date"]),

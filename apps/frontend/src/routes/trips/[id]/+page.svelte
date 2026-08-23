@@ -51,22 +51,29 @@
 			← {m.nav_trips()}
 		</a>
 		{#if data.trip}
+			{@const trip = data.trip}
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<h1 class="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{data.trip.name}</h1>
+					<h1 class="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{trip.name}</h1>
 					<p class="text-sm text-zinc-500 dark:text-zinc-400">
-						{m.trip_date()}: {data.trip.date}
+						{#if trip.plan_type === 'SINGLE_DAY'}
+							{m.trip_date()}: {trip.date}
+						{:else}
+							{m.trip_date_range()}: {trip.start_date} – {trip.end_date}
+						{/if}
 						&nbsp;·&nbsp;
-						{m.trip_created_at()}: {formatDateTime(data.trip.created_at)}
+						{m.trip_created_at()}: {formatDateTime(trip.created_at)}
 					</p>
 				</div>
 				<div class="flex items-center gap-2">
-					<a
-						href="/optimizer?from={data.trip.id}"
-						class="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-					>
-						{m.trip_open_in_optimizer()}
-					</a>
+					{#if trip.plan_type === 'SINGLE_DAY'}
+						<a
+							href="/optimizer?from={trip.id}"
+							class="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+						>
+							{m.trip_open_in_optimizer()}
+						</a>
+					{/if}
 					<Button variant="danger" onclick={() => (showDeleteDialog = true)}>
 						{m.trip_delete()}
 					</Button>
@@ -90,64 +97,85 @@
 			</p>
 		</div>
 	{:else if data.trip}
-		<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
-			<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-72 md:shrink-0">
-				<div
-					class="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
-				>
-					<p
-						class="mb-3 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500"
+		{@const trip = data.trip}
+		{#if trip.plan_type === 'SINGLE_DAY'}
+			<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+				<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-72 md:shrink-0">
+					<div
+						class="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
 					>
-						{m.trip_saved_route()}
-					</p>
-					<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-						<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_transport()}</dt>
-						<dd class="font-medium text-zinc-900 dark:text-zinc-100">{data.trip.transport_mode}</dd>
+						<p
+							class="mb-3 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500"
+						>
+							{m.trip_saved_route()}
+						</p>
+						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+							<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_transport()}</dt>
+							<dd class="font-medium text-zinc-900 dark:text-zinc-100">{trip.transport_mode}</dd>
 
-						<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_time_window()}</dt>
-						<dd class="font-medium text-zinc-900 dark:text-zinc-100">
-							{data.trip.day_start_hour}:00 – {data.trip.day_end_hour}:00
-						</dd>
+							<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_time_window()}</dt>
+							<dd class="font-medium text-zinc-900 dark:text-zinc-100">
+								{trip.day_start_hour}:00 – {trip.day_end_hour}:00
+							</dd>
 
-						<dt class="text-zinc-500 dark:text-zinc-400">{m.results_places_unit()}</dt>
-						<dd class="font-medium text-zinc-900 dark:text-zinc-100">
-							{data.trip.optimizer_response.steps.length}
-						</dd>
+							<dt class="text-zinc-500 dark:text-zinc-400">{m.results_places_unit()}</dt>
+							<dd class="font-medium text-zinc-900 dark:text-zinc-100">
+								{trip.optimizer_response.steps.length}
+							</dd>
 
-						<dt class="text-zinc-500 dark:text-zinc-400">{m.results_travel_label()}</dt>
-						<dd class="font-medium text-zinc-900 dark:text-zinc-100">
-							{formatDurationSeconds(data.trip.optimizer_response.total_travel_time_s)}
-						</dd>
+							<dt class="text-zinc-500 dark:text-zinc-400">{m.results_travel_label()}</dt>
+							<dd class="font-medium text-zinc-900 dark:text-zinc-100">
+								{formatDurationSeconds(trip.optimizer_response.total_travel_time_s)}
+							</dd>
 
-						<dt class="text-zinc-500 dark:text-zinc-400">{m.results_visits_label()}</dt>
-						<dd class="font-medium text-zinc-900 dark:text-zinc-100">
-							{data.trip.optimizer_response.total_visit_time_min} min
-						</dd>
+							<dt class="text-zinc-500 dark:text-zinc-400">{m.results_visits_label()}</dt>
+							<dd class="font-medium text-zinc-900 dark:text-zinc-100">
+								{trip.optimizer_response.total_visit_time_min} min
+							</dd>
 
-						<dt class="text-zinc-500 dark:text-zinc-400">{m.results_wait_label()}</dt>
-						<dd class="font-medium text-zinc-900 dark:text-zinc-100">
-							{data.trip.optimizer_response.total_wait_min} min
-						</dd>
-					</dl>
+							<dt class="text-zinc-500 dark:text-zinc-400">{m.results_wait_label()}</dt>
+							<dd class="font-medium text-zinc-900 dark:text-zinc-100">
+								{trip.optimizer_response.total_wait_min} min
+							</dd>
+						</dl>
+					</div>
+
+					<RouteResults result={trip.optimizer_response} />
 				</div>
 
-				<RouteResults result={data.trip.optimizer_response} />
+				<div
+					class="isolate h-64 flex-1 overflow-hidden rounded-lg border border-zinc-200 md:h-auto dark:border-zinc-800"
+				>
+					{#if LeafletMap}
+						<LeafletMap steps={trip.optimizer_response.steps} />
+					{:else}
+						<div
+							class="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500"
+						>
+							{m.map_loading()}
+						</div>
+					{/if}
+				</div>
 			</div>
-
+		{:else}
 			<div
-				class="isolate h-64 flex-1 overflow-hidden rounded-lg border border-zinc-200 md:h-auto dark:border-zinc-800"
+				class="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
 			>
-				{#if LeafletMap}
-					<LeafletMap steps={data.trip.optimizer_response.steps} />
-				{:else}
-					<div
-						class="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500"
-					>
-						{m.map_loading()}
-					</div>
-				{/if}
+				<p class="text-sm text-zinc-500 dark:text-zinc-400">{m.trip_multi_day_notice()}</p>
+				<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:max-w-sm">
+					<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_date_range()}</dt>
+					<dd class="font-medium text-zinc-900 dark:text-zinc-100">
+						{trip.start_date} – {trip.end_date}
+					</dd>
+
+					<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_days()}</dt>
+					<dd class="font-medium text-zinc-900 dark:text-zinc-100">{trip.num_days}</dd>
+
+					<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_transport()}</dt>
+					<dd class="font-medium text-zinc-900 dark:text-zinc-100">{trip.transport_mode}</dd>
+				</dl>
 			</div>
-		</div>
+		{/if}
 	{/if}
 </div>
 

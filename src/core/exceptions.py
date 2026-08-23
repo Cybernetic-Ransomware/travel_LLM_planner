@@ -55,6 +55,16 @@ class OrchestratorUnavailableError(HTTPException):
         )
 
 
+class TripPlanTypeConflictError(HTTPException):
+    """Raised when an update would change a trip's plan_type (e.g. SINGLE_DAY -> MULTI_DAY)."""
+
+    def __init__(self, trip_id: str, existing_plan_type: str, requested_plan_type: str) -> None:
+        detail = (
+            f"Trip {trip_id!r} is a {existing_plan_type} trip; cannot change plan_type to {requested_plan_type} via update"
+        )
+        super().__init__(status_code=409, detail=detail)
+
+
 class AuthenticationError(HTTPException):
     """Raised when the JWT token is missing, malformed, or fails RS256 verification."""
 

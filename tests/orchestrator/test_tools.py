@@ -945,3 +945,234 @@ class TestGetTripDetailsErrors:
 
         assert "Failed to retrieve trip" in result
         assert "timeout" in result
+
+
+def _make_multi_day_trip_summary(id_="mabc", name="Kraków then Warsaw", start_date="2026-08-01", end_date="2026-08-03", num_days=3):
+    summary = MagicMock()
+    summary.plan_type = "MULTI_DAY"
+    summary.id = id_
+    summary.name = name
+    summary.start_date = start_date
+    summary.end_date = end_date
+    summary.num_days = num_days
+    return summary
+
+
+def _make_skipped_place(name="Skipped Place", place_id="skip1"):
+    place = MagicMock()
+    place.name = name
+    place.place_id = place_id
+    return place
+
+
+def _make_transfer_segment(origin_name="Hotel A", destination_name="Hotel B", departure="11:00", arrival="13:00", label="Train"):
+    origin = MagicMock()
+    origin.name = origin_name
+    destination = MagicMock()
+    destination.name = destination_name
+    transfer = MagicMock()
+    transfer.origin = origin
+    transfer.destination = destination
+    transfer.departure_time = time.fromisoformat(departure)
+    transfer.arrival_time = time.fromisoformat(arrival)
+    transfer.label = label
+    return transfer
+
+
+def _make_route_segment(kind, steps=None, skipped=None):
+    segment = MagicMock()
+    segment.kind = kind
+    segment.steps = steps or []
+    segment.skipped = skipped or []
+    return segment
+
+
+def _make_day_plan(
+    day_index=0,
+    date="2026-08-01",
+    steps=None,
+    route_segments=None,
+    transfer=None,
+    skipped=None,
+    total_travel_time_s=0,
+    total_visit_time_min=0,
+    total_wait_min=0,
+):
+    day = MagicMock()
+    day.day_index = day_index
+    day.date = date
+    day.steps = steps or []
+    day.route_segments = route_segments or []
+    day.transfer = transfer
+    day.skipped = skipped or []
+    day.total_travel_time_s = total_travel_time_s
+    day.total_visit_time_min = total_visit_time_min
+    day.total_wait_min = total_wait_min
+    return day
+
+
+def _make_multi_day_trip_detail(
+    name="Kraków then Warsaw",
+    start_date="2026-08-01",
+    end_date="2026-08-03",
+    num_days=3,
+    days=None,
+    unassigned=None,
+):
+    from src.optimizer.matrix.models import TransportMode
+
+    trip = MagicMock()
+    trip.plan_type = "MULTI_DAY"
+    trip.name = name
+    trip.start_date = start_date
+    trip.end_date = end_date
+    trip.num_days = num_days
+    trip.transport_mode = TransportMode.WALK
+    resp = MagicMock()
+    resp.days = days if days is not None else [_make_day_plan()]
+    resp.unassigned = unassigned or []
+    trip.multi_day_response = resp
+    return trip
+
+
+@pytest.mark.unit
+class TestListSavedTripsMultiDay:
+    async def test_mixed_list_shows_date_and_date_range(self):
+        trips = [
+            _make_trip_summary("abc", "Test Krakow", "2026-07-05"),
+            _make_multi_day_trip_summary("mabc", "Kraków then Warsaw", "2026-08-01", "2026-08-03", 3),
+        ]
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.list_all = AsyncMock(return_value=trips)
+            result = await _tool_by_name("list_saved_trips").ainvoke({})
+
+        assert "date=2026-07-05" in result
+        assert "2026-08-01 to 2026-08-03 (3 days)" in result
+
+
+@pytest.mark.unit
+class TestGetTripDetailsMultiDay:
+    async def test_renders_per_day_breakdown(self):
+        days = [
+            _make_day_plan(day_index=0, date="2026-08-01", steps=[_make_route_step("Museum")]),
+            _make_day_plan(day_index=1, date="2026-08-02", steps=[_make_route_step("Park")]),
+        ]
+        trip = _make_multi_day_trip_detail(days=days, num_days=2, end_date="2026-08-02")
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
+            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+
+        assert "Day 1 (2026-08-01)" in result
+        assert "Museum" in result
+        assert "Day 2 (2026-08-02)" in result
+        assert "Park" in result
+
+    async def test_renders_transfer_segment(self):
+        transfer = _make_transfer_segment(label="Train to Warsaw")
+        day = _make_day_plan(
+            day_index=2,
+            date="2026-08-03",
+            route_segments=[_make_route_segment("PRE_TRANSFER"), _make_route_segment("POST_TRANSFER")],
+            transfer=transfer,
+        )
+        trip = _make_multi_day_trip_detail(days=[day])
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
+            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+
+        assert "Hotel A -> Hotel B" in result
+        assert "11:00" in result
+        assert "13:00" in result
+        assert "Train to Warsaw" in result
+
+    async def test_renders_pre_and_post_segments_on_transition_day(self):
+        pre_step = _make_route_step("Morning Museum")
+        post_step = _make_route_step("Evening Park")
+        day = _make_day_plan(
+            day_index=2,
+            date="2026-08-03",
+            steps=[post_step],  # DayPlan.steps is a POST-only projection per ADR-17
+            route_segments=[
+                _make_route_segment("PRE_TRANSFER", steps=[pre_step]),
+                _make_route_segment("POST_TRANSFER", steps=[post_step]),
+            ],
+            transfer=_make_transfer_segment(),
+        )
+        trip = _make_multi_day_trip_detail(days=[day])
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
+            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+
+        assert "Morning Museum" in result
+        assert "Evening Park" in result
+
+    async def test_renders_day_level_skipped_once(self):
+        skipped_place = _make_skipped_place("Closed Museum", "skip1")
+        day = _make_day_plan(skipped=[skipped_place])
+        trip = _make_multi_day_trip_detail(days=[day])
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
+            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+
+        assert result.count("Closed Museum") == 1
+
+    async def test_renders_trip_level_unassigned(self):
+        unassigned_place = _make_skipped_place("Unreachable Cafe", "unassigned1")
+        trip = _make_multi_day_trip_detail(unassigned=[unassigned_place])
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
+            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+
+        assert "Unreachable Cafe" in result
+
+    async def test_handles_route_segments_not_in_pre_post_order(self):
+        day = _make_day_plan(
+            route_segments=[
+                _make_route_segment("POST_TRANSFER", steps=[_make_route_step("After")]),
+                _make_route_segment("PRE_TRANSFER", steps=[_make_route_step("Before")]),
+            ],
+            transfer=_make_transfer_segment(),
+        )
+        trip = _make_multi_day_trip_detail(days=[day])
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
+            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+
+        assert "Before" in result
+        assert "After" in result
+
+    async def test_handles_route_segments_with_only_one_side_present(self):
+        day = _make_day_plan(
+            route_segments=[_make_route_segment("PRE_TRANSFER", steps=[_make_route_step("OnlyPre")])],
+            transfer=_make_transfer_segment(),
+        )
+        trip = _make_multi_day_trip_detail(days=[day])
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
+            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+
+        assert "OnlyPre" in result
+
+    async def test_single_day_output_unchanged_after_refactor(self):
+        trip = _make_trip_detail()
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
+            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "abc123"})
+
+        assert "Test Krakow" in result
+        assert "Muzeum Przyrodnicze" in result
+        assert "09:00" in result
+        assert "10:30" in result
+        assert "90 min visit" in result
+        assert "Total:" in result
+        assert "min travel" in result
+        assert "min visits" in result
