@@ -272,6 +272,14 @@ def _kyoto_docs() -> list[dict]:
     ]
 
 
+def _tokyo_kyoto_docs() -> list[dict]:
+    """One origin-side (PRE candidate) and one destination-side (POST candidate) place."""
+    return [
+        {"_id": "p1", "name": "Tokyo Tower", "lat": 35.6586, "lng": 139.7454, "visit_duration_min": 30},
+        {"_id": "p2", "name": "Fushimi Inari", "lat": 34.9671, "lng": 135.7727, "visit_duration_min": 60},
+    ]
+
+
 @pytest.mark.integration
 class TestMultiDayRouteTransfers:
     """End-to-end Tokyo→Kyoto transfer scenario through POST /trip — see ADR-16."""
@@ -338,3 +346,69 @@ class TestMultiDayRouteTransfers:
         }
         response = await client.post(f"{_BASE}/trip", json=payload)
         assert response.status_code == 422
+
+    async def test_full_transition_day_returns_pre_and_post_route_segments_via_two_solver_calls(self, client):
+        """Verifies real orchestration of two optimize_route calls, not just Pydantic serialization."""
+        pre_response = OptimizeResponse(
+            steps=[
+                RouteStep(
+                    place_id="p1",
+                    name="Tokyo Tower",
+                    lat=35.6586,
+                    lng=139.7454,
+                    arrival_time=time(9, 15),
+                    departure_time=time(9, 45),
+                    travel_from_previous_s=0,
+                    visit_duration_min=30,
+                )
+            ],
+            total_travel_time_s=0,
+            total_visit_time_min=30,
+            total_wait_min=0,
+            transport_mode=TransportMode.WALK,
+            skipped=[],
+        )
+        post_response = OptimizeResponse(
+            steps=[
+                RouteStep(
+                    place_id="p2",
+                    name="Fushimi Inari",
+                    lat=34.9671,
+                    lng=135.7727,
+                    arrival_time=time(15, 30),
+                    departure_time=time(16, 30),
+                    travel_from_previous_s=0,
+                    visit_duration_min=60,
+                )
+            ],
+            total_travel_time_s=0,
+            total_visit_time_min=60,
+            total_wait_min=0,
+            transport_mode=TransportMode.WALK,
+            skipped=[],
+        )
+        mock_optimize = AsyncMock(side_effect=[pre_response, post_response])
+
+        with (
+            patch(
+                "src.optimizer.solver.multi_day_service.fetch_places_by_ids",
+                new=AsyncMock(return_value=_tokyo_kyoto_docs()),
+            ),
+            patch("src.optimizer.solver.multi_day_service.optimize_route", new=mock_optimize),
+        ):
+            response = await client.post(f"{_BASE}/trip", json=_TRANSFER_PAYLOAD)
+
+        assert response.status_code == 200
+        assert mock_optimize.call_count == 2
+        pre_call_request = mock_optimize.call_args_list[0][0][2]
+        post_call_request = mock_optimize.call_args_list[1][0][2]
+        assert (pre_call_request.start_lat, pre_call_request.start_lng) == (35.6895, 139.6917)
+        assert (post_call_request.start_lat, post_call_request.start_lng) == (35.0116, 135.7681)
+
+        body = response.json()
+        day0 = body["days"][0]
+        assert [seg["kind"] for seg in day0["route_segments"]] == ["PRE_TRANSFER", "POST_TRANSFER"]
+        assert day0["route_segments"][0]["steps"][0]["place_id"] == "p1"
+        assert day0["route_segments"][1]["steps"][0]["place_id"] == "p2"
+        assert day0["transfer"] is not None
+        assert day0["steps"] == day0["route_segments"][1]["steps"]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, time
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -158,7 +159,9 @@ class SkippedPlace(BaseModel):
     place_id: str
     name: str | None
     # NO_COORDINATES | TIME_WINDOW_INFEASIBLE | NO_MATRIX_ENTRY | MATRIX_INCOMPLETE | DROPPED_LOW_PRIORITY
-    # | TRANSFER_DAY_GEOGRAPHY_MISMATCH | TRANSFER_WINDOW_INFEASIBLE | CAPACITY_EXCEEDED
+    # | TRANSFER_WINDOW_INFEASIBLE | CAPACITY_EXCEEDED | PRE_TRANSFER_WINDOW_INFEASIBLE
+    # | PRE_TRANSFER_CAPACITY_EXCEEDED
+    # POST-side reasons are unrenamed since ADR-16; TRANSFER_DAY_GEOGRAPHY_MISMATCH is retired — see ADR-17.
     reason: str
 
 
@@ -352,6 +355,18 @@ class TransferSegment(BaseModel):
     label: str | None = None
 
 
+class DayRouteSegment(BaseModel):
+    """One solver-produced route on either side of a transition-day transfer — see ADR-17."""
+
+    kind: Literal["PRE_TRANSFER", "POST_TRANSFER"]
+    steps: list[RouteStep]
+    total_travel_time_s: int
+    total_visit_time_min: int
+    total_wait_min: int
+    travel_to_end_s: int = 0
+    skipped: list[SkippedPlace]
+
+
 class DayPlan(BaseModel):
     """Optimized route for a single day within a multi-day trip."""
 
@@ -364,6 +379,7 @@ class DayPlan(BaseModel):
     skipped: list[SkippedPlace]
     travel_to_end_s: int = 0
     transfer: TransferSegment | None = None
+    route_segments: list[DayRouteSegment] = Field(default_factory=list)
 
 
 class MultiDayResponse(BaseModel):

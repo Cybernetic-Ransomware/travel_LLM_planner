@@ -161,6 +161,7 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 14 | Accepted | Astro + Svelte islands spike (`apps/astro-frontend`) as alternative frontend shell |
 | 15 | Accepted | Accommodation-derived daily START/END anchors — `src/accommodations/` module, precedence policy, changeover-day safety |
 | 16 | Accepted | Transition-day transfers — `src/transfers/` module, minute-precision day bounds, transfer-derived anchor precedence, transfer-day eligibility/admission-budget partitioning |
+| 17 | Accepted | Transition-day route segments — PRE/POST solver segments either side of a transfer, `DayPlan.route_segments`, `TransitionSide` classification, per-side visit budgets |
 | — | — | [Frontend split roadmap](docs/frontend-roadmap.md) — Astro/SvelteKit decision rule and upcoming PRs |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.

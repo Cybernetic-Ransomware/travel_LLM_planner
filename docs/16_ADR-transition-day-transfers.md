@@ -95,6 +95,18 @@ the day rather than an ignored field.
    pass/fail that would conflate "no coordinates" with "wrong city" — those are
    different failures with different, pre-existing response semantics
    (`NO_COORDINATES` already exists as a `SkippedPlace.reason`).
+
+   > **Superseded by ADR-17.** The `GEOGRAPHY_MISMATCH` branch described here —
+   > rejecting a place closer to the origin accommodation outright — no longer
+   > applies. ADR-17 replaced this eligibility check with a three-state
+   > `TransitionSide` (`ORIGIN`/`DESTINATION`/`NO_COORDINATES`) that routes an
+   > origin-side place to a PRE-transfer solver segment instead of rejecting it;
+   > `TRANSFER_DAY_GEOGRAPHY_MISMATCH` is no longer emitted. `_partition_places`
+   > now returns a `PartitionResult` with per-side buckets and budgets rather than
+   > the three-tuple above. The rest of this decision — unified partitioning,
+   > haversine over squared lat/lng, `NO_COORDINATES` as a distinct outcome, pinned
+   > eligibility checked before fill, admissible-first-then-rank for flexible/auto —
+   > remains accurate for the POST side and, per ADR-17, is mirrored for PRE.
    - **Pinned** places are checked *before* being added to the bucket and *before*
      `fill` is incremented: a pinned place that fails eligibility must not silently
      consume the day's admission budget and crowd out a legitimate destination-city
@@ -248,9 +260,11 @@ the day rather than an ignored field.
 `Accepted` — scoped to `src/transfers/`, its integration into
 `src/optimizer/solver/models.py`, `src/optimizer/solver/service.py`, and
 `src/optimizer/solver/multi_day_service.py`. Persistence, overnight transfers,
-multiple transfers per day, pre-transfer sightseeing, automatic transit-schedule
-lookup, and correct transfer/departure-time timezone handling are explicitly out of
-scope and left to future ADRs.
+multiple transfers per day, automatic transit-schedule lookup, and correct
+transfer/departure-time timezone handling are explicitly out of scope and left to
+future ADRs. **The post-transfer-only limitation (no pre-transfer sightseeing) is
+superseded by ADR-17**, which added a PRE-transfer solver segment on the origin side
+of the transfer — see the note under decision 7.
 
 ## Non-goals
 - **Persistence.** `transfers` stays request-only, exactly like `accommodations` in
@@ -265,7 +279,8 @@ scope and left to future ADRs.
   slice.
 - **Pre-transfer sightseeing.** This slice models only the segment after the
   transfer; the origin-city side of a transition day is untouched, matching the
-  motivating scenario (checkout → transfer → check-in → sightseeing).
+  motivating scenario (checkout → transfer → check-in → sightseeing). **Closed by
+  ADR-17**, which added a PRE-transfer solver segment on the origin side.
 - **A generic fixed-events/timeline engine.** `TransferSegment` is a single dedicated
   field on `DayPlan`, not a generic block list — see Rationale.
 - **Hard capacity/admission-budget enforcement for days without a transfer.** Ordinary

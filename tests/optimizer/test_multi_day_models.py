@@ -12,6 +12,7 @@ from src.optimizer.matrix.models import TransportMode
 from src.optimizer.solver.models import (
     DayConfig,
     DayPlan,
+    DayRouteSegment,
     DaySlot,
     MultiDayRequest,
     MultiDayResponse,
@@ -262,3 +263,84 @@ class TestDayPlanAndResponse:
             duration_s=18000,
         )
         assert segment.label is None
+
+    def test_route_segments_defaults_to_empty_list(self):
+        plan = DayPlan(
+            day_index=0,
+            date=date(2026, 6, 1),
+            steps=[],
+            total_travel_time_s=0,
+            total_visit_time_min=0,
+            total_wait_min=0,
+            skipped=[],
+        )
+        assert plan.route_segments == []
+
+    def test_day_plan_without_transfer_has_no_route_segments(self):
+        """route_segments is populated only for a day with a resolved transfer — see ADR-17."""
+        plan = DayPlan(
+            day_index=0,
+            date=date(2026, 6, 1),
+            steps=[self._step()],
+            total_travel_time_s=0,
+            total_visit_time_min=30,
+            total_wait_min=0,
+            skipped=[],
+        )
+        assert plan.transfer is None
+        assert plan.route_segments == []
+
+    def test_ordinary_day_construction_unaffected(self):
+        """Regression: adding route_segments must not change existing DayPlan construction."""
+        plan = DayPlan(
+            day_index=0,
+            date=date(2026, 6, 1),
+            steps=[self._step()],
+            total_travel_time_s=100,
+            total_visit_time_min=30,
+            total_wait_min=5,
+            skipped=[SkippedPlace(place_id="p2", name="P2", reason="TIME_WINDOW_INFEASIBLE")],
+            travel_to_end_s=200,
+        )
+        assert plan.steps == [self._step()]
+        assert plan.total_travel_time_s == 100
+        assert plan.travel_to_end_s == 200
+        assert plan.route_segments == []
+
+    def test_day_route_segment_construction(self):
+        segment = DayRouteSegment(
+            kind="PRE_TRANSFER",
+            steps=[self._step()],
+            total_travel_time_s=900,
+            total_visit_time_min=60,
+            total_wait_min=0,
+            travel_to_end_s=300,
+            skipped=[],
+        )
+        assert segment.kind == "PRE_TRANSFER"
+        assert len(segment.steps) == 1
+        assert segment.travel_to_end_s == 300
+
+    def test_day_plan_carries_both_route_segments(self):
+        pre_segment = DayRouteSegment(
+            kind="PRE_TRANSFER", steps=[], total_travel_time_s=0, total_visit_time_min=0, total_wait_min=0, skipped=[]
+        )
+        post_segment = DayRouteSegment(
+            kind="POST_TRANSFER",
+            steps=[self._step()],
+            total_travel_time_s=0,
+            total_visit_time_min=30,
+            total_wait_min=0,
+            skipped=[],
+        )
+        plan = DayPlan(
+            day_index=0,
+            date=date(2026, 10, 10),
+            steps=[self._step()],
+            total_travel_time_s=0,
+            total_visit_time_min=30,
+            total_wait_min=0,
+            skipped=[],
+            route_segments=[pre_segment, post_segment],
+        )
+        assert [s.kind for s in plan.route_segments] == ["PRE_TRANSFER", "POST_TRANSFER"]
