@@ -156,12 +156,23 @@ def _format_multi_day_trip(trip) -> str:
             if post is not None:
                 lines.append("  After transfer:")
                 lines.extend(_format_steps(post.steps, indent="    ") or ["    (nothing scheduled)"])
+            # day.total_travel_time_s/total_visit_time_min/total_wait_min are a POST_TRANSFER-only
+            # compatibility projection (ADR-17) — using them as the day total would silently drop
+            # the PRE_TRANSFER segment's contribution, so aggregate across segments instead.
+            segments = list(segments_by_kind.values())
+            local_travel_s = sum(s.total_travel_time_s for s in segments)
+            local_visit_min = sum(s.total_visit_time_min for s in segments)
+            local_wait_min = sum(s.total_wait_min for s in segments)
+            lines.append(
+                f"  Local routes total: {local_travel_s // 60} min travel, "
+                f"{local_visit_min} min visits, {local_wait_min} min wait"
+            )
         else:
             lines.extend(_format_steps(day.steps, indent="  ") or ["  No places in route."])
-        lines.append(
-            f"  Total: {day.total_travel_time_s // 60} min travel, "
-            f"{day.total_visit_time_min} min visits, {day.total_wait_min} min wait"
-        )
+            lines.append(
+                f"  Total: {day.total_travel_time_s // 60} min travel, "
+                f"{day.total_visit_time_min} min visits, {day.total_wait_min} min wait"
+            )
         if day.skipped:
             lines.append("  Skipped: " + ", ".join(s.name or s.place_id for s in day.skipped))
 

@@ -979,11 +979,16 @@ def _make_transfer_segment(origin_name="Hotel A", destination_name="Hotel B", de
     return transfer
 
 
-def _make_route_segment(kind, steps=None, skipped=None):
+def _make_route_segment(
+    kind, steps=None, skipped=None, total_travel_time_s=0, total_visit_time_min=0, total_wait_min=0
+):
     segment = MagicMock()
     segment.kind = kind
     segment.steps = steps or []
     segment.skipped = skipped or []
+    segment.total_travel_time_s = total_travel_time_s
+    segment.total_visit_time_min = total_visit_time_min
+    segment.total_wait_min = total_wait_min
     return segment
 
 
@@ -1109,6 +1114,42 @@ class TestGetTripDetailsMultiDay:
 
         assert "Morning Museum" in result
         assert "Evening Park" in result
+
+    async def test_transition_day_total_includes_pre_segment_not_just_post(self):
+        # DayPlan.total_* is a POST_TRANSFER-only compatibility projection (ADR-17). If the
+        # renderer used it as "the" day total, the PRE_TRANSFER segment's contribution would
+        # silently disappear from the summary.
+        day = _make_day_plan(
+            route_segments=[
+                _make_route_segment(
+                    "PRE_TRANSFER",
+                    steps=[_make_route_step("Before")],
+                    total_travel_time_s=20 * 60,
+                    total_visit_time_min=60,
+                    total_wait_min=5,
+                ),
+                _make_route_segment(
+                    "POST_TRANSFER",
+                    steps=[_make_route_step("After")],
+                    total_travel_time_s=30 * 60,
+                    total_visit_time_min=90,
+                    total_wait_min=0,
+                ),
+            ],
+            transfer=_make_transfer_segment(),
+            # Mirrors the POST_TRANSFER-only projection: equal to the POST segment's totals.
+            total_travel_time_s=30 * 60,
+            total_visit_time_min=90,
+            total_wait_min=0,
+        )
+        trip = _make_multi_day_trip_detail(days=[day])
+
+        with patch("src.orchestrator.tools.TripsManager") as MockManager:
+            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
+            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+
+        assert "Total: 30 min travel, 90 min visits, 0 min wait" not in result
+        assert "Local routes total: 50 min travel, 150 min visits, 5 min wait" in result
 
     async def test_renders_day_level_skipped_once(self):
         skipped_place = _make_skipped_place("Closed Museum", "skip1")
