@@ -1,7 +1,7 @@
 # Travel Planner — task runner
 # Install: scoop install just  |  winget install Casey.Just
 
-set shell := ["powershell", "-Command"]
+set shell := ["pwsh", "-Command"]
 
 # Run pre-commit on staged files, then open Commitizen
 # Stage your changes first: git add <files>
@@ -71,3 +71,27 @@ frontend-format:
 # Run frontend unit tests (vitest)
 frontend-test:
     npm --prefix apps/frontend run test
+
+# Regenerate OpenAPI schema snapshot and derived TypeScript contracts (mutates tracked files)
+frontend-types:
+    $env:PYTHONPATH = "."; uv run python scripts/export_openapi.py openapi.json
+    npm run generate --prefix tools/openapi-codegen
+    npm --prefix apps/frontend run types:format
+
+# Verify tracked openapi.json / generated/api.ts match a fresh regeneration, without touching tracked files
+[script("pwsh")]
+check-frontend-types:
+    $env:PYTHONPATH = "."
+    $tmp = (New-Item -ItemType Directory -Force -Path (Join-Path ([System.IO.Path]::GetTempPath()) "travel-planner-contract-check")).FullName
+    uv run python scripts/export_openapi.py "$tmp/openapi.json"
+    if ((Get-FileHash openapi.json).Hash -ne (Get-FileHash "$tmp/openapi.json").Hash) {
+        throw "openapi.json is stale — run 'just frontend-types'"
+    }
+    npx --prefix tools/openapi-codegen openapi-typescript "$tmp/openapi.json" --default-non-nullable false -o "$tmp/api.ts"
+    Push-Location apps/frontend
+    npx prettier --config .prettierrc --write "$tmp/api.ts"
+    Pop-Location
+    if ((Get-FileHash apps/frontend/src/lib/types/generated/api.ts).Hash -ne (Get-FileHash "$tmp/api.ts").Hash) {
+        throw "generated/api.ts is stale — run 'just frontend-types'"
+    }
+    Write-Output "Contracts are up to date."

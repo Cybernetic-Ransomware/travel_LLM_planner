@@ -163,6 +163,7 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 16 | Accepted | Transition-day transfers — `src/transfers/` module, minute-precision day bounds, transfer-derived anchor precedence, transfer-day eligibility/admission-budget partitioning |
 | 17 | Accepted | Transition-day route segments — PRE/POST solver segments either side of a transfer, `DayPlan.route_segments`, `TransitionSide` classification, per-side visit budgets |
 | 18 | Accepted | Multi-day trip persistence — discriminated `Trip` model in `src/trips/`, `plan_type` legacy inference, callable request discriminator, `TripPlanTypeConflictError` on update |
+| 19 | Accepted | Generated REST contracts — `openapi-typescript` from `app.openapi()`, `tools/openapi-codegen/`, `contract-drift.yml` CI gate |
 | — | — | [Frontend split roadmap](docs/frontend-roadmap.md) — Astro/SvelteKit decision rule and upcoming PRs |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.

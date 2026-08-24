@@ -59,6 +59,8 @@ SaveTripRequest = Annotated[
 
 
 class TripSummaryOutBase(BaseModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     id: str
     name: str
     created_at: str
@@ -80,6 +82,8 @@ TripSummaryOut = Annotated[SingleDayTripSummaryOut | MultiDayTripSummaryOut, Fie
 
 
 class TripDetailOutBase(BaseModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     id: str
     name: str
     created_at: str

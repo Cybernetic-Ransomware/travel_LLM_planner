@@ -1,15 +1,10 @@
-export interface ChatMessage {
-	role: 'user' | 'assistant' | 'system';
-	content: string;
-}
+import type { components } from './generated/api.js';
 
-export interface ChatRequest {
-	messages: ChatMessage[];
-	session_id?: string | null;
-	place_ids: string[];
-	resume_confirmed?: boolean | null;
-}
+export type ChatMessage = components['schemas']['ChatMessage'];
+export type ChatRequest = components['schemas']['ChatRequest'];
+export type OrchestratorStatus = components['schemas']['OrchestratorStatusOut'];
 
+// SSE payloads aren't in OpenAPI — /chat is a StreamingResponse with no response_model.
 export interface ToolProposal {
 	tool: string;
 	args: Record<string, unknown>;
@@ -20,9 +15,3 @@ export type SSEEvent =
 	| { content: string }
 	| { tool_proposal: ToolProposal }
 	| { error: string };
-
-export interface OrchestratorStatus {
-	ready: boolean;
-	provider?: string;
-	model?: string;
-}

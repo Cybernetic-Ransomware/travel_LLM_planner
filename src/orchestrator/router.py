@@ -13,7 +13,7 @@ from src.core.exceptions import OrchestratorUnavailableError
 from src.gmaps import fetch_places_by_ids
 from src.orchestrator.deps import OrchestratorDep
 from src.orchestrator.manager import OrchestratorManager
-from src.orchestrator.models import AgentState, ChatMessage, ChatRequest
+from src.orchestrator.models import AgentState, ChatMessage, ChatRequest, OrchestratorStatusOut
 
 router = APIRouter()
 logger = setup_logger(__name__, "orchestrator")
@@ -165,13 +165,13 @@ async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep, _use
     )
 
 
-@router.get("/status")
-async def status(orch: OrchestratorDep) -> dict:
+@router.get(
+    "/status",
+    response_model=OrchestratorStatusOut,
+    response_model_exclude_unset=True,
+)
+async def status(orch: OrchestratorDep) -> OrchestratorStatusOut:
     """Return the orchestrator readiness status."""
     if orch is None:
-        return {"ready": False}
-    return {
-        "ready": orch.is_ready,
-        "provider": orch.provider,
-        "model": orch.model_name,
-    }
+        return OrchestratorStatusOut(ready=False)
+    return OrchestratorStatusOut(ready=orch.is_ready, provider=orch.provider, model=orch.model_name)

@@ -9,7 +9,7 @@ from src.core.routers import router as api_router
 
 logger = setup_logger(__name__, "main")
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(title="Travel Planner API", lifespan=lifespan)
 
 app.add_middleware(ExceptionHandlerMiddleware)  # type: ignore[arg-type]
 # Added last so CORS wraps the exception middleware and error responses keep CORS headers.

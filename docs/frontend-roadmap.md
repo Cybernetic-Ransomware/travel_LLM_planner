@@ -32,5 +32,7 @@ and provides a decision rule so new screens don't require a framework discussion
 1. Public Astro landing / docs
 2. SvelteKit: backend-down error handling
 3. SvelteKit: proper route planner
-4. Types from OpenAPI
-5. Spike cleanup after ADR-14 decision
+4. Spike cleanup after ADR-14 decision
+
+REST contract types are generated from the backend's OpenAPI schema — see
+[ADR-19](19_ADR-openapi-typescript-contracts.md).

@@ -1,47 +1,16 @@
-import type { OptimizeRequest, OptimizeResponse, TransportMode } from './optimizer.js';
+import type { components, paths } from './generated/api.js';
 
-export interface SaveTripRequest {
-	name: string;
-	date: string;
-	optimizer_request: OptimizeRequest;
-	optimizer_response: OptimizeResponse;
-}
+export type SingleDaySaveTripRequest = components['schemas']['SingleDaySaveTripRequest'];
+export type MultiDaySaveTripRequest = components['schemas']['MultiDaySaveTripRequest'];
+export type SaveTripRequest =
+	paths['/api/v1/core/trips/']['post']['requestBody']['content']['application/json'];
 
-export interface SingleDayTripSummaryOut {
-	plan_type: 'SINGLE_DAY';
-	id: string;
-	name: string;
-	date: string;
-	created_at: string;
-}
+export type SingleDayTripSummaryOut = components['schemas']['SingleDayTripSummaryOut'];
+export type MultiDayTripSummaryOut = components['schemas']['MultiDayTripSummaryOut'];
+export type TripSummaryOut =
+	paths['/api/v1/core/trips/']['get']['responses'][200]['content']['application/json'][number];
 
-export interface MultiDayTripSummaryOut {
-	plan_type: 'MULTI_DAY';
-	id: string;
-	name: string;
-	start_date: string;
-	end_date: string;
-	num_days: number;
-	created_at: string;
-}
-
-export type TripSummaryOut = SingleDayTripSummaryOut | MultiDayTripSummaryOut;
-
-export interface SingleDayTripOut extends SingleDayTripSummaryOut {
-	updated_at?: string | null;
-	optimizer_request: OptimizeRequest;
-	optimizer_response: OptimizeResponse;
-	selected_place_ids: string[];
-	transport_mode: TransportMode;
-	day_start_hour: number;
-	day_end_hour: number;
-}
-
-export interface MultiDayTripOut extends MultiDayTripSummaryOut {
-	updated_at?: string | null;
-	transport_mode: TransportMode;
-	// Intentionally minimal — full multi-day itinerary typing (days/accommodations/transfers/
-	// route_segments) is a later stage's concern, not this compatibility tail's.
-}
-
-export type TripOut = SingleDayTripOut | MultiDayTripOut;
+export type SingleDayTripOut = components['schemas']['SingleDayTripDetailOut'];
+export type MultiDayTripOut = components['schemas']['MultiDayTripDetailOut'];
+export type TripOut =
+	paths['/api/v1/core/trips/{trip_id}']['get']['responses'][200]['content']['application/json'];

@@ -1,0 +1,11 @@
+{
+	"name": "openapi-codegen",
+	"private": true,
+	"devDependencies": {
+		"openapi-typescript": "7.13.0",
+		"typescript": "5.9.3"
+	},
+	"scripts": {
+		"generate": "openapi-typescript ../../openapi.json --default-non-nullable false -o ../../apps/frontend/src/lib/types/generated/api.ts"
+	}
+}

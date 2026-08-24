@@ -606,8 +606,7 @@ class TestStatusEndpoint:
     async def test_status_not_ready_when_no_orchestrator(self, client):
         response = await client.get("/api/v1/core/orchestrator/status")
         assert response.status_code == 200
-        data = response.json()
-        assert data["ready"] is False
+        assert response.json() == {"ready": False}
 
 
 @pytest.mark.unit
