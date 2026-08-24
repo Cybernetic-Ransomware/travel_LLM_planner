@@ -4,8 +4,7 @@ export type ChatMessage = components['schemas']['ChatMessage'];
 export type ChatRequest = components['schemas']['ChatRequest'];
 export type OrchestratorStatus = components['schemas']['OrchestratorStatusOut'];
 
-// SSE event payloads are not described by OpenAPI (the /chat endpoint is a StreamingResponse
-// with no response_model) — handwritten by necessity, not duplication of a generated contract.
+// SSE payloads aren't in OpenAPI — /chat is a StreamingResponse with no response_model.
 export interface ToolProposal {
 	tool: string;
 	args: Record<string, unknown>;

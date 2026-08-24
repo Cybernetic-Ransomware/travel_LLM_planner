@@ -82,7 +82,7 @@ frontend-types:
 [script("pwsh")]
 check-frontend-types:
     $env:PYTHONPATH = "."
-    $tmp = (New-Item -ItemType Directory -Force -Path "$env:TEMP/travel-planner-contract-check").FullName
+    $tmp = (New-Item -ItemType Directory -Force -Path (Join-Path ([System.IO.Path]::GetTempPath()) "travel-planner-contract-check")).FullName
     uv run python scripts/export_openapi.py "$tmp/openapi.json"
     if ((Get-FileHash openapi.json).Hash -ne (Get-FileHash "$tmp/openapi.json").Hash) {
         throw "openapi.json is stale — run 'just frontend-types'"
