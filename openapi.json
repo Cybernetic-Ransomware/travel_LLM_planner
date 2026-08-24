@@ -1,0 +1,2783 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Travel Planner API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/core/gmaps/import": {
+      "post": {
+        "tags": [
+          "api",
+          "core",
+          "gmaps"
+        ],
+        "summary": "Import Public List",
+        "operationId": "import_public_list_api_v1_core_gmaps_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/gmaps/enrich": {
+      "post": {
+        "tags": [
+          "api",
+          "core",
+          "gmaps"
+        ],
+        "summary": "Enrich Places",
+        "operationId": "enrich_places_api_v1_core_gmaps_enrich_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrichRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrichResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/gmaps/places": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "gmaps"
+        ],
+        "summary": "List Places",
+        "description": "Return all places, optionally filtered by skipped flag or list name.",
+        "operationId": "list_places_api_v1_core_gmaps_places_get",
+        "parameters": [
+          {
+            "name": "skipped",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Skipped"
+            }
+          },
+          {
+            "name": "list_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "List Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlaceOut"
+                  },
+                  "title": "Response List Places Api V1 Core Gmaps Places Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/gmaps/places/{place_id}": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "gmaps"
+        ],
+        "summary": "Get Place",
+        "description": "Return a single place by its MongoDB ObjectId.",
+        "operationId": "get_place_api_v1_core_gmaps_places__place_id__get",
+        "parameters": [
+          {
+            "name": "place_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Place Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "api",
+          "core",
+          "gmaps"
+        ],
+        "summary": "Patch Place",
+        "description": "Update scheduling preferences for a place.",
+        "operationId": "patch_place_api_v1_core_gmaps_places__place_id__patch",
+        "parameters": [
+          {
+            "name": "place_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Place Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlacePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "api",
+          "core",
+          "gmaps"
+        ],
+        "summary": "Remove Place",
+        "description": "Delete a place by its MongoDB ObjectId.",
+        "operationId": "remove_place_api_v1_core_gmaps_places__place_id__delete",
+        "parameters": [
+          {
+            "name": "place_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Place Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/gmaps/places/{place_id}/enrich": {
+      "post": {
+        "tags": [
+          "api",
+          "core",
+          "gmaps"
+        ],
+        "summary": "Enrich Place",
+        "description": "Enrich a single place via the Google Places API and return the updated record.",
+        "operationId": "enrich_place_api_v1_core_gmaps_places__place_id__enrich_post",
+        "parameters": [
+          {
+            "name": "place_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Place Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/gmaps/keycheck": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "gmaps"
+        ],
+        "summary": "Keycheck",
+        "operationId": "keycheck_api_v1_core_gmaps_keycheck_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/optimizer/matrix/status": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "optimizer"
+        ],
+        "summary": "Matrix Cache Status",
+        "description": "Return the number of cached distance matrix entries per transport mode.",
+        "operationId": "matrix_cache_status_api_v1_core_optimizer_matrix_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Matrix Cache Status Api V1 Core Optimizer Matrix Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/optimizer/matrix/cache": {
+      "delete": {
+        "tags": [
+          "api",
+          "core",
+          "optimizer"
+        ],
+        "summary": "Clear Matrix Cache",
+        "description": "Invalidate cached distance matrix entries. Optionally filter by transport mode.",
+        "operationId": "clear_matrix_cache_api_v1_core_optimizer_matrix_cache_delete",
+        "parameters": [
+          {
+            "name": "transport_mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TransportMode"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Transport Mode"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/optimizer/route": {
+      "post": {
+        "tags": [
+          "api",
+          "core",
+          "optimizer"
+        ],
+        "summary": "Optimize",
+        "description": "Optimize a visiting route for the given places using TSP with time windows.",
+        "operationId": "optimize_api_v1_core_optimizer_route_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/optimizer/trip": {
+      "post": {
+        "tags": [
+          "api",
+          "core",
+          "optimizer"
+        ],
+        "summary": "Optimize Trip Route",
+        "description": "Optimize a multi-day trip by distributing places across days using TSP with time windows.",
+        "operationId": "optimize_trip_route_api_v1_core_optimizer_trip_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultiDayRequest-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MultiDayResponse-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/optimizer/keycheck": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "optimizer"
+        ],
+        "summary": "Routes Keycheck",
+        "description": "Check whether the Google Routes API key is configured.",
+        "operationId": "routes_keycheck_api_v1_core_optimizer_keycheck_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Routes Keycheck Api V1 Core Optimizer Keycheck Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/orchestrator/chat": {
+      "post": {
+        "tags": [
+          "api",
+          "core",
+          "orchestrator"
+        ],
+        "summary": "Chat",
+        "description": "Stream a chat response using the LangGraph orchestrator.\n\nReturns Server-Sent Events (text/event-stream). The first event carries\n``session_id``. Subsequent events carry ``content`` token chunks.\nA final ``data: [DONE]`` line signals the end of the stream.\n\nWhen ``resume_confirmed`` is set (``True`` or ``False``), the session is\nassumed to be in an interrupted state (tool awaiting confirmation).\n``True`` executes the pending tool; ``False`` cancels it.",
+        "operationId": "chat_api_v1_core_orchestrator_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/orchestrator/status": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "orchestrator"
+        ],
+        "summary": "Status",
+        "description": "Return the orchestrator readiness status.",
+        "operationId": "status_api_v1_core_orchestrator_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrchestratorStatusOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/trips/": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "trips"
+        ],
+        "summary": "List Trips",
+        "description": "Return all saved trips, newest first.",
+        "operationId": "list_trips_api_v1_core_trips__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/SingleDayTripSummaryOut"
+                      },
+                      {
+                        "$ref": "#/components/schemas/MultiDayTripSummaryOut"
+                      }
+                    ],
+                    "discriminator": {
+                      "propertyName": "plan_type",
+                      "mapping": {
+                        "SINGLE_DAY": "#/components/schemas/SingleDayTripSummaryOut",
+                        "MULTI_DAY": "#/components/schemas/MultiDayTripSummaryOut"
+                      }
+                    }
+                  },
+                  "type": "array",
+                  "title": "Response List Trips Api V1 Core Trips  Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "api",
+          "core",
+          "trips"
+        ],
+        "summary": "Save Trip",
+        "description": "Persist an optimizer result (single-day or multi-day) as a named trip.",
+        "operationId": "save_trip_api_v1_core_trips__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SingleDaySaveTripRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MultiDaySaveTripRequest"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SingleDayTripDetailOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MultiDayTripDetailOut"
+                    }
+                  ],
+                  "title": "Response Save Trip Api V1 Core Trips  Post",
+                  "discriminator": {
+                    "propertyName": "plan_type",
+                    "mapping": {
+                      "SINGLE_DAY": "#/components/schemas/SingleDayTripDetailOut",
+                      "MULTI_DAY": "#/components/schemas/MultiDayTripDetailOut"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/trips/{trip_id}": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "trips"
+        ],
+        "summary": "Get Trip",
+        "description": "Return a single saved trip by its MongoDB id.",
+        "operationId": "get_trip_api_v1_core_trips__trip_id__get",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SingleDayTripDetailOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MultiDayTripDetailOut"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "plan_type",
+                    "mapping": {
+                      "SINGLE_DAY": "#/components/schemas/SingleDayTripDetailOut",
+                      "MULTI_DAY": "#/components/schemas/MultiDayTripDetailOut"
+                    }
+                  },
+                  "title": "Response Get Trip Api V1 Core Trips  Trip Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "api",
+          "core",
+          "trips"
+        ],
+        "summary": "Update Trip",
+        "description": "Replace a saved trip's content. Rejects changing plan_type (409).",
+        "operationId": "update_trip_api_v1_core_trips__trip_id__put",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SingleDaySaveTripRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MultiDaySaveTripRequest"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SingleDayTripDetailOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MultiDayTripDetailOut"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "plan_type",
+                    "mapping": {
+                      "SINGLE_DAY": "#/components/schemas/SingleDayTripDetailOut",
+                      "MULTI_DAY": "#/components/schemas/MultiDayTripDetailOut"
+                    }
+                  },
+                  "title": "Response Update Trip Api V1 Core Trips  Trip Id  Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "api",
+          "core",
+          "trips"
+        ],
+        "summary": "Delete Trip",
+        "description": "Delete a saved trip by its MongoDB id.",
+        "operationId": "delete_trip_api_v1_core_trips__trip_id__delete",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Healthcheck",
+        "operationId": "healthcheck__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccommodationStay": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "lat": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat"
+          },
+          "lng": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lng"
+          },
+          "check_in_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check In Date"
+          },
+          "check_out_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check Out Date"
+          },
+          "check_in_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check In From"
+          },
+          "check_out_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Out By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "lat",
+          "lng",
+          "check_in_date",
+          "check_out_date"
+        ],
+        "title": "AccommodationStay",
+        "description": "A lodging stay covering the half-open night interval [check_in_date, check_out_date) \u2014 see ADR-15."
+      },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "system"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage",
+        "example": {
+          "content": "What are the opening hours?",
+          "role": "user"
+        }
+      },
+      "ChatRequest": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Messages"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "place_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Place Ids"
+          },
+          "resume_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume Confirmed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "title": "ChatRequest",
+        "example": {
+          "messages": [
+            {
+              "content": "Tell me about Wawel Castle",
+              "role": "user"
+            }
+          ],
+          "place_ids": [],
+          "session_id": "550e8400-e29b-41d4-a716-446655440000"
+        }
+      },
+      "DayConfig": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "day_start_hour": {
+            "type": "integer",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Day Start Hour",
+            "default": 9
+          },
+          "day_end_hour": {
+            "type": "integer",
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "Day End Hour",
+            "default": 21
+          },
+          "day_start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Start Time"
+          },
+          "day_end_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day End Time"
+          },
+          "start_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Lat"
+          },
+          "start_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Lng"
+          },
+          "end_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Lat"
+          },
+          "end_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Lng"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date"
+        ],
+        "title": "DayConfig",
+        "description": "Configuration for a single day in a multi-day trip."
+      },
+      "DayPlan-Input": {
+        "properties": {
+          "day_index": {
+            "type": "integer",
+            "title": "Day Index"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/RouteStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "total_travel_time_s": {
+            "type": "integer",
+            "title": "Total Travel Time S"
+          },
+          "total_visit_time_min": {
+            "type": "integer",
+            "title": "Total Visit Time Min"
+          },
+          "total_wait_min": {
+            "type": "integer",
+            "title": "Total Wait Min"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedPlace"
+            },
+            "type": "array",
+            "title": "Skipped"
+          },
+          "travel_to_end_s": {
+            "type": "integer",
+            "title": "Travel To End S",
+            "default": 0
+          },
+          "transfer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransferSegment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route_segments": {
+            "items": {
+              "$ref": "#/components/schemas/DayRouteSegment"
+            },
+            "type": "array",
+            "title": "Route Segments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day_index",
+          "date",
+          "steps",
+          "total_travel_time_s",
+          "total_visit_time_min",
+          "total_wait_min",
+          "skipped"
+        ],
+        "title": "DayPlan",
+        "description": "Optimized route for a single day within a multi-day trip."
+      },
+      "DayPlan-Output": {
+        "properties": {
+          "day_index": {
+            "type": "integer",
+            "title": "Day Index"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/RouteStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "total_travel_time_s": {
+            "type": "integer",
+            "title": "Total Travel Time S"
+          },
+          "total_visit_time_min": {
+            "type": "integer",
+            "title": "Total Visit Time Min"
+          },
+          "total_wait_min": {
+            "type": "integer",
+            "title": "Total Wait Min"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedPlace"
+            },
+            "type": "array",
+            "title": "Skipped"
+          },
+          "travel_to_end_s": {
+            "type": "integer",
+            "title": "Travel To End S",
+            "default": 0
+          },
+          "transfer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransferSegment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route_segments": {
+            "items": {
+              "$ref": "#/components/schemas/DayRouteSegment"
+            },
+            "type": "array",
+            "title": "Route Segments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day_index",
+          "date",
+          "steps",
+          "total_travel_time_s",
+          "total_visit_time_min",
+          "total_wait_min",
+          "skipped"
+        ],
+        "title": "DayPlan",
+        "description": "Optimized route for a single day within a multi-day trip."
+      },
+      "DayRouteSegment": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "PRE_TRANSFER",
+              "POST_TRANSFER"
+            ],
+            "title": "Kind"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/RouteStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "total_travel_time_s": {
+            "type": "integer",
+            "title": "Total Travel Time S"
+          },
+          "total_visit_time_min": {
+            "type": "integer",
+            "title": "Total Visit Time Min"
+          },
+          "total_wait_min": {
+            "type": "integer",
+            "title": "Total Wait Min"
+          },
+          "travel_to_end_s": {
+            "type": "integer",
+            "title": "Travel To End S",
+            "default": 0
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedPlace"
+            },
+            "type": "array",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "steps",
+          "total_travel_time_s",
+          "total_visit_time_min",
+          "total_wait_min",
+          "skipped"
+        ],
+        "title": "DayRouteSegment",
+        "description": "One solver-produced route on either side of a transition-day transfer \u2014 see ADR-17."
+      },
+      "DaySlot": {
+        "properties": {
+          "day_index": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Day Index"
+          },
+          "preferred_hour_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Hour From"
+          },
+          "preferred_hour_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Hour To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day_index"
+        ],
+        "title": "DaySlot",
+        "description": "A candidate day with optional time window for a multi-day place preference."
+      },
+      "EnrichRequest": {
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 20
+          }
+        },
+        "type": "object",
+        "title": "EnrichRequest",
+        "description": "Request body for a batch enrichment run via Google Places API."
+      },
+      "EnrichResponse": {
+        "properties": {
+          "scanned": {
+            "type": "integer",
+            "title": "Scanned"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scanned",
+          "updated"
+        ],
+        "title": "EnrichResponse",
+        "description": "Summary returned after a completed enrichment batch."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ImportRequest": {
+        "properties": {
+          "list_url": {
+            "type": "string",
+            "maxLength": 2083,
+            "minLength": 1,
+            "format": "uri",
+            "title": "List Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "list_url"
+        ],
+        "title": "ImportRequest",
+        "description": "Request body for importing a public Google Maps saved list.",
+        "example": {
+          "list_url": "https://maps.app.goo.gl/o94j8NnqLffpivrv7"
+        }
+      },
+      "ImportResponse": {
+        "properties": {
+          "list_url": {
+            "type": "string",
+            "maxLength": 2083,
+            "minLength": 1,
+            "format": "uri",
+            "title": "List Url"
+          },
+          "list_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "List Name"
+          },
+          "scraped_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Scraped At"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "upserted": {
+            "type": "integer",
+            "title": "Upserted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "list_url",
+          "scraped_at",
+          "total",
+          "upserted"
+        ],
+        "title": "ImportResponse",
+        "description": "Summary returned after a completed import operation."
+      },
+      "MultiDayRequest-Input": {
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayConfig"
+            },
+            "type": "array",
+            "maxItems": 31,
+            "minItems": 1,
+            "title": "Days"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceDayPreference"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 2,
+            "title": "Places"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode",
+            "default": "WALK"
+          },
+          "start_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Lat"
+          },
+          "start_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Lng"
+          },
+          "end_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Lat"
+          },
+          "end_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Lng"
+          },
+          "accommodations": {
+            "items": {
+              "$ref": "#/components/schemas/AccommodationStay"
+            },
+            "type": "array",
+            "title": "Accommodations"
+          },
+          "transfers": {
+            "items": {
+              "$ref": "#/components/schemas/TransferBlock"
+            },
+            "type": "array",
+            "title": "Transfers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "places"
+        ],
+        "title": "MultiDayRequest",
+        "description": "Request body for a multi-day TSP trip optimization."
+      },
+      "MultiDayRequest-Output": {
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayConfig"
+            },
+            "type": "array",
+            "maxItems": 31,
+            "minItems": 1,
+            "title": "Days"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceDayPreference"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 2,
+            "title": "Places"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode",
+            "default": "WALK"
+          },
+          "start_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Lat"
+          },
+          "start_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Lng"
+          },
+          "end_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Lat"
+          },
+          "end_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Lng"
+          },
+          "accommodations": {
+            "items": {
+              "$ref": "#/components/schemas/AccommodationStay"
+            },
+            "type": "array",
+            "title": "Accommodations"
+          },
+          "transfers": {
+            "items": {
+              "$ref": "#/components/schemas/TransferBlock"
+            },
+            "type": "array",
+            "title": "Transfers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "places"
+        ],
+        "title": "MultiDayRequest",
+        "description": "Request body for a multi-day TSP trip optimization."
+      },
+      "MultiDayResponse-Input": {
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayPlan-Input"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode"
+          },
+          "unassigned": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedPlace"
+            },
+            "type": "array",
+            "title": "Unassigned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "transport_mode",
+          "unassigned"
+        ],
+        "title": "MultiDayResponse",
+        "description": "Result of a multi-day TSP trip optimization."
+      },
+      "MultiDayResponse-Output": {
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayPlan-Output"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode"
+          },
+          "unassigned": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedPlace"
+            },
+            "type": "array",
+            "title": "Unassigned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "transport_mode",
+          "unassigned"
+        ],
+        "title": "MultiDayResponse",
+        "description": "Result of a multi-day TSP trip optimization."
+      },
+      "MultiDaySaveTripRequest": {
+        "properties": {
+          "plan_type": {
+            "type": "string",
+            "const": "MULTI_DAY",
+            "title": "Plan Type",
+            "default": "MULTI_DAY"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "multi_day_request": {
+            "$ref": "#/components/schemas/MultiDayRequest-Input"
+          },
+          "multi_day_response": {
+            "$ref": "#/components/schemas/MultiDayResponse-Input"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "multi_day_request",
+          "multi_day_response"
+        ],
+        "title": "MultiDaySaveTripRequest"
+      },
+      "MultiDayTripDetailOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "plan_type": {
+            "type": "string",
+            "const": "MULTI_DAY",
+            "title": "Plan Type",
+            "default": "MULTI_DAY"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "num_days": {
+            "type": "integer",
+            "title": "Num Days"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode"
+          },
+          "multi_day_request": {
+            "$ref": "#/components/schemas/MultiDayRequest-Output"
+          },
+          "multi_day_response": {
+            "$ref": "#/components/schemas/MultiDayResponse-Output"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at",
+          "plan_type",
+          "start_date",
+          "end_date",
+          "num_days",
+          "transport_mode",
+          "multi_day_request",
+          "multi_day_response"
+        ],
+        "title": "MultiDayTripDetailOut"
+      },
+      "MultiDayTripSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "plan_type": {
+            "type": "string",
+            "const": "MULTI_DAY",
+            "title": "Plan Type",
+            "default": "MULTI_DAY"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "num_days": {
+            "type": "integer",
+            "title": "Num Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "plan_type",
+          "start_date",
+          "end_date",
+          "num_days"
+        ],
+        "title": "MultiDayTripSummaryOut"
+      },
+      "OptimizeRequest": {
+        "properties": {
+          "place_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Place Ids"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode",
+            "default": "WALK"
+          },
+          "day_start_hour": {
+            "type": "integer",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Day Start Hour",
+            "default": 9
+          },
+          "day_end_hour": {
+            "type": "integer",
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "Day End Hour",
+            "default": 21
+          },
+          "day_start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Start Time"
+          },
+          "day_end_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day End Time"
+          },
+          "start_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Lat"
+          },
+          "start_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Lng"
+          },
+          "end_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Lat"
+          },
+          "end_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Lng"
+          },
+          "departure_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departure Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "place_ids"
+        ],
+        "title": "OptimizeRequest",
+        "description": "Request body for a TSP route optimization."
+      },
+      "OptimizeResponse": {
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/RouteStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "total_travel_time_s": {
+            "type": "integer",
+            "title": "Total Travel Time S"
+          },
+          "total_visit_time_min": {
+            "type": "integer",
+            "title": "Total Visit Time Min"
+          },
+          "total_wait_min": {
+            "type": "integer",
+            "title": "Total Wait Min"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedPlace"
+            },
+            "type": "array",
+            "title": "Skipped"
+          },
+          "travel_to_end_s": {
+            "type": "integer",
+            "title": "Travel To End S",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "steps",
+          "total_travel_time_s",
+          "total_visit_time_min",
+          "total_wait_min",
+          "transport_mode",
+          "skipped"
+        ],
+        "title": "OptimizeResponse",
+        "description": "Result of a TSP route optimization."
+      },
+      "OrchestratorStatusOut": {
+        "properties": {
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ready"
+        ],
+        "title": "OrchestratorStatusOut"
+      },
+      "PlaceDayPreference": {
+        "properties": {
+          "place_id": {
+            "type": "string",
+            "title": "Place Id"
+          },
+          "day_preferences": {
+            "items": {
+              "$ref": "#/components/schemas/DaySlot"
+            },
+            "type": "array",
+            "title": "Day Preferences",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "place_id"
+        ],
+        "title": "PlaceDayPreference",
+        "description": "Per-place day assignment and optional time overrides for a multi-day trip.\n\nday_preferences semantics:\n- empty list  \u2192 auto-assign to any day (greedy bin-pack)\n- one slot    \u2192 pinned to that day\n- two or more \u2192 flexible; assigned to the candidate day with most remaining capacity"
+      },
+      "PlaceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "maps_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maps Url"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lng"
+          },
+          "gmaps_place_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gmaps Place Id"
+          },
+          "list_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "List Name"
+          },
+          "source_list_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source List Url"
+          },
+          "scraped_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scraped At"
+          },
+          "enriched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enriched At"
+          },
+          "opening_hours": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opening Hours"
+          },
+          "preferred_hour_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Hour From"
+          },
+          "preferred_hour_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Hour To"
+          },
+          "visit_duration_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Duration Min"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "must_see",
+              "normal",
+              "optional"
+            ],
+            "title": "Priority",
+            "default": "normal"
+          },
+          "skipped": {
+            "type": "boolean",
+            "title": "Skipped",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "PlaceOut",
+        "description": "Read model for a single place document returned to the panel."
+      },
+      "PlacePatch": {
+        "properties": {
+          "preferred_hour_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Hour From"
+          },
+          "preferred_hour_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Hour To"
+          },
+          "visit_duration_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Duration Min"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "must_see",
+                  "normal",
+                  "optional"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "title": "PlacePatch",
+        "description": "Partial update for scheduling preferences.\n\nOmitted fields are left unchanged; an explicit null clears the stored value\n(except ``skipped``, which must always be a boolean)."
+      },
+      "RouteStep": {
+        "properties": {
+          "place_id": {
+            "type": "string",
+            "title": "Place Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lng"
+          },
+          "arrival_time": {
+            "type": "string",
+            "format": "time",
+            "title": "Arrival Time"
+          },
+          "departure_time": {
+            "type": "string",
+            "format": "time",
+            "title": "Departure Time"
+          },
+          "travel_from_previous_s": {
+            "type": "integer",
+            "title": "Travel From Previous S"
+          },
+          "visit_duration_min": {
+            "type": "integer",
+            "title": "Visit Duration Min"
+          },
+          "wait_min": {
+            "type": "integer",
+            "title": "Wait Min",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "place_id",
+          "name",
+          "lat",
+          "lng",
+          "arrival_time",
+          "departure_time",
+          "travel_from_previous_s",
+          "visit_duration_min"
+        ],
+        "title": "RouteStep",
+        "description": "A single stop in the optimized route."
+      },
+      "SingleDaySaveTripRequest": {
+        "properties": {
+          "plan_type": {
+            "type": "string",
+            "const": "SINGLE_DAY",
+            "title": "Plan Type",
+            "default": "SINGLE_DAY"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "optimizer_request": {
+            "$ref": "#/components/schemas/OptimizeRequest"
+          },
+          "optimizer_response": {
+            "$ref": "#/components/schemas/OptimizeResponse"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "date",
+          "optimizer_request",
+          "optimizer_response"
+        ],
+        "title": "SingleDaySaveTripRequest"
+      },
+      "SingleDayTripDetailOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "plan_type": {
+            "type": "string",
+            "const": "SINGLE_DAY",
+            "title": "Plan Type",
+            "default": "SINGLE_DAY"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "optimizer_request": {
+            "$ref": "#/components/schemas/OptimizeRequest"
+          },
+          "optimizer_response": {
+            "$ref": "#/components/schemas/OptimizeResponse"
+          },
+          "selected_place_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Selected Place Ids"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode"
+          },
+          "day_start_hour": {
+            "type": "integer",
+            "title": "Day Start Hour"
+          },
+          "day_end_hour": {
+            "type": "integer",
+            "title": "Day End Hour"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at",
+          "plan_type",
+          "date",
+          "optimizer_request",
+          "optimizer_response",
+          "selected_place_ids",
+          "transport_mode",
+          "day_start_hour",
+          "day_end_hour"
+        ],
+        "title": "SingleDayTripDetailOut"
+      },
+      "SingleDayTripSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "plan_type": {
+            "type": "string",
+            "const": "SINGLE_DAY",
+            "title": "Plan Type",
+            "default": "SINGLE_DAY"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "plan_type",
+          "date"
+        ],
+        "title": "SingleDayTripSummaryOut"
+      },
+      "SkippedPlace": {
+        "properties": {
+          "place_id": {
+            "type": "string",
+            "title": "Place Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "place_id",
+          "name",
+          "reason"
+        ],
+        "title": "SkippedPlace",
+        "description": "A place that could not be included in the route."
+      },
+      "TransferBlock": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "departure_time": {
+            "type": "string",
+            "format": "time",
+            "title": "Departure Time"
+          },
+          "arrival_time": {
+            "type": "string",
+            "format": "time",
+            "title": "Arrival Time"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "departure_time",
+          "arrival_time"
+        ],
+        "title": "TransferBlock",
+        "description": "A same-day, fixed-time journey between two accommodation stays \u2014 see ADR-16."
+      },
+      "TransferEndpoint": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lng": {
+            "type": "number",
+            "title": "Lng"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "lat",
+          "lng"
+        ],
+        "title": "TransferEndpoint",
+        "description": "Display data for a transfer's origin/destination \u2014 not a persisted identifier, see ADR-16."
+      },
+      "TransferSegment": {
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/TransferEndpoint"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/TransferEndpoint"
+          },
+          "departure_time": {
+            "type": "string",
+            "format": "time",
+            "title": "Departure Time"
+          },
+          "arrival_time": {
+            "type": "string",
+            "format": "time",
+            "title": "Arrival Time"
+          },
+          "duration_s": {
+            "type": "integer",
+            "title": "Duration S"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "origin",
+          "destination",
+          "departure_time",
+          "arrival_time",
+          "duration_s"
+        ],
+        "title": "TransferSegment",
+        "description": "A resolved, time-consuming transfer between two accommodation stays within a DayPlan."
+      },
+      "TransportMode": {
+        "type": "string",
+        "enum": [
+          "WALK",
+          "DRIVE",
+          "BICYCLE",
+          "TRANSIT"
+        ],
+        "title": "TransportMode"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

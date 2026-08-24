@@ -1,0 +1,63 @@
+name: Contract Drift
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "scripts/export_openapi.py"
+      - "openapi.json"
+      - "tools/openapi-codegen/**"
+      - "apps/frontend/package.json"
+      - "apps/frontend/package-lock.json"
+      - "apps/frontend/src/lib/types/**"
+      - "justfile"
+      - ".github/workflows/contract-drift.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "scripts/export_openapi.py"
+      - "openapi.json"
+      - "tools/openapi-codegen/**"
+      - "apps/frontend/package.json"
+      - "apps/frontend/package-lock.json"
+      - "apps/frontend/src/lib/types/**"
+      - "justfile"
+      - ".github/workflows/contract-drift.yml"
+
+jobs:
+  check:
+    name: Check generated contracts are up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install backend dependencies
+        run: uv sync
+
+      - uses: extractions/setup-just@v3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: |
+            tools/openapi-codegen/package-lock.json
+            apps/frontend/package-lock.json
+
+      - name: Install codegen tool dependencies
+        run: npm ci --prefix tools/openapi-codegen
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix apps/frontend
+
+      - name: Verify openapi.json and generated/api.ts are up to date
+        run: just check-frontend-types

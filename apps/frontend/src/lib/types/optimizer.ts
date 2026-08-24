@@ -1,82 +1,28 @@
-export type TransportMode = 'WALK' | 'DRIVE' | 'BICYCLE' | 'TRANSIT';
-export type TransportModeNoTransit = 'WALK' | 'DRIVE' | 'BICYCLE';
+import type { components, paths } from './generated/api.js';
 
-export interface OptimizeRequest {
-	place_ids: string[];
-	transport_mode: TransportMode;
-	day_start_hour: number;
-	day_end_hour: number;
-	start_lat?: number;
-	start_lng?: number;
-	departure_date?: string;
-}
+export type TransportMode = components['schemas']['TransportMode'];
+export type TransportModeNoTransit = Exclude<TransportMode, 'TRANSIT'>;
 
-export interface RouteStep {
-	place_id: string;
-	name: string | null;
-	lat: number | null;
-	lng: number | null;
-	arrival_time: string;
-	departure_time: string;
-	travel_from_previous_s: number;
-	visit_duration_min: number;
-	wait_min: number;
-}
+export type OptimizeRequest =
+	paths['/api/v1/core/optimizer/route']['post']['requestBody']['content']['application/json'];
+export type OptimizeResponse =
+	paths['/api/v1/core/optimizer/route']['post']['responses'][200]['content']['application/json'];
 
-export interface SkippedPlace {
-	place_id: string;
-	name: string | null;
-	reason:
-		| 'NO_COORDINATES'
-		| 'TIME_WINDOW_INFEASIBLE'
-		| 'NO_MATRIX_ENTRY'
-		| 'MATRIX_INCOMPLETE'
-		| 'DROPPED_LOW_PRIORITY';
-}
+export type RouteStep = components['schemas']['RouteStep'];
+export type SkippedPlace = components['schemas']['SkippedPlace'];
 
-export interface OptimizeResponse {
-	steps: RouteStep[];
-	total_travel_time_s: number;
-	total_visit_time_min: number;
-	total_wait_min: number;
-	transport_mode: TransportMode;
-	skipped: SkippedPlace[];
-}
+export type DayConfig = components['schemas']['DayConfig'];
+export type DaySlot = components['schemas']['DaySlot'];
+export type PlaceDayPreference = components['schemas']['PlaceDayPreference'];
 
-export interface DayConfig {
-	date: string;
-	day_start_hour: number;
-	day_end_hour: number;
-}
+export type AccommodationStay = components['schemas']['AccommodationStay'];
+export type TransferBlock = components['schemas']['TransferBlock'];
+export type TransferEndpoint = components['schemas']['TransferEndpoint'];
+export type TransferSegment = components['schemas']['TransferSegment'];
+export type DayRouteSegment = components['schemas']['DayRouteSegment'];
+export type DayPlan = components['schemas']['DayPlan-Output'];
 
-export interface DaySlot {
-	day_index: number;
-	preferred_hour_from?: number;
-	preferred_hour_to?: number;
-}
-
-export interface PlaceDayPreference {
-	place_id: string;
-	day_preferences: DaySlot[];
-}
-
-export interface MultiDayRequest {
-	days: DayConfig[];
-	places: PlaceDayPreference[];
-	transport_mode: TransportModeNoTransit;
-	start_lat?: number;
-	start_lng?: number;
-}
-
-export interface DayPlan {
-	day_index: number;
-	date: string;
-	steps: RouteStep[];
-	skipped: SkippedPlace[];
-}
-
-export interface MultiDayResponse {
-	days: DayPlan[];
-	transport_mode: TransportModeNoTransit;
-	unassigned: SkippedPlace[];
-}
+export type MultiDayRequest =
+	paths['/api/v1/core/optimizer/trip']['post']['requestBody']['content']['application/json'];
+export type MultiDayResponse =
+	paths['/api/v1/core/optimizer/trip']['post']['responses'][200]['content']['application/json'];

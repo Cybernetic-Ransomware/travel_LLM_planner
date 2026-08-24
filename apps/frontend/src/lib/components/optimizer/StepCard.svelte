@@ -36,7 +36,7 @@
 					>+{formatDuration(step.travel_from_previous_s)} {m.step_travel_unit()}</span
 				>
 			{/if}
-			{#if step.wait_min > 0}
+			{#if (step.wait_min ?? 0) > 0}
 				<span class="text-zinc-400 dark:text-zinc-500"
 					>{step.wait_min} min {m.step_wait_unit()}</span
 				>

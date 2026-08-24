@@ -4,6 +4,14 @@
 - **Package Manager**: npm
 - **Add-ons**: prettier, eslint, vitest, tailwindcss, paraglide, sveltekit-adapter, mcp
 
+## Generated REST contracts
+
+`src/lib/types/generated/api.ts` is generated from the backend's OpenAPI schema (see ADR-19) — do not edit it
+by hand. Regenerate with `just frontend-types` (repo root); `just check-frontend-types` verifies it's current
+without touching tracked files. `gmaps.ts`/`optimizer.ts`/`orchestrator.ts`/`trips.ts` are the hand-maintained
+alias/refinement layer over the generated file — that's where to add a derived type or a handwritten
+protocol/UI type that OpenAPI doesn't describe.
+
 ---
 
 You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:

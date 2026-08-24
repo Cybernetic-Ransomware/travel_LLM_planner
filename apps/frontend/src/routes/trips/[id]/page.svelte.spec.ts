@@ -20,6 +20,7 @@ const mockTrip: SingleDayTripOut = {
 	name: 'Weekend in Kraków',
 	date: '2025-06-01',
 	created_at: '2025-06-01T10:00:00Z',
+	updated_at: null,
 	transport_mode: 'WALK',
 	day_start_hour: 9,
 	day_end_hour: 21,
@@ -48,7 +49,22 @@ const mockMultiDayTrip: MultiDayTripOut = {
 	end_date: '2025-08-03',
 	num_days: 3,
 	created_at: '2025-08-01T10:00:00Z',
-	transport_mode: 'WALK'
+	updated_at: null,
+	transport_mode: 'WALK',
+	multi_day_request: {
+		days: [
+			{ date: '2025-08-01', day_start_hour: 9, day_end_hour: 21 },
+			{ date: '2025-08-02', day_start_hour: 9, day_end_hour: 21 },
+			{ date: '2025-08-03', day_start_hour: 9, day_end_hour: 21 }
+		],
+		places: [],
+		transport_mode: 'WALK'
+	},
+	multi_day_response: {
+		days: [],
+		transport_mode: 'WALK',
+		unassigned: []
+	}
 };
 
 describe('/trips/[id] page', () => {

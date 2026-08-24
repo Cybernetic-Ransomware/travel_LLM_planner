@@ -42,6 +42,12 @@ class ChatResponse(BaseModel):
     session_id: str
 
 
+class OrchestratorStatusOut(BaseModel):
+    ready: bool
+    provider: str | None = None
+    model: str | None = None
+
+
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     place_context: list[dict]

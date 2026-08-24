@@ -1,50 +1,9 @@
-export type PlacePriority = 'must_see' | 'normal' | 'optional';
+import type { components } from './generated/api.js';
 
-export interface PlaceOut {
-	id: string;
-	name: string | null;
-	address: string | null;
-	maps_url: string | null;
-	lat: number | null;
-	lng: number | null;
-	gmaps_place_id: string | null;
-	list_name: string | null;
-	source_list_url: string | null;
-	scraped_at: string | null;
-	enriched_at: string | null;
-	opening_hours: Record<string, unknown> | null;
-	preferred_hour_from: number | null;
-	preferred_hour_to: number | null;
-	visit_duration_min: number | null;
-	priority: PlacePriority;
-	skipped: boolean;
-}
-
-export interface PlacePatch {
-	preferred_hour_from?: number | null;
-	preferred_hour_to?: number | null;
-	visit_duration_min?: number | null;
-	priority?: PlacePriority | null;
-	skipped?: boolean;
-}
-
-export interface ImportRequest {
-	list_url: string;
-}
-
-export interface ImportResponse {
-	list_url: string;
-	list_name: string | null;
-	scraped_at: string;
-	total: number;
-	upserted: number;
-}
-
-export interface EnrichRequest {
-	limit: number;
-}
-
-export interface EnrichResponse {
-	scanned: number;
-	updated: number;
-}
+export type PlacePriority = components['schemas']['PlaceOut']['priority'];
+export type PlaceOut = components['schemas']['PlaceOut'];
+export type PlacePatch = components['schemas']['PlacePatch'];
+export type ImportRequest = components['schemas']['ImportRequest'];
+export type ImportResponse = components['schemas']['ImportResponse'];
+export type EnrichRequest = components['schemas']['EnrichRequest'];
+export type EnrichResponse = components['schemas']['EnrichResponse'];
