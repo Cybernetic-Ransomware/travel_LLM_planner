@@ -165,7 +165,11 @@ async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep, _use
     )
 
 
-@router.get("/status")
+@router.get(
+    "/status",
+    response_model=OrchestratorStatusOut,
+    response_model_exclude_unset=True,
+)
 async def status(orch: OrchestratorDep) -> OrchestratorStatusOut:
     """Return the orchestrator readiness status."""
     if orch is None:

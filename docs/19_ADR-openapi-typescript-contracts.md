@@ -76,12 +76,12 @@ api/`, `src/lib/server/backend.ts`) are unchanged.
   travel_to_end_s`, `DayConfig.day_start_hour` become optional in TypeScript, matching that the backend
   genuinely accepts their omission.
 - **`openapi-typescript` requires `typescript@^5.x`; `apps/frontend` pins `^6.0.2`.** `openapi-typescript@
-  7.13.0` (latest at implementation time) still declares this peer range — a metadata lag behind a very recent
-  TypeScript major, not a real incompatibility (the tool only uses the stable Compiler API surface for AST
-  printing). Rather than loosen `apps/frontend`'s peer-dependency strictness for the whole app (`--legacy-
+  7.13.0` declares `typescript@^5.x`, while `apps/frontend` uses TypeScript 6 — outside the tool's declared peer
+  contract. Rather than loosen `apps/frontend`'s peer-dependency strictness for the whole app (`--legacy-
   peer-deps`/`.npmrc`) because of one dev-only codegen tool, `openapi-typescript` is isolated in its own
-  package, **`tools/openapi-codegen/`**, pinned to `typescript@5.9.3` (latest 5.x). This is purely a workaround
-  for the current upstream peer contract, not an architectural preference — when `openapi-typescript` bumps its
+  package, **`tools/openapi-codegen/`**, pinned to `typescript@5.9.3` (latest 5.x), so both dependency trees stay
+  within their declared peer contracts. This is purely a workaround for the current upstream peer contract, not
+  an architectural preference — when `openapi-typescript` bumps its
   peer range to include TypeScript 6, folding it back into `apps/frontend`'s own devDependencies is a
   reasonable follow-up, not required by this ADR.
 - **Cross-package Prettier formatting is cwd-sensitive.** `prettier --config apps/frontend/.prettierrc --write

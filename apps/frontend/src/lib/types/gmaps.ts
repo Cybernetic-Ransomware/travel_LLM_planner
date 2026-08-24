@@ -1,6 +1,6 @@
 import type { components } from './generated/api.js';
 
-export type PlacePriority = components['schemas']['PlaceOut']['priority'];
+export type PlacePriority = NonNullable<components['schemas']['PlaceOut']['priority']>;
 export type PlaceOut = components['schemas']['PlaceOut'];
 export type PlacePatch = components['schemas']['PlacePatch'];
 export type ImportRequest = components['schemas']['ImportRequest'];
