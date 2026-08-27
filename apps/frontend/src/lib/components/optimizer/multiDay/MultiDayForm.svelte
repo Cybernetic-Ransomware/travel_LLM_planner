@@ -11,6 +11,9 @@
 	import { hasIncompleteAccommodation } from './buildMultiDayRequest.js';
 	import { hasNoStayOverlaps } from './accommodationDraft.js';
 	import { isDayConfigValid } from './dayConfig.js';
+	import { reconcileEditableState } from './dayRangeReconciliation.js';
+	import { allTransfersValid } from './transferValidation.js';
+	import { MAX_MULTIDAY_PLACES } from './placeDaySlots.js';
 	import DayRangeEditor from './DayRangeEditor.svelte';
 	import PlaceDayMatrix from './PlaceDayMatrix.svelte';
 	import AccommodationEditor from './AccommodationEditor.svelte';
@@ -49,25 +52,30 @@
 		!loading &&
 			allDaysValid &&
 			state.placeSelections.size >= 2 &&
+			state.placeSelections.size <= MAX_MULTIDAY_PLACES &&
 			!hasIncompleteAccommodation(state) &&
-			hasNoStayOverlaps(state.accommodations)
+			hasNoStayOverlaps(state.accommodations) &&
+			allTransfersValid(state.transfers)
 	);
 
-	// Every mutation funnels through the single onchange prop — MultiDayForm never holds editableState itself.
+	// Every mutation funnels through here so day-range/accommodation changes always reconcile orphaned state.
+	function propagate(next: MultiDayEditableState) {
+		onchange(reconcileEditableState(next));
+	}
 	function updateDays(days: DayConfig[]) {
-		onchange({ ...state, days });
+		propagate({ ...state, days });
 	}
 	function updatePlaceSelections(placeSelections: Map<string, DaySlot[]>) {
-		onchange({ ...state, placeSelections });
+		propagate({ ...state, placeSelections });
 	}
 	function updateAccommodations(accommodations: AccommodationDraft[]) {
-		onchange({ ...state, accommodations });
+		propagate({ ...state, accommodations });
 	}
 	function updateTransfers(transfers: Map<string, TransferBlock>) {
-		onchange({ ...state, transfers });
+		propagate({ ...state, transfers });
 	}
 	function updateTransportMode(mode: string) {
-		onchange({ ...state, transportMode: mode as TransportModeNoTransit });
+		propagate({ ...state, transportMode: mode as TransportModeNoTransit });
 	}
 
 	function handleSubmit(e: SubmitEvent) {

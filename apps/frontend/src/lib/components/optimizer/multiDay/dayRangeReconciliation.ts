@@ -1,5 +1,8 @@
 import type { DayConfig, TransferBlock } from '$lib/types/index.js';
 import { defaultDayConfig } from './dayConfig.js';
+import { pruneSlotsToRange } from './placeDaySlots.js';
+import { isCompleteAccommodationDraft } from './accommodationDraft.js';
+import type { MultiDayEditableState } from './buildMultiDayRequest.js';
 
 export function addDays(dateStr: string, days: number): string {
 	const d = new Date(`${dateStr}T00:00:00Z`);
@@ -73,4 +76,44 @@ export function isTransitionDay<T extends { localKey: string }>(anchors: DayAnch
 		anchors.end !== null &&
 		anchors.start.localKey !== anchors.end.localKey
 	);
+}
+
+// Shared by TransferEditor (rendering) and reconcileEditableState (pruning) so the two never disagree.
+export function computeTransitionDates<T extends DateRangeLike & { localKey: string }>(
+	dayDates: string[],
+	accommodations: T[]
+): string[] {
+	const anchors = resolveDayAnchors(dayDates, accommodations);
+	return dayDates.filter((_, i) => isTransitionDay(anchors[i]));
+}
+
+// Idempotent — it only ever drops already-orphaned state, so calling it after every mutation is safe.
+export function reconcileEditableState(state: MultiDayEditableState): MultiDayEditableState {
+	const dayDates = state.days.map((d) => d.date);
+	const numDays = state.days.length;
+
+	const placeSelections = new Map(
+		[...state.placeSelections].map(([placeId, slots]) => [
+			placeId,
+			pruneSlotsToRange(slots, numDays)
+		])
+	);
+
+	const tripStart = dayDates[0];
+	const tripEnd = dayDates.at(-1);
+	const accommodations =
+		tripStart !== undefined && tripEnd !== undefined
+			? pruneAccommodationsToRange(state.accommodations, tripStart, tripEnd)
+			: state.accommodations;
+
+	const transitionDates = new Set(
+		computeTransitionDates(dayDates, accommodations.filter(isCompleteAccommodationDraft))
+	);
+	const transfers = new Map(
+		[...pruneTransfersToRange(state.transfers, dayDates)].filter(([date]) =>
+			transitionDates.has(date)
+		)
+	);
+
+	return { ...state, placeSelections, accommodations, transfers };
 }

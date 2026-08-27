@@ -107,6 +107,57 @@ describe('AccommodationEditor', () => {
 		expect(getByText(/wykracza poza zakres dni podróży/)).toBeTruthy();
 	});
 
+	it('hydrates persisted check_in_from/check_out_by into their time inputs on reopen', async () => {
+		const draft: AccommodationDraft = {
+			localKey: 'k1',
+			name: 'Hotel A',
+			lat: 50.1,
+			lng: 20.1,
+			check_in_date: '2026-03-01',
+			check_out_date: '2026-03-03',
+			check_in_from: '14:00',
+			check_out_by: '11:00'
+		};
+		const { container } = render(AccommodationEditor, {
+			props: {
+				accommodations: [draft],
+				places,
+				tripStart: '2026-03-01',
+				tripEnd: '2026-03-03',
+				onchange: vi.fn()
+			}
+		});
+		expect((container.querySelector('#checkin-from-k1') as HTMLInputElement).value).toBe('14:00');
+		expect((container.querySelector('#checkout-by-k1') as HTMLInputElement).value).toBe('11:00');
+	});
+
+	it('editing check_in_from preserves every other field on the draft (lossless)', async () => {
+		const draft: AccommodationDraft = {
+			localKey: 'k1',
+			name: 'Hotel A',
+			lat: 50.1,
+			lng: 20.1,
+			check_in_date: '2026-03-01',
+			check_out_date: '2026-03-03',
+			check_in_from: null,
+			check_out_by: null
+		};
+		const onchange = vi.fn();
+		const { container } = render(AccommodationEditor, {
+			props: {
+				accommodations: [draft],
+				places,
+				tripStart: '2026-03-01',
+				tripEnd: '2026-03-03',
+				onchange
+			}
+		});
+		const input = container.querySelector('#checkin-from-k1') as HTMLInputElement;
+		await userEvent.fill(input, '15:30');
+		const next = onchange.mock.calls.at(-1)?.[0] as AccommodationDraft[];
+		expect(next[0]).toEqual({ ...draft, check_in_from: '15:30' });
+	});
+
 	it('flags overlapping complete stays', async () => {
 		const drafts: AccommodationDraft[] = [
 			{

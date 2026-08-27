@@ -17,6 +17,12 @@
 	} = $props();
 
 	function setMode(mode: DayTimeMode) {
+		// A null time here would make the next hydrateBoundary() read this back as hour mode, reverting the toggle.
+		if (mode === 'exact' && boundary.time === null) {
+			const hour = isEndBoundary && boundary.hour === 24 ? 23 : boundary.hour;
+			onchange({ ...boundary, mode, time: `${String(hour).padStart(2, '0')}:00` });
+			return;
+		}
 		onchange({ ...boundary, mode });
 	}
 
@@ -65,6 +71,7 @@
 			value={boundary.hour}
 			{disabled}
 			oninput={(e) => setHour(Number(e.currentTarget.value))}
+			data-testid="boundary-value-hour"
 			class="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 		/>
 	{:else}
@@ -74,6 +81,7 @@
 			value={boundary.time ?? ''}
 			{disabled}
 			oninput={(e) => setTime(e.currentTarget.value)}
+			data-testid="boundary-value-exact"
 			class="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 		/>
 	{/if}

@@ -241,6 +241,57 @@ describe('MultiDayPlanner — reopened trip (prefill)', () => {
 		});
 	});
 
+	it('reopening a trip with a missing place marks the persisted result stale immediately', async () => {
+		const requestWithMissingPlace: MultiDayRequest = {
+			...persistedRequest,
+			places: [...persistedRequest.places, { place_id: 'p-missing', day_preferences: [] }]
+		};
+		const missingPlacePrefill: MultiDayOptimizerPrefill = {
+			...prefill,
+			multiDayRequest: requestWithMissingPlace
+		};
+		const { getByTestId, getByRole } = render(MultiDayPlanner, {
+			props: { places, prefill: missingPlacePrefill }
+		});
+		await expect.element(getByTestId('stale-notice')).toBeVisible();
+		const updateBtn = getByRole('button', {
+			name: 'Zaktualizuj zapisaną trasę'
+		}).element() as HTMLButtonElement;
+		expect(updateBtn.disabled).toBe(true);
+	});
+
+	it('an invalid persisted transfer blocks submit — optimizeTrip is never called', async () => {
+		const invalidTransferPrefill: MultiDayOptimizerPrefill = {
+			...prefill,
+			multiDayRequest: {
+				...persistedRequest,
+				accommodations: [
+					{
+						name: 'Hotel A',
+						lat: 50,
+						lng: 20,
+						check_in_date: '2026-02-28',
+						check_out_date: '2026-03-02'
+					},
+					{
+						name: 'Hotel B',
+						lat: 51,
+						lng: 21,
+						check_in_date: '2026-03-02',
+						check_out_date: '2026-03-04'
+					}
+				],
+				transfers: [{ date: '2026-03-02', departure_time: '11:00', arrival_time: '10:00' }]
+			}
+		};
+		const { getByTestId } = render(MultiDayPlanner, {
+			props: { places, prefill: invalidTransferPrefill }
+		});
+		const submitBtn = getByTestId('multiday-submit').element() as HTMLButtonElement;
+		expect(submitBtn.disabled).toBe(true);
+		expect(optimizeTrip).not.toHaveBeenCalled();
+	});
+
 	it('shows a success toast after update', async () => {
 		const { getByRole, getByText } = render(MultiDayPlanner, { props: { places, prefill } });
 		await userEvent.click(getByRole('button', { name: 'Zaktualizuj zapisaną trasę' }));

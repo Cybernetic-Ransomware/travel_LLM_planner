@@ -165,6 +165,35 @@
 		</div>
 	</div>
 
+	<div class="grid grid-cols-2 gap-2">
+		<div class="flex flex-col gap-1">
+			<label for="checkin-from-{draft.localKey}" class="text-xs text-zinc-500 dark:text-zinc-400">
+				{m.multiday_accommodation_checkin_from_label()}
+			</label>
+			<input
+				id="checkin-from-{draft.localKey}"
+				type="time"
+				value={draft.check_in_from ?? ''}
+				{disabled}
+				oninput={(e) => update({ check_in_from: e.currentTarget.value || null })}
+				class="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+			/>
+		</div>
+		<div class="flex flex-col gap-1">
+			<label for="checkout-by-{draft.localKey}" class="text-xs text-zinc-500 dark:text-zinc-400">
+				{m.multiday_accommodation_checkout_by_label()}
+			</label>
+			<input
+				id="checkout-by-{draft.localKey}"
+				type="time"
+				value={draft.check_out_by ?? ''}
+				{disabled}
+				oninput={(e) => update({ check_out_by: e.currentTarget.value || null })}
+				class="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+			/>
+		</div>
+	</div>
+
 	{#if !isCompleteAccommodationDraft(draft)}
 		<p class="text-xs text-amber-600 dark:text-amber-400">
 			{m.multiday_accommodation_incomplete()}

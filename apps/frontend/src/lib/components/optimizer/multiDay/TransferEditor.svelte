@@ -3,7 +3,8 @@
 	import type { TransferBlock } from '$lib/types/index.js';
 	import type { AccommodationDraft } from './accommodationDraft.js';
 	import { isCompleteAccommodationDraft } from './accommodationDraft.js';
-	import { resolveDayAnchors, isTransitionDay } from './dayRangeReconciliation.js';
+	import { computeTransitionDates } from './dayRangeReconciliation.js';
+	import { isTransferBlockValid } from './transferValidation.js';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let {
@@ -21,11 +22,9 @@
 	} = $props();
 
 	// Only complete drafts participate, so a half-filled accommodation row never creates a spurious transfer day.
-	const transitionDates = $derived.by(() => {
-		const complete = accommodations.filter(isCompleteAccommodationDraft);
-		const anchors = resolveDayAnchors(dayDates, complete);
-		return dayDates.filter((_, i) => isTransitionDay(anchors[i]));
-	});
+	const transitionDates = $derived.by(() =>
+		computeTransitionDates(dayDates, accommodations.filter(isCompleteAccommodationDraft))
+	);
 
 	function toggleEnabled(date: string, checked: boolean) {
 		const next = new SvelteMap(transfers);
@@ -110,7 +109,7 @@
 					oninput={(e) => update(date, { label: e.currentTarget.value || null })}
 					class="ml-6 rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 				/>
-				{#if existing.arrival_time <= existing.departure_time}
+				{#if !isTransferBlockValid(existing)}
 					<p class="pl-6 text-xs text-red-600 dark:text-red-400">{m.multiday_transfer_invalid()}</p>
 				{/if}
 			{/if}

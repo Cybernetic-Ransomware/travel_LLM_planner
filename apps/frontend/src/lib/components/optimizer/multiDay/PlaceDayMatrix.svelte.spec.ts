@@ -92,6 +92,20 @@ describe('PlaceDayMatrix', () => {
 		expect(getByText('Zaznacz co najmniej 2 miejsca')).toBeTruthy();
 	});
 
+	it('allows checking a 50th place but blocks a 51st', async () => {
+		const manyPlaces = Array.from({ length: 51 }, (_, i) => mockPlace(`p${i}`, `Place ${i}`));
+		const fiftySelected = new Map(manyPlaces.slice(0, 50).map((p) => [p.id, []]));
+		const onchange = vi.fn();
+		const { getByText, getByTestId } = render(PlaceDayMatrix, {
+			props: { places: manyPlaces, numDays: 3, placeSelections: fiftySelected, onchange }
+		});
+		expect(getByText('Maksymalnie można wybrać 50 miejsc.')).toBeTruthy();
+
+		const unselectedCheckbox = getByTestId('place-include-p50').element() as HTMLInputElement;
+		expect(unselectedCheckbox.checked).toBe(false);
+		expect(unselectedCheckbox.disabled).toBe(true);
+	});
+
 	it('uses a compact disclosure layout above 8 days', async () => {
 		const { container } = render(PlaceDayMatrix, {
 			props: { places, numDays: 10, placeSelections: new Map([['p1', []]]), onchange: vi.fn() }

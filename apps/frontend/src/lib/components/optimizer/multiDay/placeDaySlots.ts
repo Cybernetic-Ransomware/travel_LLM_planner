@@ -1,5 +1,8 @@
 import type { DaySlot } from '$lib/types/index.js';
 
+// Mirrors MultiDayRequest.places max_length in src/optimizer/solver/models.py.
+export const MAX_MULTIDAY_PLACES = 50;
+
 // Toggling an already-checked day is a no-op, so it never loses preferred_hour_from/to on the existing slot.
 export function toggleDaySlot(current: DaySlot[], dayIndex: number, checked: boolean): DaySlot[] {
 	if (checked) {

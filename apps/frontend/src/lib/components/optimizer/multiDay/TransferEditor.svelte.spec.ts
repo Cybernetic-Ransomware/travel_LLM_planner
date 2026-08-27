@@ -81,6 +81,16 @@ describe('TransferEditor', () => {
 		expect(getByText('Przyjazd musi być późniejszy niż odjazd.')).toBeTruthy();
 	});
 
+	it('flags an incomplete transfer (blank time) as invalid, not just a bad ordering', async () => {
+		const transfers = new Map([
+			['2026-03-02', { date: '2026-03-02', departure_time: '10:00', arrival_time: '' }]
+		]);
+		const { getByText } = render(TransferEditor, {
+			props: { transfers, accommodations: transitionAccommodations, dayDates, onchange: vi.fn() }
+		});
+		expect(getByText('Przyjazd musi być późniejszy niż odjazd.')).toBeTruthy();
+	});
+
 	it('unchecking removes the TransferBlock for that date', async () => {
 		const onchange = vi.fn();
 		const transfers = new Map([

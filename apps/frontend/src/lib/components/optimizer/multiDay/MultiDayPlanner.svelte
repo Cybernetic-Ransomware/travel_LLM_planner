@@ -50,7 +50,12 @@
 		untrack(() => prefill?.multiDayRequest ?? null)
 	);
 	let result = $state<MultiDayResponse | null>(untrack(() => prefill?.multiDayResponse ?? null));
-	let isStale = $state(false);
+
+	const missingPrefillPlaceCount = untrack(() =>
+		prefill ? countMissingPrefillPlaces(prefill.multiDayRequest, availablePlaceIds) : 0
+	);
+	// A dropped-place hydration already diverges from lastOptimizedRequest/result, so it starts stale.
+	let isStale = $state(missingPrefillPlaceCount > 0);
 	let activeDayIndex = $state(0);
 
 	let loading = $state(false);
@@ -59,9 +64,6 @@
 	let showSaveForm = $state(false);
 	let saveSuccess = $state<string | null>(null);
 
-	const missingPrefillPlaceCount = untrack(() =>
-		prefill ? countMissingPrefillPlaces(prefill.multiDayRequest, availablePlaceIds) : 0
-	);
 	let prefillMissingCount = $state(missingPrefillPlaceCount);
 	let prefillNotice = $state<string | null>(
 		untrack(() => (prefill ? m.optimizer_prefill_notice({ name: prefill.tripName }) : null))

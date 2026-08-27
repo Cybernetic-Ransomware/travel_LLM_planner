@@ -6,9 +6,34 @@ import {
 	pruneAccommodationsToRange,
 	pruneTransfersToRange,
 	resolveDayAnchors,
-	isTransitionDay
+	isTransitionDay,
+	computeTransitionDates,
+	reconcileEditableState
 } from './dayRangeReconciliation.js';
+import { buildMultiDayRequest, type MultiDayEditableState } from './buildMultiDayRequest.js';
+import type { AccommodationDraft } from './accommodationDraft.js';
 import type { DayConfig, TransferBlock } from '$lib/types/index.js';
+
+function accommodationDraft(
+	localKey: string,
+	checkIn: string,
+	checkOut: string
+): AccommodationDraft {
+	return {
+		localKey,
+		name: `Hotel ${localKey}`,
+		lat: 50,
+		lng: 20,
+		check_in_date: checkIn,
+		check_out_date: checkOut,
+		check_in_from: null,
+		check_out_by: null
+	};
+}
+
+function days(dates: string[]): DayConfig[] {
+	return dates.map((date) => ({ date, day_start_hour: 9, day_end_hour: 21 }));
+}
 
 function range(checkIn: string, checkOut: string) {
 	return { check_in_date: checkIn, check_out_date: checkOut };
@@ -117,6 +142,115 @@ describe('pruneTransfersToRange', () => {
 		const transfers = new Map([[transfer.date, transfer]]);
 		const result = pruneTransfersToRange(transfers, ['2026-03-01', '2026-03-02']);
 		expect(result.size).toBe(1);
+	});
+});
+
+describe('computeTransitionDates', () => {
+	it('returns only the dates where START and END come from different stays', () => {
+		const entries = [
+			accommodationDraft('A', '2026-02-28', '2026-03-02'),
+			accommodationDraft('B', '2026-03-02', '2026-03-04')
+		];
+		expect(computeTransitionDates(['2026-03-01', '2026-03-02', '2026-03-03'], entries)).toEqual([
+			'2026-03-02'
+		]);
+	});
+});
+
+describe('reconcileEditableState', () => {
+	function baseState(overrides: Partial<MultiDayEditableState> = {}): MultiDayEditableState {
+		return {
+			days: days(['2026-03-01', '2026-03-02', '2026-03-03']),
+			placeSelections: new Map(),
+			transportMode: 'WALK',
+			accommodations: [],
+			transfers: new Map(),
+			globalStart: null,
+			globalEnd: null,
+			...overrides
+		};
+	}
+
+	it('drops a PINNED slot pointing at a day removed by shrinking the range', () => {
+		const state = baseState({
+			days: days(['2026-03-01', '2026-03-02']),
+			placeSelections: new Map([['p1', [{ day_index: 2 }]]])
+		});
+		const result = reconcileEditableState(state);
+		expect(result.placeSelections.get('p1')).toEqual([]);
+	});
+
+	it('prunes only the removed slot of a FLEXIBLE place, keeping the remaining one', () => {
+		const state = baseState({
+			days: days(['2026-03-01', '2026-03-02']),
+			placeSelections: new Map([['p1', [{ day_index: 0 }, { day_index: 2 }]]])
+		});
+		const result = reconcileEditableState(state);
+		expect(result.placeSelections.get('p1')).toEqual([{ day_index: 0 }]);
+	});
+
+	it('removes a transfer whose date is no longer among the days after the start date shifts', () => {
+		const state = baseState({
+			days: days(['2026-03-01', '2026-03-02', '2026-03-03']),
+			accommodations: [
+				accommodationDraft('A', '2026-02-28', '2026-03-02'),
+				accommodationDraft('B', '2026-03-02', '2026-03-04')
+			],
+			transfers: new Map([
+				['2026-03-02', { date: '2026-03-02', departure_time: '10:00', arrival_time: '11:00' }]
+			])
+		});
+		// Shift the whole range forward — 2026-03-02 is no longer one of the trip's days at all.
+		const shifted = { ...state, days: days(['2026-04-01', '2026-04-02', '2026-04-03']) };
+		const result = reconcileEditableState(shifted);
+		expect(result.transfers.has('2026-03-02')).toBe(false);
+	});
+
+	it('removes a transfer orphaned by an accommodation change that is no longer a transition day', () => {
+		const state = baseState({
+			accommodations: [accommodationDraft('A', '2026-02-28', '2026-03-04')],
+			transfers: new Map([
+				['2026-03-02', { date: '2026-03-02', departure_time: '10:00', arrival_time: '11:00' }]
+			])
+		});
+		const result = reconcileEditableState(state);
+		expect(result.transfers.size).toBe(0);
+	});
+
+	it('keeps a transfer whose day is still a genuine transition day', () => {
+		const state = baseState({
+			accommodations: [
+				accommodationDraft('A', '2026-02-28', '2026-03-02'),
+				accommodationDraft('B', '2026-03-02', '2026-03-04')
+			],
+			transfers: new Map([
+				['2026-03-02', { date: '2026-03-02', departure_time: '10:00', arrival_time: '11:00' }]
+			])
+		});
+		const result = reconcileEditableState(state);
+		expect(result.transfers.has('2026-03-02')).toBe(true);
+	});
+
+	it('produces a request with no orphaned day_index/transfer date after reconciliation', () => {
+		const state = baseState({
+			days: days(['2026-03-01', '2026-03-02']),
+			placeSelections: new Map([
+				['p1', [{ day_index: 0 }]],
+				['p2', [{ day_index: 2 }]]
+			]),
+			accommodations: [accommodationDraft('A', '2026-02-28', '2026-03-04')],
+			transfers: new Map([
+				['2026-03-02', { date: '2026-03-02', departure_time: '10:00', arrival_time: '11:00' }]
+			])
+		});
+		const reconciled = reconcileEditableState(state);
+		const request = buildMultiDayRequest(reconciled);
+		expect(
+			request.places.every((p) => (p.day_preferences ?? []).every((s) => s.day_index < 2))
+		).toBe(true);
+		expect(
+			(request.transfers ?? []).every((t) => request.days.some((d) => d.date === t.date))
+		).toBe(true);
 	});
 });
 

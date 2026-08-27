@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { SvelteMap } from 'svelte/reactivity';
 	import type { DaySlot, PlaceOut } from '$lib/types/index.js';
-	import { toggleDaySlot, checkedDayIndices, placeDaySelectionKind } from './placeDaySlots.js';
+	import {
+		toggleDaySlot,
+		checkedDayIndices,
+		placeDaySelectionKind,
+		MAX_MULTIDAY_PLACES
+	} from './placeDaySlots.js';
 	import DayCheckboxGroup from './DayCheckboxGroup.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
@@ -26,6 +31,7 @@
 	};
 
 	function toggleInclude(placeId: string, include: boolean) {
+		if (include && placeSelections.size >= MAX_MULTIDAY_PLACES) return;
 		const next = new SvelteMap(placeSelections);
 		if (include) {
 			next.set(placeId, []);
@@ -65,8 +71,9 @@
 					<input
 						type="checkbox"
 						checked={included}
-						{disabled}
+						disabled={disabled || (!included && placeSelections.size >= MAX_MULTIDAY_PLACES)}
 						onchange={(e) => toggleInclude(place.id, e.currentTarget.checked)}
+						data-testid="place-include-{place.id}"
 						class="accent-blue-600"
 					/>
 					<span class="truncate text-zinc-800 dark:text-zinc-200">{place.name ?? place.id}</span>
@@ -94,5 +101,7 @@
 
 	{#if placeSelections.size < 2}
 		<p class="text-xs text-zinc-400 dark:text-zinc-500">{m.multiday_min_places_hint()}</p>
+	{:else if placeSelections.size >= MAX_MULTIDAY_PLACES}
+		<p class="text-xs text-amber-600 dark:text-amber-400">{m.multiday_max_places_hint()}</p>
 	{/if}
 </div>

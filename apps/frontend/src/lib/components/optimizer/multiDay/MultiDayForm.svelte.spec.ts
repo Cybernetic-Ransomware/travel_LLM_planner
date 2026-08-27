@@ -3,7 +3,7 @@ import { render } from 'vitest-browser-svelte';
 import { userEvent } from 'vitest/browser';
 import MultiDayForm from './MultiDayForm.svelte';
 import { defaultEditableState, type MultiDayEditableState } from './buildMultiDayRequest.js';
-import type { PlaceOut } from '$lib/types/index.js';
+import type { DaySlot, PlaceOut } from '$lib/types/index.js';
 
 function mockPlace(id: string, name: string): PlaceOut {
 	return {
@@ -78,6 +78,60 @@ describe('MultiDayForm', () => {
 		});
 		const btn = getByTestId('multiday-submit').element() as HTMLButtonElement;
 		expect(btn.disabled).toBe(true);
+	});
+
+	it('an invalid transfer (arrival <= departure) blocks submit even with valid places/days', async () => {
+		const state: MultiDayEditableState = {
+			...defaultEditableState(),
+			days: [
+				{ date: '2026-03-01', day_start_hour: 9, day_end_hour: 21 },
+				{ date: '2026-03-02', day_start_hour: 9, day_end_hour: 21 }
+			],
+			placeSelections: new Map([
+				['p1', []],
+				['p2', []]
+			]),
+			transfers: new Map([
+				['2026-03-02', { date: '2026-03-02', departure_time: '11:00', arrival_time: '10:00' }]
+			])
+		};
+		const { getByTestId } = render(MultiDayForm, {
+			props: { state, places, onchange: vi.fn(), onsubmit: vi.fn() }
+		});
+		const btn = getByTestId('multiday-submit').element() as HTMLButtonElement;
+		expect(btn.disabled).toBe(true);
+	});
+
+	it('50 selected places keep submit enabled, and a 51st place cannot be checked', async () => {
+		const manyPlaces: PlaceOut[] = Array.from({ length: 51 }, (_, i) =>
+			mockPlace(`p${i}`, `Place ${i}`)
+		);
+		const fiftySelected = new Map(manyPlaces.slice(0, 50).map((p) => [p.id, []]));
+		const state: MultiDayEditableState = {
+			...defaultEditableState(),
+			placeSelections: fiftySelected
+		};
+		const { getByTestId } = render(MultiDayForm, {
+			props: { state, places: manyPlaces, onchange: vi.fn(), onsubmit: vi.fn() }
+		});
+		expect((getByTestId('multiday-submit').element() as HTMLButtonElement).disabled).toBe(false);
+
+		const unselectedCheckbox = getByTestId('place-include-p50').element() as HTMLInputElement;
+		expect(unselectedCheckbox.disabled).toBe(true);
+	});
+
+	it('exceeding 50 places (a request built with 51) is rejected before submit is possible', async () => {
+		const overLimitSelections = new Map<string, DaySlot[]>(
+			Array.from({ length: 51 }, (_, i) => [`p${i}`, []])
+		);
+		const state: MultiDayEditableState = {
+			...defaultEditableState(),
+			placeSelections: overLimitSelections
+		};
+		const { getByTestId } = render(MultiDayForm, {
+			props: { state, places, onchange: vi.fn(), onsubmit: vi.fn() }
+		});
+		expect((getByTestId('multiday-submit').element() as HTMLButtonElement).disabled).toBe(true);
 	});
 
 	it('editing a place selection calls onchange with a new state object, not a mutation', async () => {
