@@ -10,11 +10,16 @@
 	import RouteForm from '$lib/components/optimizer/RouteForm.svelte';
 	import RouteResults from '$lib/components/optimizer/RouteResults.svelte';
 	import SaveTripForm from '$lib/components/optimizer/SaveTripForm.svelte';
+	import MultiDayPlanner from '$lib/components/optimizer/multiDay/MultiDayPlanner.svelte';
 	import Toast from '$lib/components/ui/Toast.svelte';
 
 	import * as m from '$lib/paraglide/messages.js';
 
+	type PlanMode = 'SINGLE_DAY' | 'MULTI_DAY';
+
 	let { data }: { data: PageData } = $props();
+
+	let mode = $state<PlanMode>(untrack(() => (data.multiDayPrefill ? 'MULTI_DAY' : 'SINGLE_DAY')));
 
 	let places = $state<PlaceOut[]>(untrack(() => data.places));
 
@@ -194,111 +199,145 @@
 		<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{m.page_optimizer_subtitle()}</p>
 	</div>
 
-	{#if placesLoadError}
-		<Toast message={placesLoadError} variant="error" />
-	{/if}
+	<div
+		class="flex w-fit gap-1 rounded-lg border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900"
+		role="group"
+	>
+		<button
+			type="button"
+			onclick={() => (mode = 'SINGLE_DAY')}
+			data-testid="mode-single-day"
+			class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {mode === 'SINGLE_DAY'
+				? 'bg-blue-600 text-white'
+				: 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'}"
+		>
+			{m.optimizer_mode_single_day()}
+		</button>
+		<button
+			type="button"
+			onclick={() => (mode = 'MULTI_DAY')}
+			data-testid="mode-multi-day"
+			class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {mode === 'MULTI_DAY'
+				? 'bg-blue-600 text-white'
+				: 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'}"
+		>
+			{m.optimizer_mode_multi_day()}
+		</button>
+	</div>
 
-	{#if prefillFailed}
-		<Toast
-			message={m.optimizer_prefill_failed()}
-			variant="error"
-			onclose={() => (prefillFailed = false)}
-		/>
-	{/if}
+	{#if mode === 'SINGLE_DAY'}
+		{#if placesLoadError}
+			<Toast message={placesLoadError} variant="error" />
+		{/if}
 
-	{#if prefillNotice}
-		<Toast message={prefillNotice} variant="info" onclose={() => (prefillNotice = null)} />
-	{/if}
-
-	{#if prefillMissingCount > 0}
-		<Toast
-			message={m.optimizer_prefill_missing_places({ count: prefillMissingCount })}
-			variant="warning"
-			onclose={() => (prefillMissingCount = 0)}
-		/>
-	{/if}
-
-	{#if error}
-		<Toast message={error} variant="error" onclose={() => (error = null)} />
-	{/if}
-
-	{#if saveSuccess}
-		<Toast message={saveSuccess} variant="success" onclose={() => (saveSuccess = null)} />
-	{/if}
-
-	{#if preferenceNotice}
-		<Toast
-			message={preferenceNotice.message}
-			variant={preferenceNotice.variant}
-			onclose={() => (preferenceNotice = null)}
-		/>
-	{/if}
-
-	{#if enrichNotice}
-		<Toast
-			message={enrichNotice.message}
-			variant={enrichNotice.variant}
-			onclose={() => (enrichNotice = null)}
-		/>
-	{/if}
-
-	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
-		<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-72 md:shrink-0">
-			<RouteForm
-				{places}
-				hasLoadError={data.backendError !== null}
-				bind:selectedIds
-				loading={optimizerBusy}
-				initialTransportMode={data.prefill?.transportMode}
-				initialDayStartHour={data.prefill?.dayStartHour}
-				initialDayEndHour={data.prefill?.dayEndHour}
-				onsubmit={handleSubmit}
+		{#if prefillFailed}
+			<Toast
+				message={m.optimizer_prefill_failed()}
+				variant="error"
+				onclose={() => (prefillFailed = false)}
 			/>
+		{/if}
 
-			{#if result}
-				<RouteResults
-					{result}
-					places={requestedPlaces}
-					onmarkmustsee={handleMarkMustSee}
-					onenrich={handleEnrichPlace}
-					{promotedPlaceIds}
-					{updatingPlaceId}
-					{placeUpdateKind}
+		{#if prefillNotice}
+			<Toast message={prefillNotice} variant="info" onclose={() => (prefillNotice = null)} />
+		{/if}
+
+		{#if prefillMissingCount > 0}
+			<Toast
+				message={m.optimizer_prefill_missing_places({ count: prefillMissingCount })}
+				variant="warning"
+				onclose={() => (prefillMissingCount = 0)}
+			/>
+		{/if}
+
+		{#if error}
+			<Toast message={error} variant="error" onclose={() => (error = null)} />
+		{/if}
+
+		{#if saveSuccess}
+			<Toast message={saveSuccess} variant="success" onclose={() => (saveSuccess = null)} />
+		{/if}
+
+		{#if preferenceNotice}
+			<Toast
+				message={preferenceNotice.message}
+				variant={preferenceNotice.variant}
+				onclose={() => (preferenceNotice = null)}
+			/>
+		{/if}
+
+		{#if enrichNotice}
+			<Toast
+				message={enrichNotice.message}
+				variant={enrichNotice.variant}
+				onclose={() => (enrichNotice = null)}
+			/>
+		{/if}
+
+		<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+			<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-72 md:shrink-0">
+				<RouteForm
+					{places}
+					hasLoadError={data.backendError !== null}
+					bind:selectedIds
+					loading={optimizerBusy}
+					initialTransportMode={data.prefill?.transportMode}
+					initialDayStartHour={data.prefill?.dayStartHour}
+					initialDayEndHour={data.prefill?.dayEndHour}
+					onsubmit={handleSubmit}
 				/>
 
-				{#if data.prefill}
+				{#if result}
+					<RouteResults
+						{result}
+						places={requestedPlaces}
+						onmarkmustsee={handleMarkMustSee}
+						onenrich={handleEnrichPlace}
+						{promotedPlaceIds}
+						{updatingPlaceId}
+						{placeUpdateKind}
+					/>
+
+					{#if data.prefill}
+						<button
+							onclick={handleUpdateTrip}
+							disabled={updating}
+							class="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+						>
+							{updating ? '…' : m.optimizer_update_trip()}
+						</button>
+					{/if}
+
 					<button
-						onclick={handleUpdateTrip}
-						disabled={updating}
-						class="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+						onclick={() => (showSaveForm = true)}
+						class="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
 					>
-						{updating ? '…' : m.optimizer_update_trip()}
+						{data.prefill ? m.optimizer_save_as_new() : m.optimizer_save_trip()}
 					</button>
 				{/if}
+			</div>
 
-				<button
-					onclick={() => (showSaveForm = true)}
-					class="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-				>
-					{data.prefill ? m.optimizer_save_as_new() : m.optimizer_save_trip()}
-				</button>
-			{/if}
+			<div
+				class="isolate h-64 flex-1 overflow-hidden rounded-lg border border-zinc-200 md:h-auto dark:border-zinc-800"
+			>
+				{#if LeafletMap}
+					<LeafletMap places={mapPlaces} steps={mapSteps} selectedIds={mapSelectedIds} />
+				{:else}
+					<div
+						class="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500"
+					>
+						{m.map_loading()}
+					</div>
+				{/if}
+			</div>
 		</div>
-
-		<div
-			class="isolate h-64 flex-1 overflow-hidden rounded-lg border border-zinc-200 md:h-auto dark:border-zinc-800"
-		>
-			{#if LeafletMap}
-				<LeafletMap places={mapPlaces} steps={mapSteps} selectedIds={mapSelectedIds} />
-			{:else}
-				<div
-					class="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500"
-				>
-					{m.map_loading()}
-				</div>
-			{/if}
-		</div>
-	</div>
+	{:else}
+		<MultiDayPlanner
+			{places}
+			hasLoadError={data.backendError !== null}
+			prefill={data.multiDayPrefill}
+		/>
+	{/if}
 </div>
 
 {#if showSaveForm && result && lastRequest}

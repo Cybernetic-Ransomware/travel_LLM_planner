@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types';
 import type { PlaceOut, TransportMode, TripOut } from '$lib/types/index.js';
+import type { MultiDayOptimizerPrefill } from '$lib/components/optimizer/multiDay/hydrateMultiDayState.js';
 import { backendFetch } from '$lib/server/backend.js';
 
 export interface OptimizerPrefill {
@@ -21,6 +22,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 	]);
 
 	let prefill: OptimizerPrefill | null = null;
+	let multiDayPrefill: MultiDayOptimizerPrefill | null = null;
 	let prefillFailed = false;
 	if (tripResult && fromTripId) {
 		if (tripResult.ok && tripResult.data.plan_type === 'SINGLE_DAY') {
@@ -34,11 +36,17 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 				dayStartHour: trip.day_start_hour,
 				dayEndHour: trip.day_end_hour
 			};
+		} else if (tripResult.ok && tripResult.data.plan_type === 'MULTI_DAY') {
+			const trip = tripResult.data;
+			multiDayPrefill = {
+				tripId: fromTripId,
+				tripName: trip.name,
+				multiDayRequest: trip.multi_day_request,
+				multiDayResponse: trip.multi_day_response
+			};
 		} else if (!tripResult.ok) {
 			prefillFailed = true;
 		}
-		// else: the trip resolved but is MULTI_DAY — /optimizer only understands single-day
-		// trips, so prefill is silently skipped rather than crashing or misrendering.
 	}
 
 	if (!placesResult.ok) {
@@ -46,6 +54,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 			places: [] as PlaceOut[],
 			backendError: placesResult.error,
 			prefill,
+			multiDayPrefill,
 			prefillFailed,
 			missingPrefillPlaceCount: 0
 		};
@@ -60,6 +69,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 		places: placesResult.data,
 		backendError: null,
 		prefill,
+		multiDayPrefill,
 		prefillFailed,
 		missingPrefillPlaceCount
 	};

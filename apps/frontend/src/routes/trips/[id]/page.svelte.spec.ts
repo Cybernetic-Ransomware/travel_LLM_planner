@@ -193,7 +193,7 @@ describe('/trips/[id] page', () => {
 		expect(getByRole('link', { name: 'Otwórz w planerze trasy' })).toBeTruthy();
 	});
 
-	it('renders a minimal read-only fallback for a multi-day trip', async () => {
+	it('renders the multi-day trip summary (date range, day count, transport)', async () => {
 		const { getByText } = render(Page, {
 			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
 		});
@@ -212,10 +212,48 @@ describe('/trips/[id] page', () => {
 		expect(getByText('90 min').query()).toBeNull();
 	});
 
-	it('hides the open-in-optimizer action for a multi-day trip', async () => {
+	it('shows the open-in-optimizer action for a multi-day trip too', async () => {
 		const { getByRole } = render(Page, {
 			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
 		});
-		expect(getByRole('link', { name: 'Otwórz w planerze trasy' }).query()).toBeNull();
+		const link = getByRole('link', { name: 'Otwórz w planerze trasy' }).element();
+		expect(link.getAttribute('href')).toBe('/optimizer?from=multi-1');
+	});
+
+	it('renders the persisted multi-day itinerary, not a placeholder notice', async () => {
+		const tripWithDay: MultiDayTripOut = {
+			...mockMultiDayTrip,
+			multi_day_response: {
+				days: [
+					{
+						day_index: 0,
+						date: '2025-08-01',
+						steps: [
+							{
+								place_id: 'p1',
+								name: 'Wawel',
+								lat: 50,
+								lng: 20,
+								arrival_time: '10:00:00',
+								departure_time: '11:00:00',
+								travel_from_previous_s: 0,
+								visit_duration_min: 60,
+								wait_min: 0
+							}
+						],
+						total_travel_time_s: 0,
+						total_visit_time_min: 60,
+						total_wait_min: 0,
+						skipped: []
+					}
+				],
+				transport_mode: 'WALK',
+				unassigned: []
+			}
+		};
+		const { getByText } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: tripWithDay, backendError: null } }
+		});
+		expect(getByText('Wawel')).toBeTruthy();
 	});
 });
