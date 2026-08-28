@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types.js';
 	import RouteResults from '$lib/components/optimizer/RouteResults.svelte';
+	import MultiDayItinerary from '$lib/components/optimizer/multiDay/MultiDayItinerary.svelte';
 	import DeleteTripDialog from '$lib/components/trips/DeleteTripDialog.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Toast from '$lib/components/ui/Toast.svelte';
@@ -14,17 +15,33 @@
 	let showDeleteDialog = $state(false);
 	let deleting = $state(false);
 	let deleteError = $state<string | null>(null);
+	let activeDayIndex = $state(0);
 
 	let LeafletMap: typeof import('$lib/components/map/LeafletMap.svelte').default | null =
 		$state(null);
+	let MultiDayLeafletMap:
+		| typeof import('$lib/components/map/MultiDayLeafletMap.svelte').default
+		| null = $state(null);
 
 	$effect(() => {
-		if (!LeafletMap && data.trip) {
+		if (!data.trip) return;
+		if (data.trip.plan_type === 'SINGLE_DAY' && !LeafletMap) {
 			import('$lib/components/map/LeafletMap.svelte').then((mod) => {
 				LeafletMap = mod.default;
 			});
 		}
+		if (data.trip.plan_type === 'MULTI_DAY' && !MultiDayLeafletMap) {
+			import('$lib/components/map/MultiDayLeafletMap.svelte').then((mod) => {
+				MultiDayLeafletMap = mod.default;
+			});
+		}
 	});
+
+	const activeDay = $derived(
+		data.trip?.plan_type === 'MULTI_DAY'
+			? (data.trip.multi_day_response.days[activeDayIndex] ?? null)
+			: null
+	);
 
 	async function confirmDelete() {
 		if (!data.trip) return;
@@ -66,14 +83,12 @@
 					</p>
 				</div>
 				<div class="flex items-center gap-2">
-					{#if trip.plan_type === 'SINGLE_DAY'}
-						<a
-							href="/optimizer?from={trip.id}"
-							class="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-						>
-							{m.trip_open_in_optimizer()}
-						</a>
-					{/if}
+					<a
+						href="/optimizer?from={trip.id}"
+						class="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+					>
+						{m.trip_open_in_optimizer()}
+					</a>
 					<Button variant="danger" onclick={() => (showDeleteDialog = true)}>
 						{m.trip_delete()}
 					</Button>
@@ -158,22 +173,46 @@
 				</div>
 			</div>
 		{:else}
-			<div
-				class="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
-			>
-				<p class="text-sm text-zinc-500 dark:text-zinc-400">{m.trip_multi_day_notice()}</p>
-				<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:max-w-sm">
-					<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_date_range()}</dt>
-					<dd class="font-medium text-zinc-900 dark:text-zinc-100">
-						{trip.start_date} – {trip.end_date}
-					</dd>
+			<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+				<div class="flex w-full flex-col gap-4 overflow-y-auto md:w-96 md:shrink-0">
+					<div
+						class="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+					>
+						<p
+							class="mb-3 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500"
+						>
+							{m.trip_saved_route()}
+						</p>
+						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+							<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_date_range()}</dt>
+							<dd class="font-medium text-zinc-900 dark:text-zinc-100">
+								{trip.start_date} – {trip.end_date}
+							</dd>
 
-					<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_days()}</dt>
-					<dd class="font-medium text-zinc-900 dark:text-zinc-100">{trip.num_days}</dd>
+							<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_days()}</dt>
+							<dd class="font-medium text-zinc-900 dark:text-zinc-100">{trip.num_days}</dd>
 
-					<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_transport()}</dt>
-					<dd class="font-medium text-zinc-900 dark:text-zinc-100">{trip.transport_mode}</dd>
-				</dl>
+							<dt class="text-zinc-500 dark:text-zinc-400">{m.trip_transport()}</dt>
+							<dd class="font-medium text-zinc-900 dark:text-zinc-100">{trip.transport_mode}</dd>
+						</dl>
+					</div>
+
+					<MultiDayItinerary response={trip.multi_day_response} bind:activeDayIndex />
+				</div>
+
+				<div
+					class="isolate h-64 flex-1 overflow-hidden rounded-lg border border-zinc-200 md:h-auto dark:border-zinc-800"
+				>
+					{#if activeDay && MultiDayLeafletMap}
+						<MultiDayLeafletMap {activeDay} />
+					{:else}
+						<div
+							class="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500"
+						>
+							{m.map_loading()}
+						</div>
+					{/if}
+				</div>
 			</div>
 		{/if}
 	{/if}

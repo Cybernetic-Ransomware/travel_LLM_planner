@@ -11,7 +11,8 @@ import type { OptimizeResponse, PlaceOut, SkippedPlace, TripOut } from '$lib/typ
 import type { OptimizerPrefill } from './+page.server.js';
 
 vi.mock('$lib/api/optimizer.js', () => ({
-	optimizeRoute: vi.fn()
+	optimizeRoute: vi.fn(),
+	optimizeTrip: vi.fn()
 }));
 
 vi.mock('$lib/api/trips.js', () => ({
@@ -91,6 +92,7 @@ function pageData(overrides: Record<string, unknown> = {}) {
 		places,
 		backendError: null,
 		prefill,
+		multiDayPrefill: null,
 		prefillFailed: false,
 		missingPrefillPlaceCount: 0,
 		...overrides
@@ -509,5 +511,53 @@ describe('/optimizer page — cross-action notices', () => {
 
 		resolvePatch({ ...mockPlace('p1', 'Wawel'), priority: 'must_see' });
 		await vi.waitFor(() => expect(patchPlace).toHaveBeenCalledTimes(1));
+	});
+});
+
+describe('/optimizer page — mode switching', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it('defaults to single-day mode and shows the single-day form', async () => {
+		const { getByTestId } = render(Page, { props: { data: pageData({ prefill: null }) } });
+		await expect.element(getByTestId('optimize-submit')).toBeVisible();
+		expect(getByTestId('multiday-submit').query()).toBeNull();
+	});
+
+	it('switching to multi-day mode shows the multi-day form instead of the single-day one', async () => {
+		const { getByTestId } = render(Page, { props: { data: pageData({ prefill: null }) } });
+		await userEvent.click(getByTestId('mode-multi-day'));
+		await expect.element(getByTestId('multiday-submit')).toBeVisible();
+		expect(getByTestId('optimize-submit').query()).toBeNull();
+	});
+
+	it('switching back to single-day restores the single-day form untouched', async () => {
+		const { getByTestId } = render(Page, { props: { data: pageData({ prefill: null }) } });
+		await userEvent.click(getByTestId('mode-multi-day'));
+		await userEvent.click(getByTestId('mode-single-day'));
+		await expect.element(getByTestId('optimize-submit')).toBeVisible();
+	});
+
+	it('defaults to multi-day mode when the page was loaded with a multi-day prefill', async () => {
+		const multiDayPrefill = {
+			tripId: 'trip-2',
+			tripName: 'Multi Trip',
+			multiDayRequest: {
+				days: [{ date: '2026-03-01', day_start_hour: 9, day_end_hour: 21 }],
+				places: [
+					{ place_id: 'p1', day_preferences: [] },
+					{ place_id: 'p2', day_preferences: [] }
+				],
+				transport_mode: 'WALK',
+				accommodations: [],
+				transfers: []
+			},
+			multiDayResponse: { days: [], transport_mode: 'WALK', unassigned: [] }
+		};
+		const { getByTestId } = render(Page, {
+			props: { data: pageData({ prefill: null, multiDayPrefill }) }
+		});
+		await expect.element(getByTestId('multiday-submit')).toBeVisible();
 	});
 });
