@@ -1,7 +1,5 @@
-"""Integration: MultiDayTripEditor against a real Mongo trips collection.
-
-optimize_trip is stubbed (its own suite covers routing) so this focuses on the
-load -> apply -> compare-and-set -> persist path and request/response coherence.
+"""Integration: MultiDayTripEditor against a real Mongo trips collection. optimize_trip
+is stubbed (its own suite covers routing) to focus on the CAS-persist + coherence path.
 """
 
 from __future__ import annotations

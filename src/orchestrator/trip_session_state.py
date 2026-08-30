@@ -1,17 +1,9 @@
-"""Server-authoritative write scope for orchestrator chat threads.
+"""Server-authoritative write scope for orchestrator chat threads (ADR-20).
 
-The ``allowed_place_ids`` guard used to live only in a per-invocation
-``config["configurable"]`` entry — never checkpointed, never rebuilt on the
-resume path. Under production ``interrupt_before=["tools_write"]`` a write tool
-runs *only* on resume, with that config gone, so the guard was effectively
-bypassed. This store fixes that: the router binds a thread to a trip (or to a
-generic place selection) on every normal turn, the router snapshots that scope
-into ``pending`` at the interrupt, and the write tool consumes ``pending``
-exactly once on resume. Scope never comes from the confirmation request body.
-
-The binding document is never deleted on the happy path — only its ``pending``
-field is atomically cleared (single-use consume). A TTL index on ``expires_at``
-reclaims abandoned threads.
+The router binds a thread on every normal turn, snapshots the scope into
+``pending`` at the interrupt, and the write tool single-use consumes it on
+resume; scope never comes from the confirmation request. The binding doc is
+never deleted on the happy path — only ``pending`` is atomically cleared.
 """
 
 from __future__ import annotations
@@ -119,10 +111,8 @@ class TripSessionStateStore:
         return _binding_from_doc(doc)
 
     async def arm_pending(self, thread_id: str, tool_call_id: str) -> bool:
-        """Snapshot the current binding into ``pending`` at the interrupt.
-
-        Returns ``False`` when there is no trusted binding to arm from — the
-        caller MUST NOT emit a tool proposal in that case (fail closed).
+        """Snapshot the binding into ``pending`` at the interrupt; ``False`` = no trusted
+        binding, so the caller must fail closed and not emit a proposal.
         """
         doc = await self._collection.find_one({"thread_id": thread_id})
         if doc is None:

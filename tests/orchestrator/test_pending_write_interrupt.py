@@ -1,5 +1,5 @@
-"""Unit tests for router.inspect_pending_write_interrupt — the guarantee that every
-graph state paused before tools_write resolves to a proposal or a fail-closed error.
+"""Unit tests for router.inspect_pending_write_interrupt: a paused write interrupt always
+resolves to a proposal or a fail-closed error.
 """
 
 from __future__ import annotations

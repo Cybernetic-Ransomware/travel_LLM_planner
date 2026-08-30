@@ -1,13 +1,7 @@
-"""Pure, I/O-free reconciliation helpers run *before* the mutated ``MultiDayRequest``
-is re-constructed.
-
-Two jobs the canonical Pydantic validators can't do on their own:
-  * resolve every ``stay_index`` in a batch against the PRE-BATCH accommodation
-    order and reject conflicting targets, so a selector can't silently shift
-    once an earlier op in the same batch adds/removes a stay;
-  * drop transfers whose date stopped being an accommodation changeover after
-    an accommodation edit — otherwise ``validate_transfers_on_transition_days``
-    would turn a reasonable edit into a hard error.
+"""Pure, I/O-free reconciliation the canonical Pydantic validators can't do:
+resolve every batch ``stay_index`` against the PRE-BATCH order (so a selector
+can't shift mid-batch) and drop transfers orphaned by an accommodation edit
+(so a reasonable edit doesn't become a hard validator error).
 """
 
 from __future__ import annotations
@@ -84,11 +78,8 @@ def resolve_accommodation_selectors(
 ) -> dict[int, int]:
     """Map each update/remove op (by ``id(op)``) to an index into the PRE-BATCH list.
 
-    ``stay_index`` counts positions in ``sorted(stays, key=check_in_date)`` — the
-    same order ``validate_no_stay_overlaps`` and the context prompt use. Resolution
-    happens once, before any mutation. Two ops targeting the same pre-batch stay
-    (remove+update, or update+update) is a conflict, not last-wins. Add ops get no
-    entry — a freshly added stay has no selector in the same batch.
+    ``stay_index`` counts positions in ``sorted(stays, key=check_in_date)``. Two ops
+    hitting the same pre-batch stay is a conflict, not last-wins; add ops get no entry.
     """
     sorted_positions = sorted(range(len(pre_batch_stays)), key=lambda i: pre_batch_stays[i].check_in_date)
 
@@ -116,12 +107,9 @@ def reconcile_transfers_after_transition_change(
     transfers: list[dict],
     reconcilable_dates: set[date],
 ) -> list[date]:
-    """Drop *pre-existing* transfers whose date is no longer an accommodation changeover.
-
-    Only dates in ``reconcilable_dates`` (the transfers that existed before this
-    batch) are silently dropped — a transfer added in this batch that lands on a
-    non-transition day is left for ``validate_transfers_on_transition_days`` to
-    reject as a hard error. Mutates ``transfers``.
+    """Silently drop transfers in ``reconcilable_dates`` (pre-batch ones) whose date is no
+    longer a changeover; a transfer *added* this batch on a bad day is left for the hard
+    validator. Mutates ``transfers``.
     """
     if not transfers:
         return []

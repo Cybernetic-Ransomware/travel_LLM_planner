@@ -1,8 +1,7 @@
 """Typed failures for the multi-day trip edit flow.
 
-Every subclass carries a ``user_message`` — a short, safe string the chat tool
-returns verbatim to the LLM. No failure here ever reaches persistence: the
-editor raises before its single ``find_one_and_update`` write.
+Every subclass carries a short LLM-safe ``user_message``. The editor raises
+before its single write, so nothing here ever reaches persistence.
 """
 
 from __future__ import annotations

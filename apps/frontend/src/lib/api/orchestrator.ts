@@ -27,12 +27,9 @@ export async function* streamChat(
 }
 
 /**
- * Fire-and-forget cancellation of a pending confirmation-gated tool call.
- *
- * The chat stream generator does not start its fetch until iterated, so abandoning
- * it never reaches the backend. This sends a real `resume_confirmed: false` POST so
- * the server strips the dangling tool call and drops the armed write scope. Failure
- * is swallowed — the server-side single-use scope + TTL are the backstop.
+ * Fire-and-forget cancel of a pending confirmation-gated tool call. A real POST is
+ * needed because the stream generator never starts its fetch until iterated; failure
+ * is swallowed since the server-side single-use scope + TTL are the backstop.
  */
 export function cancelPendingChatTool(sessionId: string, tripId?: string): void {
 	const body: ChatRequest = {

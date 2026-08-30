@@ -1,8 +1,7 @@
 """The single load -> mutate -> re-validate -> optimize -> compare-and-set-persist path.
 
-Nothing here writes until the very last step. Any failure in validate/mutate/
-optimize raises first, so a failed edit leaves the stored trip untouched. The
-persisted request and response always come from the same ``optimize_trip`` run.
+Any failure before the final write raises first, so a failed edit leaves the stored
+trip untouched; the persisted request and response are from the same ``optimize_trip`` run.
 """
 
 from __future__ import annotations
@@ -50,8 +49,7 @@ class MultiDayTripEditor:
         trip = await self._trips.find_by_id(trip_id)
         if trip is None:
             raise TripNotFoundError()
-        # find_by_id already resolved plan_type to a concrete class, so isinstance here
-        # is equivalent to a plan_type == "MULTI_DAY" check (ADR-18) and narrows the type.
+        # find_by_id returns a concrete class, so this equals a plan_type check (ADR-18) and narrows.
         if not isinstance(trip, MultiDayTripDetailOut):
             raise UnsupportedPlanTypeError()
         if trip.revision != expected_revision:

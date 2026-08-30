@@ -1,9 +1,7 @@
 """The single LLM-facing write path for a persisted MULTI_DAY trip.
 
-The tool takes no ``trip_id`` argument — the target comes only from the
-server-side ``pending`` scope snapshotted at the interrupt and consumed here
-exactly once. Any smuggled ``trip_id``-like key in ``operations`` is rejected
-by ``TripEditBatch``'s ``extra="forbid"``.
+No ``trip_id`` argument: the target comes only from the ``pending`` scope
+consumed here once. Smuggled keys in ``operations`` hit ``extra="forbid"``.
 """
 
 from __future__ import annotations

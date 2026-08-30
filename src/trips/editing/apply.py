@@ -1,10 +1,8 @@
 """Pure mutation + re-validation of a ``MultiDayRequest``.
 
-Every handler works on a deep copy of ``request.model_dump(mode="python")`` — a
-half-applied batch never yields a partial model. The model is constructed exactly
-once, at the end, by ``MultiDayRequest.model_validate``, which re-runs every
-``@model_validator`` for free. Any ``ValidationError`` there is wrapped as
-``TripEditValidationError``.
+Handlers work on a deep copy of the dumped dict; the model is constructed exactly
+once at the end, so a half-applied batch never yields a partial model and every
+``@model_validator`` re-runs. Its ``ValidationError`` becomes ``TripEditValidationError``.
 """
 
 from __future__ import annotations
@@ -86,11 +84,8 @@ def apply_operations(request: MultiDayRequest, operations: list[TripEditOperatio
 
 
 def _apply_accommodation_ops(data: dict, accommodation_ops: list[AccommodationOp], resolved: dict[int, int]) -> None:
-    """Updates in place, then removes (selectors already resolved to pre-batch indices), then adds.
-
-    Updates run before removes so a deletion never invalidates an update's resolved
-    index; ``resolve_accommodation_selectors`` has already guaranteed no stay is
-    both updated and removed.
+    """Updates (in place) before removes before adds, so a deletion never invalidates an
+    update's pre-batch index; the resolver already forbids updating and removing one stay.
     """
     stays = data["accommodations"]
 

@@ -69,11 +69,9 @@ class TripsManager:
         return _to_trip_detail_out(doc)
 
     async def update(self, trip_id: str, request: SaveTripRequest) -> TripDetailOut | None:
-        """Compare-and-set update shared by ``PUT /core/trips/{id}`` and the chat editor.
-
-        ``expected_revision`` is mandatory: a missing token is a 428, a stale token is
-        a 409, a match writes request+response and ``$inc``s ``revision`` in one atomic
-        ``find_one_and_update``. Legacy docs without a ``revision`` field count as 0.
+        """Compare-and-set update shared by ``PUT /core/trips/{id}`` and the chat editor:
+        missing ``expected_revision`` -> 428, stale -> 409, match -> atomic ``$set`` + ``$inc``.
+        Legacy docs without ``revision`` count as 0.
         """
         oid = _parse_object_id(trip_id)
         if oid is None:

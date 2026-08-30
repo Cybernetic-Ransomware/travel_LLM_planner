@@ -1,10 +1,7 @@
 """Bounded, deterministic system-prompt rendering of a persisted MULTI_DAY trip.
 
-The agent gets this summary automatically when the chat is opened against a
-saved trip, so it never has to call ``get_trip_details`` first. Every
-user-controlled string (trip / place / accommodation / transfer names) goes
-through ``_sanitize_for_prompt``; the whole block is capped so a large trip
-can't blow the context window.
+Every user-controlled string goes through ``_sanitize_for_prompt`` and the whole
+block is capped, so a large or hostile trip can't blow or steer the context.
 """
 
 from __future__ import annotations

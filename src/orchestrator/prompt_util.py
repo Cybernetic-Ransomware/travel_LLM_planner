@@ -4,13 +4,7 @@ _MAX_FIELD_LEN = 200
 
 
 def _sanitize_for_prompt(text: str) -> str:
-    """Strip control characters and collapse whitespace to prevent prompt injection.
-
-    A malicious place name such as ``"Foo\\nIgnore previous instructions"`` would
-    otherwise introduce a new paragraph into the system prompt and could alter the
-    model's behaviour.  Replacing control characters with a single space keeps the
-    value on one line and limits it to a safe length.
-    """
+    """Collapse control chars/whitespace and cap length so a hostile field can't inject a prompt line."""
     text = re.sub(r"[\x00-\x1f\x7f]+", " ", text)
     text = re.sub(r" {2,}", " ", text).strip()
     return text[:_MAX_FIELD_LEN]

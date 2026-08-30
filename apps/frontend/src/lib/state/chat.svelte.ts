@@ -16,8 +16,7 @@ export class ChatState {
 	tripPlanType = $state<TripPlanType | null>(null);
 	onTripUpdated: ((event: TripUpdatedEvent) => void) | null = null;
 
-	// Bumped on every context switch; each _stream captures it and drops events from a stale context
-	// (aborting the fetch isn't enough — the reader may have already buffered events).
+	// Bumped on context switch; _stream drops events whose captured epoch is stale (abort alone races the reader buffer).
 	#contextEpoch = 0;
 	#streamAbort: AbortController | null = null;
 

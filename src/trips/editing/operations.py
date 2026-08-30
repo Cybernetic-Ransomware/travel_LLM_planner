@@ -1,11 +1,8 @@
 """Typed, discriminated batch of edit operations for a persisted MULTI_DAY trip.
 
-Every operation model is LLM-visible (the batch is the argument schema of the
-``edit_multi_day_trip`` chat tool). They all inherit ``extra="forbid"`` from
-``TripEditOperationBase`` so an unknown key smuggled through the LLM's tool
-arguments — ``trip_id``, ``revision``, ``expected_revision``, a scope selector —
-is a validation error, never silently ignored. Nested payload models
-(``DaySlotOp``) carry the same config.
+Every model (nested ones too) inherits ``extra="forbid"`` from
+``TripEditOperationBase`` so a key the LLM smuggles in — ``trip_id``,
+``revision``, a scope selector — is a validation error, never ignored.
 """
 
 from __future__ import annotations
