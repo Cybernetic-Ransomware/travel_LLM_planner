@@ -37,6 +37,9 @@
 	let showSaveForm = $state(false);
 	let saveSuccess = $state<string | null>(null);
 	let updating = $state(false);
+	// Mutable local view of the persisted revision — refreshed after each successful PUT.
+	let currentRevision = $state(untrack(() => data.prefill?.revision ?? 0));
+	let conflicted = $state(false);
 	let preferenceNotice = $state<{ message: string; variant: 'success' | 'warning' } | null>(null);
 	let enrichNotice = $state<{ message: string; variant: 'success' | 'warning' } | null>(null);
 	let updatingPlaceId = $state<string | null>(null);
@@ -124,7 +127,7 @@
 	}
 
 	async function handleUpdateTrip() {
-		if (!data.prefill || !result || !lastRequest) return;
+		if (!data.prefill || !result || !lastRequest || conflicted) return;
 		updating = true;
 		error = null;
 		saveSuccess = null;
@@ -133,11 +136,18 @@
 				name: data.prefill.tripName,
 				date: data.prefill.tripDate,
 				optimizer_request: lastRequest,
-				optimizer_response: result
+				optimizer_response: result,
+				expected_revision: currentRevision
 			});
+			currentRevision = trip.plan_type === 'SINGLE_DAY' ? trip.revision : currentRevision;
 			saveSuccess = m.update_trip_success({ name: trip.name });
 		} catch (err) {
-			error = err instanceof ApiError ? err.detail : m.update_trip_failed();
+			if (err instanceof ApiError && (err.status === 409 || err.status === 428)) {
+				conflicted = true;
+				error = m.update_trip_conflict();
+			} else {
+				error = err instanceof ApiError ? err.detail : m.update_trip_failed();
+			}
 		} finally {
 			updating = false;
 		}
@@ -301,7 +311,7 @@
 					{#if data.prefill}
 						<button
 							onclick={handleUpdateTrip}
-							disabled={updating}
+							disabled={updating || conflicted}
 							class="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
 						>
 							{updating ? '…' : m.optimizer_update_trip()}

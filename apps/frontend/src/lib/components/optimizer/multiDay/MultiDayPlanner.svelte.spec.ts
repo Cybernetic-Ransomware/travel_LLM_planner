@@ -82,6 +82,7 @@ const persistedResponse: MultiDayResponse = {
 const prefill: MultiDayOptimizerPrefill = {
 	tripId: 'trip-1',
 	tripName: 'Kraków then Warsaw',
+	revision: 0,
 	multiDayRequest: persistedRequest,
 	multiDayResponse: persistedResponse
 };
@@ -95,6 +96,7 @@ const updatedTrip: TripOut = {
 	num_days: 2,
 	created_at: '2026-03-01T10:00:00Z',
 	updated_at: '2026-03-01T12:00:00Z',
+	revision: 1,
 	transport_mode: 'WALK',
 	multi_day_request: persistedRequest,
 	multi_day_response: persistedResponse
@@ -236,6 +238,7 @@ describe('MultiDayPlanner — reopened trip (prefill)', () => {
 		await userEvent.click(getByRole('button', { name: 'Zaktualizuj zapisaną trasę' }));
 		expect(updateTrip).toHaveBeenCalledWith('trip-1', {
 			name: 'Kraków then Warsaw',
+			expected_revision: 0,
 			multi_day_request: persistedRequest,
 			multi_day_response: persistedResponse
 		});

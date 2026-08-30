@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
+	import { getChatContext } from '$lib/state/context.svelte.js';
 	import type { PageData } from './$types.js';
 	import RouteResults from '$lib/components/optimizer/RouteResults.svelte';
 	import MultiDayItinerary from '$lib/components/optimizer/multiDay/MultiDayItinerary.svelte';
@@ -11,6 +12,14 @@
 	import * as m from '$lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
+
+	const chat = getChatContext();
+	$effect(() => {
+		const trip = data.trip;
+		if (!trip) return;
+		chat.setTripContext(trip.id, trip.plan_type, () => invalidate(`app:trip:${trip.id}`));
+		return () => chat.clearTripContext();
+	});
 
 	let showDeleteDialog = $state(false);
 	let deleting = $state(false);

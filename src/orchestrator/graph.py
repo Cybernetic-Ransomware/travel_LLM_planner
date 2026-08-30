@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -11,23 +9,13 @@ from langgraph.prebuilt import ToolNode
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.gmaps import GooglePlacesManager
+from src.optimizer.matrix.client import GoogleRoutesManager
 from src.orchestrator.models import AgentState
-from src.orchestrator.tools import create_tools
+from src.orchestrator.prompt_util import _MAX_FIELD_LEN, _sanitize_for_prompt
+from src.orchestrator.tools import _WRITE_TOOL_NAMES, create_tools
+from src.orchestrator.trip_session_state import TripSessionStateStore
 
-_MAX_FIELD_LEN = 200
-
-
-def _sanitize_for_prompt(text: str) -> str:
-    """Strip control characters and collapse whitespace to prevent prompt injection.
-
-    A malicious place name such as ``"Foo\\nIgnore previous instructions"`` would
-    otherwise introduce a new paragraph into the system prompt and could alter the
-    model's behaviour.  Replacing control characters with a single space keeps the
-    value on one line and limits it to a safe length.
-    """
-    text = re.sub(r"[\x00-\x1f\x7f]+", " ", text)
-    text = re.sub(r" {2,}", " ", text).strip()
-    return text[:_MAX_FIELD_LEN]
+__all__ = ["build_graph", "_WRITE_TOOL_NAMES", "_sanitize_for_prompt", "_MAX_FIELD_LEN"]
 
 
 def _build_place_context_prompt(places: list[dict]) -> str:
@@ -46,7 +34,7 @@ def _build_place_context_prompt(places: list[dict]) -> str:
         h_from = p.get("preferred_hour_from")
         h_to = p.get("preferred_hour_to")
         if h_from is not None and h_to is not None:
-            line += f", preferred {h_from}:00\u2013{h_to}:00"
+            line += f", preferred {h_from}:00–{h_to}:00"
         lines.append(line)
     lines.append(
         "\nWhen suggesting changes to visit hours, always describe the proposed change first "
@@ -73,27 +61,33 @@ async def router_node(state: AgentState) -> str:
 async def chatbot_node(state: AgentState, llm: BaseChatModel) -> dict:
     """Invoke the LLM with the full conversation history and return the response.
 
-    When place_context is provided, prepends a SystemMessage describing the trip
-    so the LLM can reason about the user's specific places.
+    Prepends a trip-context SystemMessage when the chat is bound to a saved trip,
+    and/or a place-context SystemMessage for generic selection chats.
     """
+    prefix: list[SystemMessage] = []
+    trip_context = state.get("trip_context")
+    if trip_context:
+        prefix.append(SystemMessage(content=trip_context))
     place_context = state.get("place_context") or []
     if place_context:
-        messages = [SystemMessage(content=_build_place_context_prompt(place_context))] + list(state["messages"])
-    else:
-        messages = list(state["messages"])
+        prefix.append(SystemMessage(content=_build_place_context_prompt(place_context)))
+
+    messages = prefix + list(state["messages"]) if prefix else list(state["messages"])
     response = await llm.ainvoke(messages)
     return {"messages": [response]}
 
 
 def _after_chatbot(state: AgentState) -> str:
-    """Conditional edge after chatbot — routes to tool execution or END."""
+    """Route after chatbot: write batch -> ``tools_write`` (interrupt), reads -> ``tools_read``, else END."""
     messages = state.get("messages", [])
     if not messages:
         return "end"
     last = messages[-1]
-    if isinstance(last, AIMessage) and last.tool_calls:
-        return "tools"
-    return "end"
+    if not (isinstance(last, AIMessage) and last.tool_calls):
+        return "end"
+    if any(tc["name"] in _WRITE_TOOL_NAMES for tc in last.tool_calls):
+        return "tools_write"
+    return "tools_read"
 
 
 def build_graph(
@@ -101,23 +95,30 @@ def build_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     db: AsyncDatabase | None = None,
     places_manager: GooglePlacesManager | None = None,
+    routes_manager: GoogleRoutesManager | None = None,
+    session_state_store: TripSessionStateStore | None = None,
 ) -> CompiledStateGraph:
-    """Build and compile the LangGraph StateGraph for the orchestrator.
+    """Build and compile the orchestrator StateGraph.
 
-    When ``db`` is provided, the graph is extended with a tool node for
-    ``update_visit_hours``. The LLM is bound with tool schemas so it can emit
-    tool calls, and the graph topology becomes a ReAct loop:
+    With ``db`` the graph is a ReAct loop with a split tool stage:
 
-        START → router_node ─── "chatbot" ──→ chatbot ──→ (tool_calls?) ──→ tools ──→ chatbot
-                             └── "end" ──→ END                           └── END
+        START -> router -> chatbot -> (_after_chatbot)
+                                       |-> tools_write -> chatbot   (interrupt_before when checkpointed)
+                                       |-> tools_read  -> chatbot
+                                       |-> END
 
-    ``interrupt_before=["tools"]`` is applied only when a checkpointer is present,
-    enabling human-in-the-loop confirmation before any tool writes to MongoDB.
-
-    Without ``db`` the graph retains the original linear topology.
+    ``tools_write`` is built with *every* tool, not just the write ones, so a
+    mixed read+write batch still resolves after a single confirmation.
+    Without ``db`` the graph keeps the original linear topology.
     """
     if db is not None:
-        tools = create_tools(db, places_manager)
+        tools = create_tools(
+            db,
+            places_manager=places_manager,
+            routes_manager=routes_manager,
+            session_state_store=session_state_store,
+        )
+        read_tools = [t for t in tools if t.name not in _WRITE_TOOL_NAMES]
         llm_with_tools = llm.bind_tools(tools)
 
         async def _chatbot(state: AgentState) -> dict:
@@ -125,12 +126,18 @@ def build_graph(
 
         graph = StateGraph(AgentState)
         graph.add_node("chatbot", _chatbot)
-        graph.add_node("tools", ToolNode(tools))
+        graph.add_node("tools_read", ToolNode(read_tools))
+        graph.add_node("tools_write", ToolNode(tools))
         graph.add_conditional_edges(START, router_node, {"chatbot": "chatbot", "end": END})
-        graph.add_conditional_edges("chatbot", _after_chatbot, {"tools": "tools", "end": END})
-        graph.add_edge("tools", "chatbot")
+        graph.add_conditional_edges(
+            "chatbot",
+            _after_chatbot,
+            {"tools_write": "tools_write", "tools_read": "tools_read", "end": END},
+        )
+        graph.add_edge("tools_read", "chatbot")
+        graph.add_edge("tools_write", "chatbot")
 
-        interrupt_before = ["tools"] if checkpointer is not None else []
+        interrupt_before = ["tools_write"] if checkpointer is not None else []
         return graph.compile(checkpointer=checkpointer, interrupt_before=interrupt_before)
 
     async def _chatbot_no_tools(state: AgentState) -> dict:

@@ -9,6 +9,7 @@ import { stayToDraft } from './accommodationDraft.js';
 export interface MultiDayOptimizerPrefill {
 	tripId: string;
 	tripName: string;
+	revision: number;
 	multiDayRequest: MultiDayRequest;
 	multiDayResponse: MultiDayResponse;
 }

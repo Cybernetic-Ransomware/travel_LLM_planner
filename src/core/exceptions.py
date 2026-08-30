@@ -65,6 +65,29 @@ class TripPlanTypeConflictError(HTTPException):
         super().__init__(status_code=409, detail=detail)
 
 
+class TripConcurrencyConflictError(HTTPException):
+    """Raised when a trip update's expected_revision no longer matches the stored revision."""
+
+    def __init__(self, trip_id: str, expected: int) -> None:
+        super().__init__(
+            status_code=409,
+            detail=(
+                f"Trip {trip_id!r} changed since it was loaded (expected revision {expected}); "
+                "reload the trip and retry the update"
+            ),
+        )
+
+
+class MissingExpectedRevisionError(HTTPException):
+    """Raised when a trip update omits expected_revision — updates must carry the concurrency token."""
+
+    def __init__(self, trip_id: str) -> None:
+        super().__init__(
+            status_code=428,
+            detail=f"Updating trip {trip_id!r} requires expected_revision; reload the trip and retry",
+        )
+
+
 class AuthenticationError(HTTPException):
     """Raised when the JWT token is missing, malformed, or fails RS256 verification."""
 

@@ -236,13 +236,15 @@ export interface paths {
 		 * Chat
 		 * @description Stream a chat response using the LangGraph orchestrator.
 		 *
-		 *     Returns Server-Sent Events (text/event-stream). The first event carries
-		 *     ``session_id``. Subsequent events carry ``content`` token chunks.
-		 *     A final ``data: [DONE]`` line signals the end of the stream.
+		 *     The first SSE event carries ``session_id``; later events carry ``content``
+		 *     token chunks; ``data: [DONE]`` ends the stream. ``tool_proposal`` and
+		 *     ``trip_updated`` events appear around a confirmation-gated write.
 		 *
-		 *     When ``resume_confirmed`` is set (``True`` or ``False``), the session is
-		 *     assumed to be in an interrupted state (tool awaiting confirmation).
-		 *     ``True`` executes the pending tool; ``False`` cancels it.
+		 *     When ``resume_confirmed`` is set the session is assumed interrupted:
+		 *     ``True`` executes the pending tool, ``False`` cancels it.
+		 *
+		 *     When ``trip_id`` is set the chat edits that saved trip: ``place_ids`` is
+		 *     ignored and the trip's contents and place scope are derived server-side.
 		 */
 		post: operations['chat_api_v1_core_orchestrator_chat_post'];
 		delete?: never;
@@ -404,6 +406,8 @@ export interface components {
 			messages: components['schemas']['ChatMessage'][];
 			/** Session Id */
 			session_id?: string | null;
+			/** Trip Id */
+			trip_id?: string | null;
 			/** Place Ids */
 			place_ids?: string[];
 			/** Resume Confirmed */
@@ -686,6 +690,8 @@ export interface components {
 			name: string;
 			multi_day_request: components['schemas']['MultiDayRequest-Input'];
 			multi_day_response: components['schemas']['MultiDayResponse-Input'];
+			/** Expected Revision */
+			expected_revision?: number | null;
 		};
 		/** MultiDayTripDetailOut */
 		MultiDayTripDetailOut: {
@@ -697,6 +703,11 @@ export interface components {
 			created_at: string;
 			/** Updated At */
 			updated_at: string | null;
+			/**
+			 * Revision
+			 * @default 0
+			 */
+			revision: number;
 			/**
 			 * @description discriminator enum property added by openapi-typescript
 			 * @enum {string}
@@ -933,6 +944,8 @@ export interface components {
 			date: string;
 			optimizer_request: components['schemas']['OptimizeRequest'];
 			optimizer_response: components['schemas']['OptimizeResponse'];
+			/** Expected Revision */
+			expected_revision?: number | null;
 		};
 		/** SingleDayTripDetailOut */
 		SingleDayTripDetailOut: {
@@ -944,6 +957,11 @@ export interface components {
 			created_at: string;
 			/** Updated At */
 			updated_at: string | null;
+			/**
+			 * Revision
+			 * @default 0
+			 */
+			revision: number;
 			/**
 			 * @description discriminator enum property added by openapi-typescript
 			 * @enum {string}

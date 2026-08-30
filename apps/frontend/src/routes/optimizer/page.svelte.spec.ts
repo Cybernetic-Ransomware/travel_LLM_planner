@@ -51,6 +51,7 @@ const prefill: OptimizerPrefill = {
 	tripId: 'trip-1',
 	tripName: 'Weekend in Kraków',
 	tripDate: '2026-07-11',
+	revision: 0,
 	selectedPlaceIds: ['p1', 'p2'],
 	transportMode: 'WALK',
 	dayStartHour: 9,
@@ -73,6 +74,7 @@ const updatedTrip: TripOut = {
 	date: '2026-07-11',
 	created_at: '2026-07-11T10:00:00Z',
 	updated_at: '2026-07-11T11:00:00Z',
+	revision: 1,
 	transport_mode: 'WALK',
 	day_start_hour: 9,
 	day_end_hour: 21,
@@ -130,6 +132,7 @@ describe('/optimizer page — update saved trip', () => {
 		expect(updateTrip).toHaveBeenCalledWith('trip-1', {
 			name: 'Weekend in Kraków',
 			date: '2026-07-11',
+			expected_revision: 0,
 			optimizer_request: {
 				place_ids: ['p1', 'p2'],
 				transport_mode: 'WALK',

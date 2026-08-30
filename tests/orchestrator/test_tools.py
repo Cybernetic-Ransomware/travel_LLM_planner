@@ -5,6 +5,7 @@ import pytest
 
 from src.core.exceptions import InvalidHourRangeError
 from src.orchestrator.tools import PRICING_FIELD_MASK, create_tools
+from src.orchestrator.trip_session_state import PendingScope
 
 
 def _make_tool(db=None):
@@ -156,17 +157,18 @@ class TestUpdateVisitHoursSuccess:
         _, _, called_patch = mock_update.call_args[0]
         assert called_patch.visit_duration_min == 120
 
-    async def test_empty_allowed_list_skips_scope_check(self):
+    async def test_empty_allowed_list_denies_write(self):
+        """Fail-closed: an empty/absent selection must NOT open unrestricted place writes."""
         tool = _make_tool()
-        updated_doc = {"name": "Anywhere", "preferred_hour_from": 9, "preferred_hour_to": 17}
 
-        with patch("src.orchestrator.tools.find_and_update_place", new=AsyncMock(return_value=updated_doc)):
+        with patch("src.orchestrator.tools.find_and_update_place", new=AsyncMock()) as mock_update:
             result = await tool.ainvoke(
                 {"place_id": "any-id", "preferred_hour_from": 9, "preferred_hour_to": 17},
                 config=_config([]),
             )
 
-        assert "Cannot update" not in result
+        assert "no place selection" in result
+        mock_update.assert_not_called()
 
     @pytest.mark.regression
     async def test_omitted_args_not_marked_set_on_patch(self):
@@ -305,7 +307,7 @@ class TestScopeGuard:
                 config=_config(["allowed-id-1", "allowed-id-2"]),
             )
 
-        assert "not part of the current trip plan" in result
+        assert "not part of the current selection" in result
         mock_update.assert_not_called()
 
     async def test_allows_place_id_in_allowed_list(self):
@@ -320,6 +322,117 @@ class TestScopeGuard:
             )
 
         assert "Cannot update" not in result
+
+
+def _store_returning(scope):
+    store = MagicMock()
+    store.consume_pending = AsyncMock(return_value=scope)
+    return store
+
+
+def _place_scope(allowed):
+    return PendingScope(
+        tool_call_id="c1",
+        kind="place_selection",
+        trip_id=None,
+        plan_type=None,
+        name=None,
+        revision=None,
+        allowed_place_ids=allowed,
+    )
+
+
+def _trip_scope(name="Tokyo May"):
+    return PendingScope(
+        tool_call_id="c1",
+        kind="trip",
+        trip_id="507f1f77bcf86cd799439011",
+        plan_type="MULTI_DAY",
+        name=name,
+        revision=1,
+        allowed_place_ids=["p1"],
+    )
+
+
+@pytest.mark.unit
+class TestLegacyPlaceToolsFailClosed:
+    async def test_trip_context_denies_update_visit_hours_and_redirects(self):
+        tools = create_tools(MagicMock(), session_state_store=_store_returning(_trip_scope()))
+        tool = next(t for t in tools if t.name == "update_visit_hours")
+
+        with patch("src.orchestrator.tools.find_and_update_place", new=AsyncMock()) as mock_update:
+            result = await tool.ainvoke(
+                {"place_id": "p1", "preferred_hour_from": 9, "preferred_hour_to": 17},
+                config={"configurable": {"thread_id": "t1"}},
+            )
+
+        assert "Tokyo May" in result
+        assert "edit_multi_day_trip" not in result.lower() or "trip plan" in result.lower()
+        mock_update.assert_not_called()
+
+    async def test_trip_context_denies_add_place(self):
+        tools = create_tools(MagicMock(), session_state_store=_store_returning(_trip_scope()))
+        tool = next(t for t in tools if t.name == "add_place")
+
+        with patch("src.orchestrator.tools.insert_place", new=AsyncMock()) as mock_insert:
+            result = await tool.ainvoke(
+                {"name": "New Cafe"},
+                config={"configurable": {"thread_id": "t1"}},
+            )
+
+        assert "saved trip" in result
+        mock_insert.assert_not_called()
+
+    async def test_place_selection_scope_allows_in_scope_place(self):
+        updated_doc = {"name": "Wawel", "preferred_hour_from": 9, "preferred_hour_to": 17}
+        tools = create_tools(MagicMock(), session_state_store=_store_returning(_place_scope(["p1"])))
+        tool = next(t for t in tools if t.name == "update_visit_hours")
+
+        with patch("src.orchestrator.tools.find_and_update_place", new=AsyncMock(return_value=updated_doc)):
+            result = await tool.ainvoke(
+                {"place_id": "p1", "preferred_hour_from": 9, "preferred_hour_to": 17},
+                config={"configurable": {"thread_id": "t1"}},
+            )
+
+        assert "Wawel" in result
+
+    async def test_place_selection_scope_denies_out_of_scope_place(self):
+        tools = create_tools(MagicMock(), session_state_store=_store_returning(_place_scope(["p1"])))
+        tool = next(t for t in tools if t.name == "update_visit_hours")
+
+        with patch("src.orchestrator.tools.find_and_update_place", new=AsyncMock()) as mock_update:
+            result = await tool.ainvoke(
+                {"place_id": "other", "preferred_hour_from": 9, "preferred_hour_to": 17},
+                config={"configurable": {"thread_id": "t1"}},
+            )
+
+        assert "not part of the current selection" in result
+        mock_update.assert_not_called()
+
+    async def test_no_pending_scope_after_resume_denies(self):
+        tools = create_tools(MagicMock(), session_state_store=_store_returning(None))
+        tool = next(t for t in tools if t.name == "skip_place")
+
+        with patch("src.orchestrator.tools.find_and_update_place", new=AsyncMock()) as mock_update:
+            result = await tool.ainvoke(
+                {"place_id": "p1", "skipped": True},
+                config={"configurable": {"thread_id": "t1"}},
+            )
+
+        assert "expired" in result
+        mock_update.assert_not_called()
+
+    async def test_store_error_fails_closed(self):
+        store = MagicMock()
+        store.consume_pending = AsyncMock(side_effect=RuntimeError("mongo down"))
+        tools = create_tools(MagicMock(), session_state_store=store)
+        tool = next(t for t in tools if t.name == "update_visit_hours")
+
+        result = await tool.ainvoke(
+            {"place_id": "p1", "preferred_hour_from": 9, "preferred_hour_to": 17},
+            config={"configurable": {"thread_id": "t1"}},
+        )
+        assert "can't verify the scope" in result
 
 
 @pytest.mark.unit
@@ -417,7 +530,7 @@ class TestSkipPlaceErrors:
                 config=_config(["allowed-id"]),
             )
 
-        assert "not part of the current trip plan" in result
+        assert "not part of the current selection" in result
         mock_update.assert_not_called()
 
 
@@ -947,7 +1060,9 @@ class TestGetTripDetailsErrors:
         assert "timeout" in result
 
 
-def _make_multi_day_trip_summary(id_="mabc", name="Kraków then Warsaw", start_date="2026-08-01", end_date="2026-08-03", num_days=3):
+def _make_multi_day_trip_summary(
+    id_="mabc", name="Kraków then Warsaw", start_date="2026-08-01", end_date="2026-08-03", num_days=3
+):
     summary = MagicMock()
     summary.plan_type = "MULTI_DAY"
     summary.id = id_
@@ -965,7 +1080,9 @@ def _make_skipped_place(name="Skipped Place", place_id="skip1"):
     return place
 
 
-def _make_transfer_segment(origin_name="Hotel A", destination_name="Hotel B", departure="11:00", arrival="13:00", label="Train"):
+def _make_transfer_segment(
+    origin_name="Hotel A", destination_name="Hotel B", departure="11:00", arrival="13:00", label="Train"
+):
     origin = MagicMock()
     origin.name = origin_name
     destination = MagicMock()
@@ -979,9 +1096,7 @@ def _make_transfer_segment(origin_name="Hotel A", destination_name="Hotel B", de
     return transfer
 
 
-def _make_route_segment(
-    kind, steps=None, skipped=None, total_travel_time_s=0, total_visit_time_min=0, total_wait_min=0
-):
+def _make_route_segment(kind, steps=None, skipped=None, total_travel_time_s=0, total_visit_time_min=0, total_wait_min=0):
     segment = MagicMock()
     segment.kind = kind
     segment.steps = steps or []

@@ -26,6 +26,8 @@ class SingleDaySaveTripRequest(BaseModel):
     date: date
     optimizer_request: OptimizeRequest
     optimizer_response: OptimizeResponse
+    # Optimistic-concurrency token for updates; ignored by save-as-new (POST). See ADR-20.
+    expected_revision: int | None = None
 
 
 class MultiDaySaveTripRequest(BaseModel):
@@ -35,6 +37,8 @@ class MultiDaySaveTripRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     multi_day_request: MultiDayRequest
     multi_day_response: MultiDayResponse
+    # Optimistic-concurrency token for updates; ignored by save-as-new (POST). See ADR-20.
+    expected_revision: int | None = None
 
 
 def _save_trip_request_discriminator(value: Any) -> str:
@@ -88,6 +92,8 @@ class TripDetailOutBase(BaseModel):
     name: str
     created_at: str
     updated_at: str | None = None
+    # Server-managed current revision; clients echo it back as expected_revision on update. See ADR-20.
+    revision: int = 0
 
 
 class SingleDayTripDetailOut(TripDetailOutBase):

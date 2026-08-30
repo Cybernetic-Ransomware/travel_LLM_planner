@@ -95,6 +95,7 @@ src/
 │   └── db/     # MongoDBManager, FastAPI deps (get_db, mongo_session, mongo_transaction)
 ├── gmaps/      # Google Places domain: scraper, storage, router, models
 ├── trips/      # Trip persistence domain: save/list/get optimized routes as named trips
+│   └── editing/  # Multi-day trip edit service: typed operation batch -> validate -> optimize -> compare-and-set persist (ADR-20)
 ├── panel/      # Streamlit UI + API client
 └── main.py     # App composition only — registers components via register_*(app) functions
 ```
@@ -164,6 +165,7 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 17 | Accepted | Transition-day route segments — PRE/POST solver segments either side of a transfer, `DayPlan.route_segments`, `TransitionSide` classification, per-side visit budgets |
 | 18 | Accepted | Multi-day trip persistence — discriminated `Trip` model in `src/trips/`, `plan_type` legacy inference, callable request discriminator, `TripPlanTypeConflictError` on update |
 | 19 | Accepted | Generated REST contracts — `openapi-typescript` from `app.openapi()`, `tools/openapi-codegen/`, `contract-drift.yml` CI gate |
+| 20 | Accepted | Confirmation-gated AI editing of persisted multi-day trips — server-derived `ChatRequest.trip_id`, `edit_multi_day_trip` batch tool, `TripSessionStateStore` scope snapshot/consume, split read/write ToolNode, bidirectional `revision` + `expected_revision` compare-and-set (amends ADR-10, ADR-18) |
 | — | — | [Frontend split roadmap](docs/frontend-roadmap.md) — Astro/SvelteKit decision rule and upcoming PRs |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.

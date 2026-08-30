@@ -10,9 +10,11 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from src.config.conf_logger import setup_logger
 from src.gmaps import GooglePlacesManager
+from src.optimizer.matrix.client import GoogleRoutesManager
 from src.orchestrator.checkpointer import MongoCheckpointSaver
 from src.orchestrator.graph import build_graph
 from src.orchestrator.models import AgentState
+from src.orchestrator.trip_session_state import TripSessionStateStore
 
 logger = setup_logger(__name__, "orchestrator")
 
@@ -34,6 +36,7 @@ class OrchestratorManager:
         langsmith_project: str,
         db: AsyncDatabase | None = None,
         places_manager: GooglePlacesManager | None = None,
+        routes_manager: GoogleRoutesManager | None = None,
         checkpoint_ttl_days: int = 30,
     ) -> None:
         self._provider = provider
@@ -44,10 +47,12 @@ class OrchestratorManager:
         self._langsmith_project = langsmith_project
         self._db = db
         self._places_manager = places_manager
+        self._routes_manager = routes_manager
         self._checkpoint_ttl_days = checkpoint_ttl_days
         self._llm: BaseChatModel | None = None
         self._graph: CompiledStateGraph | None = None
         self._checkpointer: MongoCheckpointSaver | None = None
+        self._trip_session_state: TripSessionStateStore | None = None
 
     @property
     def graph(self) -> CompiledStateGraph:
@@ -69,6 +74,11 @@ class OrchestratorManager:
     def has_checkpointer(self) -> bool:
         """Whether a checkpointer is active (conversation persistence enabled)."""
         return self._checkpointer is not None
+
+    @property
+    def trip_session_state(self) -> TripSessionStateStore | None:
+        """Server-side write-scope store for chat threads, or None when not connected with a db."""
+        return self._trip_session_state
 
     @property
     def provider(self) -> str:
@@ -104,11 +114,14 @@ class OrchestratorManager:
 
         if self._db is not None:
             self._checkpointer = MongoCheckpointSaver(self._db, retention_days=self._checkpoint_ttl_days)
+            self._trip_session_state = TripSessionStateStore(self._db, retention_days=self._checkpoint_ttl_days)
             self._graph = build_graph(
                 self._llm,
                 checkpointer=self._checkpointer,
                 db=self._db,
                 places_manager=self._places_manager,
+                routes_manager=self._routes_manager,
+                session_state_store=self._trip_session_state,
             )
             logger.info(
                 "OrchestratorManager connected — provider=%s model=%s checkpointer=mongodb",
@@ -127,6 +140,8 @@ class OrchestratorManager:
         self._llm = None
         self._checkpointer = None
         self._places_manager = None
+        self._routes_manager = None
+        self._trip_session_state = None
 
     async def __aenter__(self) -> OrchestratorManager:
         await self.connect()

@@ -367,6 +367,7 @@ class TestUpdateTrip:
         payload["name"] = "Updated name"
         payload["optimizer_request"]["place_ids"] = ["p3", "p4"]
         payload["optimizer_response"]["total_wait_min"] = 123
+        payload["expected_revision"] = 0
         return payload
 
     async def test_returns_200_with_updated_detail(self, client: AsyncClient):
@@ -429,6 +430,7 @@ class TestUpdateTripMultiDay:
         payload = _multi_day_payload()
         payload["name"] = "Updated multi-day name"
         payload["multi_day_response"]["unassigned"] = []
+        payload["expected_revision"] = 0
         return payload
 
     async def test_returns_200_with_updated_detail(self, client: AsyncClient):
@@ -492,6 +494,46 @@ class TestUpdateTripPlanTypeConflict:
     async def test_valid_but_nonexistent_id_returns_404_not_409(self, client: AsyncClient):
         response = await client.put(f"{ENDPOINT}/000000000000000000000000", json=_multi_day_payload())
         assert response.status_code == 404
+
+
+@pytest.mark.integration
+class TestUpdateTripConcurrency:
+    async def test_put_without_expected_revision_returns_428(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        body = {**_payload(), "name": "No token"}
+        response = await client.put(f"{ENDPOINT}/{created['id']}", json=body)
+        assert response.status_code == 428
+
+    async def test_put_with_stale_expected_revision_returns_409(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        await client.put(f"{ENDPOINT}/{created['id']}", json={**_payload(), "name": "First", "expected_revision": 0})
+        response = await client.put(
+            f"{ENDPOINT}/{created['id']}", json={**_payload(), "name": "Second", "expected_revision": 0}
+        )
+        assert response.status_code == 409
+
+    async def test_two_sequential_updates_with_refreshed_token_succeed(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        first = (
+            await client.put(f"{ENDPOINT}/{created['id']}", json={**_payload(), "name": "First", "expected_revision": 0})
+        ).json()
+        assert first["revision"] == 1
+        second = await client.put(
+            f"{ENDPOINT}/{created['id']}",
+            json={**_payload(), "name": "Second", "expected_revision": first["revision"]},
+        )
+        assert second.status_code == 200
+        assert second.json()["revision"] == 2
+
+    async def test_stale_put_after_concurrent_edit_does_not_clobber(self, client: AsyncClient):
+        created = (await client.post(f"{ENDPOINT}/", json=_payload())).json()
+        await client.put(f"{ENDPOINT}/{created['id']}", json={**_payload(), "name": "Winner", "expected_revision": 0})
+        loser = await client.put(
+            f"{ENDPOINT}/{created['id']}", json={**_payload(), "name": "Loser", "expected_revision": 0}
+        )
+        assert loser.status_code == 409
+        current = (await client.get(f"{ENDPOINT}/{created['id']}")).json()
+        assert current["name"] == "Winner"
 
 
 @pytest.mark.integration

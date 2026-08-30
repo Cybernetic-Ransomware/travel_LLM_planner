@@ -4,6 +4,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 GMAPS_COLLECTION = "gmaps_places"
 MATRIX_COLLECTION = "distance_matrix_cache"
 CHECKPOINTS_COLLECTION = "orchestrator_checkpoints"
+THREAD_TRIP_STATE_COLLECTION = "orchestrator_thread_trip_state"
 
 
 class MongoDBManager:
@@ -59,3 +60,7 @@ class MongoDBManager:
             name="checkpoint_lookup",
         )
         await checkpoints.create_index("expires_at", expireAfterSeconds=0)
+
+        thread_trip_state = db[THREAD_TRIP_STATE_COLLECTION]
+        await thread_trip_state.create_index("thread_id", unique=True)
+        await thread_trip_state.create_index("expires_at", expireAfterSeconds=0)

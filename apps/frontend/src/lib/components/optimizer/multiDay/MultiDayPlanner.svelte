@@ -64,6 +64,11 @@
 	let showSaveForm = $state(false);
 	let saveSuccess = $state<string | null>(null);
 
+	// Mutable local view of the persisted revision — refreshed after each PUT so a second save uses the new token.
+	let currentRevision = $state(untrack(() => prefill?.revision ?? 0));
+	// Latched on a 409: the on-page state is behind the server; block further saves until reload.
+	let conflicted = $state(false);
+
 	let prefillMissingCount = $state(missingPrefillPlaceCount);
 	let prefillNotice = $state<string | null>(
 		untrack(() => (prefill ? m.optimizer_prefill_notice({ name: prefill.tripName }) : null))
@@ -131,7 +136,7 @@
 	}
 
 	async function handleUpdateTrip() {
-		if (!prefill || !result || !lastOptimizedRequest || isStale || updating) return;
+		if (!prefill || !result || !lastOptimizedRequest || isStale || updating || conflicted) return;
 		updating = true;
 		error = null;
 		saveSuccess = null;
@@ -139,12 +144,19 @@
 			const payload: MultiDaySaveTripRequest = {
 				name: prefill.tripName,
 				multi_day_request: lastOptimizedRequest,
-				multi_day_response: result
+				multi_day_response: result,
+				expected_revision: currentRevision
 			};
 			const trip = await updateTrip(prefill.tripId, payload);
+			currentRevision = trip.plan_type === 'MULTI_DAY' ? trip.revision : currentRevision;
 			saveSuccess = m.update_trip_success({ name: trip.name });
 		} catch (err) {
-			error = err instanceof ApiError ? err.detail : m.update_trip_failed();
+			if (err instanceof ApiError && (err.status === 409 || err.status === 428)) {
+				conflicted = true;
+				error = m.update_trip_conflict();
+			} else {
+				error = err instanceof ApiError ? err.detail : m.update_trip_failed();
+			}
 		} finally {
 			updating = false;
 		}
@@ -198,7 +210,7 @@
 				{#if prefill}
 					<button
 						onclick={handleUpdateTrip}
-						disabled={updating || isStale}
+						disabled={updating || isStale || conflicted}
 						class="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
 					>
 						{updating ? '…' : m.optimizer_update_trip()}

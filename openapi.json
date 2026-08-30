@@ -556,7 +556,7 @@
           "orchestrator"
         ],
         "summary": "Chat",
-        "description": "Stream a chat response using the LangGraph orchestrator.\n\nReturns Server-Sent Events (text/event-stream). The first event carries\n``session_id``. Subsequent events carry ``content`` token chunks.\nA final ``data: [DONE]`` line signals the end of the stream.\n\nWhen ``resume_confirmed`` is set (``True`` or ``False``), the session is\nassumed to be in an interrupted state (tool awaiting confirmation).\n``True`` executes the pending tool; ``False`` cancels it.",
+        "description": "Stream a chat response using the LangGraph orchestrator.\n\nThe first SSE event carries ``session_id``; later events carry ``content``\ntoken chunks; ``data: [DONE]`` ends the stream. ``tool_proposal`` and\n``trip_updated`` events appear around a confirmation-gated write.\n\nWhen ``resume_confirmed`` is set the session is assumed interrupted:\n``True`` executes the pending tool, ``False`` cancels it.\n\nWhen ``trip_id`` is set the chat edits that saved trip: ``place_ids`` is\nignored and the trip's contents and place scope are derived server-side.",
         "operationId": "chat_api_v1_core_orchestrator_chat_post",
         "requestBody": {
           "content": {
@@ -1026,6 +1026,17 @@
               }
             ],
             "title": "Session Id"
+          },
+          "trip_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trip Id"
           },
           "place_ids": {
             "items": {
@@ -1763,6 +1774,17 @@
           },
           "multi_day_response": {
             "$ref": "#/components/schemas/MultiDayResponse-Input"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
           }
         },
         "additionalProperties": false,
@@ -1799,6 +1821,11 @@
             ],
             "title": "Updated At"
           },
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "default": 0
+          },
           "plan_type": {
             "type": "string",
             "const": "MULTI_DAY",
@@ -1833,6 +1860,7 @@
           "name",
           "created_at",
           "updated_at",
+          "revision",
           "plan_type",
           "start_date",
           "end_date",
@@ -2465,6 +2493,17 @@
           },
           "optimizer_response": {
             "$ref": "#/components/schemas/OptimizeResponse"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
           }
         },
         "additionalProperties": false,
@@ -2501,6 +2540,11 @@
               }
             ],
             "title": "Updated At"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "default": 0
           },
           "plan_type": {
             "type": "string",
@@ -2543,6 +2587,7 @@
           "name",
           "created_at",
           "updated_at",
+          "revision",
           "plan_type",
           "date",
           "optimizer_request",
