@@ -51,30 +51,42 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
+async def _fail_closed_write(
+    orch: OrchestratorManager,
+    thread_id: str,
+    session_state_store: TripSessionStateStore,
+) -> None:
+    """Shared cleanup for every write fail-closed path: cancel dangling calls, drop the armed scope."""
+    try:
+        await orch.acancel_pending_tools(thread_id)
+    except Exception:
+        logger.exception("acancel_pending_tools failed during fail-closed for thread_id=%s", thread_id)
+    try:
+        await session_state_store.clear_pending(thread_id)
+    except Exception:
+        logger.exception("clear_pending failed during fail-closed for thread_id=%s", thread_id)
+
+
 async def inspect_pending_write_interrupt(
     orch: OrchestratorManager,
     thread_id: str,
     session_state_store: TripSessionStateStore,
 ) -> str | None:
-    """After a stream ends, turn a pending write interrupt into an SSE line (or None).
-
-    Guarantees that every graph state paused before ``tools_write`` resolves to
-    either a ``tool_proposal`` (scope armed from a trusted binding) or a
-    fail-closed ``error`` — for the first proposal and for a re-interrupt after
-    an earlier tool ran. Enforces "exactly one write tool call per interrupted
-    turn": two or more is fail-closed with no proposal and no armed scope.
-    """
+    """Resolve a pending write interrupt to a proposal or an explicit fail-closed error — never a silent stall."""
     if not orch.has_checkpointer:
         return None
     try:
         graph_state = await orch.graph.aget_state({"configurable": {"thread_id": thread_id}})
     except Exception:
         logger.exception("Failed to read interrupt state for thread_id=%s", thread_id)
-        return None
+        # Can't confirm the turn is clean or whether a write is paused — fail closed.
+        await _fail_closed_write(orch, thread_id, session_state_store)
+        return _sse({"error": _SCOPE_UNAVAILABLE_ERROR})
     if not graph_state or not graph_state.next:
         return None
 
-    messages = (graph_state.values or {}).get("messages", [])
+    values = graph_state.values if isinstance(graph_state.values, dict) else {}
+    messages = values.get("messages", [])
     last = messages[-1] if messages else None
     if last is None or not isinstance(last, AIMessage) or not last.tool_calls:
         return None
@@ -84,16 +96,14 @@ async def inspect_pending_write_interrupt(
         return None
 
     if len(write_calls) >= 2:
-        await orch.acancel_pending_tools(thread_id)
-        await session_state_store.clear_pending(thread_id)
+        await _fail_closed_write(orch, thread_id, session_state_store)
         return _sse({"error": _MULTI_WRITE_ERROR})
 
     tc = write_calls[0]
     armed = await session_state_store.arm_pending(thread_id, tc["id"])
     if not armed:
         # No trusted binding to arm from — never propose a write without scope.
-        await orch.acancel_pending_tools(thread_id)
-        await session_state_store.clear_pending(thread_id)
+        await _fail_closed_write(orch, thread_id, session_state_store)
         return _sse({"error": _SCOPE_UNAVAILABLE_ERROR})
 
     return _sse({"tool_proposal": {"tool": tc["name"], "args": tc["args"]}})
@@ -166,11 +176,12 @@ async def _emit_post_turn(
     if orch.has_checkpointer:
         try:
             gs = await orch.graph.aget_state({"configurable": {"thread_id": thread_id}})
-            update = (gs.values or {}).get("last_trip_update") if gs else None
+            values = gs.values if gs else None
+            update = values.get("last_trip_update") if isinstance(values, dict) else None
         except Exception:
             logger.exception("Failed to read last_trip_update for thread_id=%s", thread_id)
             update = None
-        if update:
+        if isinstance(update, dict):
             yield _sse({"trip_updated": update})
             try:
                 await orch.graph.aupdate_state({"configurable": {"thread_id": thread_id}}, {"last_trip_update": None})

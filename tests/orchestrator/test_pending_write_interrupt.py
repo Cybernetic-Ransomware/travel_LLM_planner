@@ -112,7 +112,14 @@ async def test_last_message_not_ai_returns_none():
     assert await inspect_pending_write_interrupt(orch, "t", _store()) is None
 
 
-async def test_aget_state_error_is_swallowed():
+async def test_aget_state_error_fails_closed():
     orch = _orch()
     orch.graph.aget_state = AsyncMock(side_effect=RuntimeError("boom"))
-    assert await inspect_pending_write_interrupt(orch, "t", _store()) is None
+    store = _store()
+
+    line = await inspect_pending_write_interrupt(orch, "t", store)
+
+    assert "error" in _parse(line)
+    orch.acancel_pending_tools.assert_awaited_once_with("t")
+    store.clear_pending.assert_awaited_once_with("t")
+    store.arm_pending.assert_not_awaited()
