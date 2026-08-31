@@ -48,6 +48,10 @@ test:
 test-integration:
     uv run pytest -m integration
 
+# One-off: copy persisted trips from Mongo into Turso via TripRepository, verify, stamp marker
+migrate-trips-to-turso *ARGS:
+    $env:PYTHONPATH = "."; uv run python scripts/migrate_trips_to_turso.py {{ARGS}}
+
 # Start SvelteKit frontend dev server
 frontend-dev:
     npm --prefix apps/frontend run dev

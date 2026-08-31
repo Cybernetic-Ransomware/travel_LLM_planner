@@ -40,6 +40,13 @@ scope with a production-quality implementation — see `MultiDayPlanner.svelte` 
   a `trip_updated` SSE event triggers a scoped `invalidate('app:trip:<id>')`. `/optimizer`'s update
   path now sends `expected_revision` and surfaces a 409 conflict. See
   [ADR-20](20_ADR-confirmation-gated-ai-trip-editing.md).
+- Revision history + restore on `/trips/[id]`: a `RevisionHistory` panel lists every persisted
+  revision newest-first (number, source, `recorded_at`, summary, current marker, revert provenance),
+  `RevisionDetail` opens a read-only historical snapshot, and `RestoreRevisionDialog` restores an
+  earlier revision (sends `expected_revision`, surfaces a 409 as "reload and try again"). The
+  `/trips/[id]` loader fetches `.../revisions` under the same `depends('app:trip:<id>')` key, so a
+  chat edit or restore refreshes the history too. `revert_trip_revision` renders as a chat proposal.
+  See [ADR-21](21_ADR-turso-trip-persistence-revision-history.md).
 
 ## Upcoming PRs
 

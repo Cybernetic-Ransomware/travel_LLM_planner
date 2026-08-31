@@ -8,14 +8,24 @@ from src.core.exceptions import InvalidHourRangeError
 from src.gmaps import GooglePlacesManager, PlaceCreate, PlacePatch, find_and_update_place, insert_place
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.orchestrator.trip_edit_tool import build_edit_multi_day_trip_tool
+from src.orchestrator.trip_history_tools import (
+    build_list_trip_revisions_tool,
+    build_revert_trip_revision_tool,
+)
 from src.orchestrator.trip_session_state import TripSessionStateStore
-from src.trips.manager import TripsManager
+from src.trips.repository import TripRepository
 
 logger = setup_logger(__name__, "orchestrator")
 
 # Tools that mutate persisted state — a turn calling any of these pauses for confirmation.
-_WRITE_TOOL_NAMES = {"edit_multi_day_trip", "update_visit_hours", "skip_place", "add_place"}
-_READ_TOOL_NAMES = {"list_saved_trips", "get_trip_details", "search_place", "get_place_pricing"}
+_WRITE_TOOL_NAMES = {"edit_multi_day_trip", "update_visit_hours", "skip_place", "add_place", "revert_trip_revision"}
+_READ_TOOL_NAMES = {
+    "list_saved_trips",
+    "get_trip_details",
+    "search_place",
+    "get_place_pricing",
+    "list_trip_revisions",
+}
 
 # priceLevel and priceRange are Places API Enterprise fields; the serves* food/drink
 # attributes and editorialSummary bill under Enterprise + Atmosphere.
@@ -195,6 +205,7 @@ def create_tools(
     places_manager: GooglePlacesManager | None = None,
     routes_manager: GoogleRoutesManager | None = None,
     session_state_store: TripSessionStateStore | None = None,
+    trips_repo: TripRepository | None = None,
 ) -> list:
     """Return the list of LLM-callable tools with the database connection closure-bound.
 
@@ -413,58 +424,62 @@ def create_tools(
 
     tools: list = [update_visit_hours, skip_place, add_place]
 
-    trips_manager = TripsManager(db)
+    if trips_repo is not None:
 
-    @tool
-    async def list_saved_trips() -> str:
-        """List all saved trips by name and date.
+        @tool
+        async def list_saved_trips() -> str:
+            """List all saved trips by name and date.
 
-        Use this tool when the user asks what trips they have saved, wants to browse
-        their saved trips, or mentions a trip by name and you need to find its ID.
-        Returns trip IDs that can be passed to get_trip_details.
-        """
-        try:
-            trips = await trips_manager.list_all()
-        except Exception as exc:
-            return f"Failed to retrieve trips: {exc}"
-        if not trips:
-            return "No saved trips found."
+            Use this tool when the user asks what trips they have saved, wants to browse
+            their saved trips, or mentions a trip by name and you need to find its ID.
+            Returns trip IDs that can be passed to get_trip_details.
+            """
+            try:
+                trips = await trips_repo.list_all()
+            except Exception as exc:
+                return f"Failed to retrieve trips: {exc}"
+            if not trips:
+                return "No saved trips found."
 
-        def _format_summary_line(t) -> str:
-            if getattr(t, "plan_type", "SINGLE_DAY") == "MULTI_DAY":
-                return f"- id={t.id}, name='{t.name}', {t.start_date} to {t.end_date} ({t.num_days} days)"
-            return f"- id={t.id}, name='{t.name}', date={t.date}"
+            def _format_summary_line(t) -> str:
+                if getattr(t, "plan_type", "SINGLE_DAY") == "MULTI_DAY":
+                    return f"- id={t.id}, name='{t.name}', {t.start_date} to {t.end_date} ({t.num_days} days)"
+                return f"- id={t.id}, name='{t.name}', date={t.date}"
 
-        lines = [_format_summary_line(t) for t in trips]
-        return "Saved trips:\n" + "\n".join(lines)
+            lines = [_format_summary_line(t) for t in trips]
+            return "Saved trips:\n" + "\n".join(lines)
 
-    @tool
-    async def get_trip_details(trip_id: str) -> str:
-        """Get the full details of a saved trip including all places and route.
+        @tool
+        async def get_trip_details(trip_id: str) -> str:
+            """Get the full details of a saved trip including all places and route.
 
-        Use this tool to retrieve complete information about a specific trip:
-        transport mode, time window, ordered place list with arrival/departure times,
-        visit durations, and any skipped places.
+            Use this tool to retrieve complete information about a specific trip:
+            transport mode, time window, ordered place list with arrival/departure times,
+            visit durations, and any skipped places.
 
-        Args:
-            trip_id: MongoDB ObjectId string of the trip (from list_saved_trips).
-        """
-        try:
-            trip = await trips_manager.find_by_id(trip_id)
-        except Exception as exc:
-            return f"Failed to retrieve trip: {exc}"
-        if trip is None:
-            return f"Trip '{trip_id}' not found."
+            Args:
+                trip_id: ObjectId string of the trip (from list_saved_trips).
+            """
+            try:
+                trip = await trips_repo.get(trip_id)
+            except Exception as exc:
+                return f"Failed to retrieve trip: {exc}"
+            if trip is None:
+                return f"Trip '{trip_id}' not found."
 
-        if getattr(trip, "plan_type", "SINGLE_DAY") == "MULTI_DAY":
-            return _format_multi_day_trip(trip)
-        return _format_single_day_trip(trip)
+            if getattr(trip, "plan_type", "SINGLE_DAY") == "MULTI_DAY":
+                return _format_multi_day_trip(trip)
+            return _format_single_day_trip(trip)
 
-    tools.append(list_saved_trips)
-    tools.append(get_trip_details)
+        tools.append(list_saved_trips)
+        tools.append(get_trip_details)
 
-    if routes_manager is not None and session_state_store is not None:
-        tools.append(build_edit_multi_day_trip_tool(db, routes_manager, session_state_store))
+        if session_state_store is not None:
+            tools.append(build_list_trip_revisions_tool(trips_repo, session_state_store))
+            tools.append(build_revert_trip_revision_tool(trips_repo, session_state_store))
+
+    if trips_repo is not None and routes_manager is not None and session_state_store is not None:
+        tools.append(build_edit_multi_day_trip_tool(db, trips_repo, routes_manager, session_state_store))
 
     if places_manager is not None:
 

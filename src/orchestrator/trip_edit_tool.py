@@ -22,7 +22,7 @@ from src.orchestrator.trip_session_state import TripSessionStateStore
 from src.trips.editing.errors import TripEditError
 from src.trips.editing.operations import TripEditBatch, TripEditOperation
 from src.trips.editing.service import MultiDayTripEditor
-from src.trips.manager import TripsManager
+from src.trips.repository import TripRepository
 
 logger = setup_logger(__name__, "orchestrator")
 
@@ -31,6 +31,7 @@ _SCOPE_EXPIRED = "I can't confirm this change — the trip context for this prop
 
 def build_edit_multi_day_trip_tool(
     db: AsyncDatabase,
+    trips_repo: TripRepository,
     routes_manager: GoogleRoutesManager,
     session_state_store: TripSessionStateStore,
 ):
@@ -66,7 +67,7 @@ def build_edit_multi_day_trip_tool(
             first = exc.errors()[0]["msg"] if exc.errors() else "invalid operation"
             return f"That change isn't valid: {first}"
 
-        editor = MultiDayTripEditor(db, TripsManager(db), routes_manager)
+        editor = MultiDayTripEditor(db, trips_repo, routes_manager)
         try:
             result = await editor.apply(scope.trip_id, batch.operations, scope.revision)
         except TripEditError as exc:

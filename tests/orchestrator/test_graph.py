@@ -355,7 +355,13 @@ class TestGraphStructureWithTools:
         mock_llm = MagicMock()
         captured = {}
         mock_llm.bind_tools = MagicMock(side_effect=lambda tools: captured.setdefault("tools", tools) or mock_llm)
-        build_graph(mock_llm, db=MagicMock(), routes_manager=MagicMock(), session_state_store=MagicMock())
+        build_graph(
+            mock_llm,
+            db=MagicMock(),
+            trips_repo=MagicMock(),
+            routes_manager=MagicMock(),
+            session_state_store=MagicMock(),
+        )
         assert "edit_multi_day_trip" in {t.name for t in captured["tools"]}
 
 

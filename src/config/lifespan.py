@@ -5,9 +5,12 @@ from fastapi import FastAPI
 from src.config.conf_logger import setup_logger
 from src.config.config import settings
 from src.core.db.manager import MongoDBManager
+from src.core.turso.manager import TursoManager
+from src.core.turso.migration_state import MigrationState
 from src.gmaps import GooglePlacesManager
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.orchestrator.manager import OrchestratorManager
+from src.trips.repository import TripRepository
 
 logger = setup_logger(__name__, "main")
 
@@ -20,6 +23,26 @@ async def lifespan(app: FastAPI):
     app.state.db = await manager.connect()
     app.state.client = manager.client
     logger.info("MongoDB connected — pool_size=%d db=%s", settings.mongo_pool_size, settings.mongo_db)
+
+    # Persisted trips live in Turso, not MongoDB (ADR-21); startup only checks the Turso
+    # migration marker and never reads the now-legacy Mongo `trips` collection.
+    turso = TursoManager(settings.turso_database_url, settings.turso_auth_token)
+    trip_db = await turso.connect()
+    await turso.apply_schema()
+    if settings.trips_require_migration_marker and not await MigrationState(trip_db).is_complete():
+        raise RuntimeError(
+            "Turso trip migration marker missing — run `just migrate-trips-to-turso` "
+            "(it verifies the source and stamps the marker) before starting the app. "
+            "Set TRIPS_REQUIRE_MIGRATION_MARKER=False only for local development."
+        )
+    app.state.trip_db = trip_db
+    app.state.turso = turso
+    trips_repo = TripRepository(trip_db)
+    logger.info(
+        "Trips database ready — backend=%s marker_required=%s",
+        turso.backend,
+        settings.trips_require_migration_marker,
+    )
 
     async with GooglePlacesManager(settings.google_places_api_key, settings.google_places_fields) as gp_manager:
         app.state.google_places = gp_manager
@@ -39,6 +62,7 @@ async def lifespan(app: FastAPI):
                     langsmith_tracing=settings.langsmith_tracing,
                     langsmith_project=settings.langsmith_project,
                     db=app.state.db,
+                    trips_repo=trips_repo,
                     places_manager=gp_manager,
                     routes_manager=gr_manager,
                     checkpoint_ttl_days=settings.checkpoint_ttl_days,
@@ -61,6 +85,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("GooglePlacesManager disconnected")
     logger.info("GoogleRoutesManager disconnected")
+
+    await turso.disconnect()
+    logger.info("Trips database disconnected")
 
     await manager.disconnect()
     logger.info("MongoDB disconnected")

@@ -38,7 +38,7 @@ def _trip_scope(**over) -> PendingScope:
 def _tool(store, editor_apply):
     store_mock = MagicMock()
     store_mock.consume_pending = AsyncMock(return_value=store)
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store_mock)
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), store_mock)
     return tool, store_mock, editor_apply
 
 
@@ -47,7 +47,7 @@ def _ops():
 
 
 async def test_schema_hides_injected_params_from_the_model():
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock())
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), MagicMock())
     props = tool.tool_call_schema.model_json_schema()["properties"]
     assert "operations" in props
     assert "config" not in props
@@ -57,7 +57,7 @@ async def test_schema_hides_injected_params_from_the_model():
 async def test_missing_scope_fails_closed_without_touching_editor():
     store = MagicMock()
     store.consume_pending = AsyncMock(return_value=None)
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store)
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), store)
 
     with patch("src.orchestrator.trip_edit_tool.MultiDayTripEditor") as editor_cls:
         result = await tool.ainvoke(
@@ -72,7 +72,7 @@ async def test_missing_scope_fails_closed_without_touching_editor():
 async def test_place_selection_scope_is_rejected():
     store = MagicMock()
     store.consume_pending = AsyncMock(return_value=_trip_scope(kind="place_selection", trip_id=None))
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store)
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), store)
 
     with patch("src.orchestrator.trip_edit_tool.MultiDayTripEditor") as editor_cls:
         result = await tool.ainvoke(
@@ -87,7 +87,7 @@ async def test_place_selection_scope_is_rejected():
 async def test_tool_call_id_mismatch_fails_closed():
     store = MagicMock()
     store.consume_pending = AsyncMock(return_value=_trip_scope(tool_call_id="different"))
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store)
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), store)
 
     result = await tool.ainvoke(
         {"name": "edit_multi_day_trip", "args": {"operations": _ops()}, "id": "call-1", "type": "tool_call"},
@@ -99,7 +99,7 @@ async def test_tool_call_id_mismatch_fails_closed():
 async def test_happy_path_uses_scope_trip_id_and_revision_and_returns_command():
     store = MagicMock()
     store.consume_pending = AsyncMock(return_value=_trip_scope())
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store)
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), store)
 
     updated = MagicMock(id="507f1f77bcf86cd799439011", revision=3)
     updated.name = "Tokyo May"  # name= is reserved by MagicMock, set it explicitly
@@ -128,7 +128,7 @@ async def test_happy_path_uses_scope_trip_id_and_revision_and_returns_command():
 async def test_summary_reports_auto_removed_transfer():
     store = MagicMock()
     store.consume_pending = AsyncMock(return_value=_trip_scope())
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store)
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), store)
 
     updated = MagicMock(id="507f1f77bcf86cd799439011", revision=3)
     updated.name = "Tokyo May"
@@ -149,7 +149,7 @@ async def test_summary_reports_auto_removed_transfer():
 async def test_editor_error_becomes_user_message():
     store = MagicMock()
     store.consume_pending = AsyncMock(return_value=_trip_scope())
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store)
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), store)
 
     editor = MagicMock()
     editor.apply = AsyncMock(side_effect=TripConcurrencyConflictError())
@@ -166,7 +166,7 @@ async def test_editor_error_becomes_user_message():
 async def test_forged_trip_id_in_operations_is_rejected():
     store = MagicMock()
     store.consume_pending = AsyncMock(return_value=_trip_scope())
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store)
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), store)
 
     # extra="forbid" on every operation model: langchain rejects the smuggled key at
     # the tool boundary before the body runs. ToolNode turns this into an error message.
@@ -186,7 +186,7 @@ async def test_forged_trip_id_in_operations_is_rejected():
 async def test_empty_operations_batch_rejected_in_body():
     store = MagicMock()
     store.consume_pending = AsyncMock(return_value=_trip_scope())
-    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store)
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), MagicMock(), store)
 
     with patch("src.orchestrator.trip_edit_tool.MultiDayTripEditor") as editor_cls:
         result = await tool.ainvoke(

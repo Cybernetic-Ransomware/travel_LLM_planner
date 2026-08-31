@@ -7,7 +7,12 @@ import { goto } from '$app/navigation';
 import type { SingleDayTripOut, MultiDayTripOut } from '$lib/types/index.js';
 
 vi.mock('$lib/api/trips.js', () => ({
-	deleteTrip: vi.fn().mockResolvedValue(undefined)
+	deleteTrip: vi.fn().mockResolvedValue(undefined),
+	restoreTripRevision: vi.fn().mockResolvedValue({ revision: 1 }),
+	getTripRevision: vi.fn().mockResolvedValue({}),
+	getTripRevisions: vi
+		.fn()
+		.mockResolvedValue({ trip_id: 'abc', current_revision: 0, revisions: [] })
 }));
 
 vi.mock('$app/navigation', () => ({
@@ -78,6 +83,22 @@ const mockMultiDayTrip: MultiDayTripOut = {
 	}
 };
 
+const mockRevisions = {
+	trip_id: 'abc',
+	current_revision: 0,
+	revisions: [
+		{
+			revision: 0,
+			source: 'CREATED' as const,
+			summary: 'Trip created',
+			restored_from_revision: null,
+			schema_version: 1,
+			snapshot_hash: 'h0',
+			recorded_at: '2025-06-01T10:00:00Z'
+		}
+	]
+};
+
 describe('/trips/[id] page', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -85,7 +106,14 @@ describe('/trips/[id] page', () => {
 
 	it('binds the chat to the trip context on mount and clears it on unmount', async () => {
 		const { unmount } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(chatMock.setTripContext).toHaveBeenCalledWith('abc', 'SINGLE_DAY', expect.any(Function));
 		unmount();
@@ -94,13 +122,25 @@ describe('/trips/[id] page', () => {
 
 	it('keeps the chat session when the same trip is re-fetched (no re-bind, no clear)', async () => {
 		const { rerender } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockMultiDayTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(chatMock.setTripContext).toHaveBeenCalledTimes(1);
 
 		// trip_updated -> invalidate -> load re-runs -> a fresh object with the same id
 		await rerender({
-			data: { orchestratorReady: true, trip: { ...mockMultiDayTrip }, backendError: null }
+			data: {
+				orchestratorReady: true,
+				trip: { ...mockMultiDayTrip },
+				backendError: null,
+				revisions: mockRevisions
+			}
 		});
 
 		expect(chatMock.setTripContext).toHaveBeenCalledTimes(1);
@@ -109,9 +149,23 @@ describe('/trips/[id] page', () => {
 
 	it('re-binds the chat context when navigating to a different trip', async () => {
 		const { rerender } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockMultiDayTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
-		await rerender({ data: { orchestratorReady: true, trip: mockTrip, backendError: null } });
+		await rerender({
+			data: {
+				orchestratorReady: true,
+				trip: mockTrip,
+				backendError: null,
+				revisions: mockRevisions
+			}
+		});
 
 		expect(chatMock.setTripContext).toHaveBeenCalledTimes(2);
 		expect(chatMock.setTripContext).toHaveBeenLastCalledWith(
@@ -124,7 +178,14 @@ describe('/trips/[id] page', () => {
 	it('scoped-invalidates on a trip_updated callback, not invalidateAll', async () => {
 		const { invalidate } = await import('$app/navigation');
 		render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockMultiDayTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		const onUpdated = chatMock.setTripContext.mock.calls.at(-1)?.[2] as () => void;
 		onUpdated();
@@ -133,35 +194,70 @@ describe('/trips/[id] page', () => {
 
 	it('renders trip name in heading', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(getByText('Weekend in Kraków')).toBeTruthy();
 	});
 
 	it('renders trip date', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(getByText(/2025-06-01/)).toBeTruthy();
 	});
 
 	it('renders transport mode', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(getByText('WALK')).toBeTruthy();
 	});
 
 	it('renders day time window', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(getByText('9:00 – 21:00')).toBeTruthy();
 	});
 
 	it('renders travel, visit and wait metrics', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(getByText('30m')).toBeTruthy();
 		expect(getByText('90 min')).toBeTruthy();
@@ -174,7 +270,8 @@ describe('/trips/[id] page', () => {
 				data: {
 					orchestratorReady: true,
 					trip: null,
-					backendError: { message: 'Trip load failed', status: 503, source: 'backend' }
+					backendError: { message: 'Trip load failed', status: 503, source: 'backend' },
+					revisions: null
 				}
 			}
 		});
@@ -184,7 +281,14 @@ describe('/trips/[id] page', () => {
 
 	it('renders back link to /trips', async () => {
 		const { getByRole } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		const backLink = getByRole('link', { name: /Zapisane trasy/ }).element();
 		expect(backLink.getAttribute('href')).toBe('/trips');
@@ -192,7 +296,14 @@ describe('/trips/[id] page', () => {
 
 	it('renders open-in-optimizer link with trip id', async () => {
 		const { getByRole } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		const link = getByRole('link', { name: 'Otwórz w planerze trasy' }).element();
 		expect(link.getAttribute('href')).toBe('/optimizer?from=abc');
@@ -200,7 +311,14 @@ describe('/trips/[id] page', () => {
 
 	it('delete button opens confirm dialog with trip name', async () => {
 		const { getByRole, getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		await userEvent.click(getByRole('button', { name: 'Usuń trasę' }));
 		expect(
@@ -212,7 +330,14 @@ describe('/trips/[id] page', () => {
 
 	it('confirm calls deleteTrip and navigates to /trips with deleted param', async () => {
 		const { getByRole } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		await userEvent.click(getByRole('button', { name: 'Usuń trasę' }));
 		await userEvent.click(getByRole('button', { name: 'Usuń', exact: true }));
@@ -222,7 +347,14 @@ describe('/trips/[id] page', () => {
 
 	it('cancel closes dialog without calling the API', async () => {
 		const { getByRole, getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		await userEvent.click(getByRole('button', { name: 'Usuń trasę' }));
 		await userEvent.click(getByRole('button', { name: 'Anuluj' }));
@@ -233,7 +365,14 @@ describe('/trips/[id] page', () => {
 	it('shows error toast when delete fails', async () => {
 		vi.mocked(deleteTrip).mockRejectedValueOnce(new Error('boom'));
 		const { getByRole, getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		await userEvent.click(getByRole('button', { name: 'Usuń trasę' }));
 		await userEvent.click(getByRole('button', { name: 'Usuń', exact: true }));
@@ -243,7 +382,14 @@ describe('/trips/[id] page', () => {
 
 	it('single-day rendering is unchanged (regression guard)', async () => {
 		const { getByText, getByRole } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(getByText('Weekend in Kraków')).toBeTruthy();
 		expect(getByText(/2025-06-01/)).toBeTruthy();
@@ -254,7 +400,14 @@ describe('/trips/[id] page', () => {
 
 	it('renders the multi-day trip summary (date range, day count, transport)', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockMultiDayTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(getByText('Kraków then Warsaw')).toBeTruthy();
 		expect(getByText(/2025-08-01 – 2025-08-03/)).toBeTruthy();
@@ -264,7 +417,14 @@ describe('/trips/[id] page', () => {
 
 	it('multi-day detail does not access single-day-only fields', async () => {
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockMultiDayTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(getByText('Kraków then Warsaw')).toBeTruthy();
 		expect(getByText('30m').query()).toBeNull();
@@ -273,7 +433,14 @@ describe('/trips/[id] page', () => {
 
 	it('shows the open-in-optimizer action for a multi-day trip too', async () => {
 		const { getByRole } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: mockMultiDayTrip,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		const link = getByRole('link', { name: 'Otwórz w planerze trasy' }).element();
 		expect(link.getAttribute('href')).toBe('/optimizer?from=multi-1');
@@ -311,7 +478,14 @@ describe('/trips/[id] page', () => {
 			}
 		};
 		const { getByText } = render(Page, {
-			props: { data: { orchestratorReady: true, trip: tripWithDay, backendError: null } }
+			props: {
+				data: {
+					orchestratorReady: true,
+					trip: tripWithDay,
+					backendError: null,
+					revisions: mockRevisions
+				}
+			}
 		});
 		expect(getByText('Wawel')).toBeTruthy();
 	});

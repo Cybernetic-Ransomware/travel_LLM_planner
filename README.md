@@ -37,11 +37,37 @@ Copy `docker/.env.template` to `docker/.env` and fill in the values:
 
 | Variable | Required | Description |
 |---|---|---|
-| `MONGO_URI` | yes | MongoDB connection string |
+| `MONGO_URI` | yes | MongoDB connection string (Places, distance-matrix cache, orchestrator state) |
 | `MONGO_DB` | yes | Database name |
+| `TURSO_DATABASE_URL` | yes | Persisted trips + revision history (ADR-21). `file:/data/trips.db` for local/dev (stdlib sqlite3); `libsql://<db>.turso.io` for production |
+| `TURSO_AUTH_TOKEN` | for `libsql://` | Turso database auth token (empty for a `file:` URL) |
+| `TRIPS_REQUIRE_MIGRATION_MARKER` | no | `True` in production — startup requires the Turso migration-complete marker; `False` for local dev |
 | `GOOGLE_PLACES_API_KEY` | yes | Google Cloud key — must have **Places API (New)** enabled |
 | `GOOGLE_ROUTES_API_KEY` | yes | Google Cloud key — must have **Routes API** enabled (can be the same key) |
 | `DEBUG` | no | Set to `true` to enable debug logging |
+
+### Trip persistence (Turso / libSQL)
+
+Persisted trips and their immutable revision history live in Turso, not MongoDB (ADR-21).
+Local development and CI use stdlib `sqlite3` on a file DB (`file:` URL) — no install.
+Production uses the `libsql` driver against a remote Turso database; it is installed
+explicitly in the Docker image (`uv pip install libsql`) because it has no Windows wheel.
+
+**Production cutover (writes frozen):**
+
+1. Provision the Turso database; set `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`.
+2. Freeze trip writes (stop the old app or disable the save + chat-edit paths).
+3. `just migrate-trips-to-turso` — validates every Mongo `trips` document, imports it via
+   `TripRepository.import_migration_baseline`, verifies coverage + hashes, and stamps the
+   Turso `app_migrations` marker **only if everything is clean**. `--dry-run` reports without
+   writing; `--skip-invalid` continues past malformed docs (exits non-zero, no marker).
+4. Start the new stack (`TRIPS_REQUIRE_MIGRATION_MARKER=True`) — the marker gate passes.
+5. Read-only smoke on migrated data (`GET /trips`, `GET /trips/:id`, `GET /trips/:id/revisions`).
+6. Write smoke on a **disposable** trip created after cutover (`POST` → `PUT` → `DELETE`).
+7. Green ⇒ re-open real writes.
+
+Rollback to the Mongo-backed version is clean only through steps 5–6. Once a real trip is
+created / updated / restored on the new stack, Mongo no longer holds the newest revisions.
 
 ## Getting Started (Windows)
 ### Docker Deploy
@@ -117,7 +143,8 @@ Run unit and regression tests (no Docker required):
 just test
 ```
 
-Run integration tests (requires Docker Desktop running):
+Run integration tests (requires Docker Desktop running for the MongoDB testcontainer;
+the Turso trip tests use a stdlib sqlite file and need no Docker):
 ```powershell
 just test-integration
 ```

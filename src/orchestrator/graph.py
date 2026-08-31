@@ -14,6 +14,7 @@ from src.orchestrator.models import AgentState
 from src.orchestrator.prompt_util import _MAX_FIELD_LEN, _sanitize_for_prompt
 from src.orchestrator.tools import _WRITE_TOOL_NAMES, create_tools
 from src.orchestrator.trip_session_state import TripSessionStateStore
+from src.trips.repository import TripRepository
 
 __all__ = ["build_graph", "_WRITE_TOOL_NAMES", "_sanitize_for_prompt", "_MAX_FIELD_LEN"]
 
@@ -94,6 +95,7 @@ def build_graph(
     llm: BaseChatModel,
     checkpointer: BaseCheckpointSaver | None = None,
     db: AsyncDatabase | None = None,
+    trips_repo: TripRepository | None = None,
     places_manager: GooglePlacesManager | None = None,
     routes_manager: GoogleRoutesManager | None = None,
     session_state_store: TripSessionStateStore | None = None,
@@ -114,6 +116,7 @@ def build_graph(
     if db is not None:
         tools = create_tools(
             db,
+            trips_repo=trips_repo,
             places_manager=places_manager,
             routes_manager=routes_manager,
             session_state_store=session_state_store,

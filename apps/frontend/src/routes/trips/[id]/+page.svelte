@@ -6,6 +6,7 @@
 	import RouteResults from '$lib/components/optimizer/RouteResults.svelte';
 	import MultiDayItinerary from '$lib/components/optimizer/multiDay/MultiDayItinerary.svelte';
 	import DeleteTripDialog from '$lib/components/trips/DeleteTripDialog.svelte';
+	import RevisionHistory from '$lib/components/trips/RevisionHistory.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Toast from '$lib/components/ui/Toast.svelte';
 	import { deleteTrip } from '$lib/api/trips.js';
@@ -173,6 +174,14 @@
 					</div>
 
 					<RouteResults result={trip.optimizer_response} />
+
+					{#if data.revisions}
+						<RevisionHistory
+							tripId={trip.id}
+							currentRevision={data.revisions.current_revision}
+							revisions={data.revisions.revisions}
+						/>
+					{/if}
 				</div>
 
 				<div
@@ -215,6 +224,14 @@
 					</div>
 
 					<MultiDayItinerary response={trip.multi_day_response} bind:activeDayIndex />
+
+					{#if data.revisions}
+						<RevisionHistory
+							tripId={trip.id}
+							currentRevision={data.revisions.current_revision}
+							revisions={data.revisions.revisions}
+						/>
+					{/if}
 				</div>
 
 				<div

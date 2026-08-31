@@ -13,6 +13,11 @@ COPY ./pyproject.toml ./uv.lock ./
 
 RUN uv sync --no-cache --no-group dev
 
+# libsql (the remote Turso driver, ADR-21) is not in the locked deps because it has no
+# Windows wheel and would break `uv sync` for Windows developers. The Linux image installs
+# it explicitly; local dev uses the stdlib sqlite3 backend via a file: URL.
+RUN uv pip install --no-cache libsql
+
 
 FROM python:3.14-slim AS runtime
 LABEL authors="aleksander.marszalki"

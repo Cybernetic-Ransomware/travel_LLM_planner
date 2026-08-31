@@ -1,5 +1,5 @@
-"""Integration: MultiDayTripEditor against a real Mongo trips collection. optimize_trip
-is stubbed (its own suite covers routing) to focus on the CAS-persist + coherence path.
+"""Integration: MultiDayTripEditor against a real Turso trips backend. optimize_trip is
+stubbed (its own suite covers routing) to focus on the CAS-persist + history-row path.
 """
 
 from __future__ import annotations
@@ -8,20 +8,19 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.optimizer.solver.models import MultiDayResponse
+from src.optimizer.solver.models import MultiDayRequest, MultiDayResponse
 from src.trips.editing.errors import OptimizerFailedError, TripConcurrencyConflictError
 from src.trips.editing.operations import SetPlacePinnedOp, UpdateDayWindowOp
 from src.trips.editing.service import MultiDayTripEditor
-from src.trips.manager import TRIPS_COLLECTION, TripsManager
 from src.trips.models import MultiDaySaveTripRequest
+from src.trips.repository import TripRepository
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(autouse=True)
-async def clean(test_db):
-    yield
-    await test_db[TRIPS_COLLECTION].delete_many({})
+@pytest.fixture
+def repo(trip_db) -> TripRepository:
+    return TripRepository(trip_db)
 
 
 def _save_request(base_payload) -> MultiDaySaveTripRequest:
@@ -32,9 +31,8 @@ def _save_request(base_payload) -> MultiDaySaveTripRequest:
     )
 
 
-async def _seed(test_db, base_payload) -> str:
-    manager = TripsManager(test_db)
-    saved = await manager.save(_save_request(base_payload))
+async def _seed(repo: TripRepository, base_payload) -> str:
+    saved = await repo.save(_save_request(base_payload))
     return saved.id
 
 
@@ -59,12 +57,17 @@ def _canned_response(request) -> MultiDayResponse:
     )
 
 
-async def test_apply_persists_new_request_and_coherent_response_and_bumps_revision(test_db, base_payload):
-    from src.optimizer.solver.models import MultiDayRequest
+async def _revision_rows(conn, trip_id: str) -> list[dict]:
+    result = await conn.execute(
+        "SELECT revision, source, summary FROM trip_revisions WHERE trip_id = ? ORDER BY revision", (trip_id,)
+    )
+    return result.rows
 
+
+async def test_apply_persists_request_response_and_orchestrator_revision_row(repo, trip_db, base_payload):
     request = MultiDayRequest.model_validate(base_payload)
-    trip_id = await _seed(test_db, request)
-    editor = MultiDayTripEditor(test_db, TripsManager(test_db), AsyncMock())
+    trip_id = await _seed(repo, request)
+    editor = MultiDayTripEditor(AsyncMock(), repo, AsyncMock())
 
     ops = [
         SetPlacePinnedOp(op="set_place_pinned", place_id="p1", day_index=2),
@@ -77,23 +80,22 @@ async def test_apply_persists_new_request_and_coherent_response_and_bumps_revisi
         updated = await editor.apply(trip_id, ops, expected_revision=0)
 
     assert updated.trip.revision == 1
-    reloaded = await TripsManager(test_db).find_by_id(trip_id)
+    reloaded = await repo.get(trip_id)
     pinned = next(p for p in reloaded.multi_day_request.places if p.place_id == "p1")
     assert pinned.day_preferences[0].day_index == 2
     assert reloaded.multi_day_request.days[2].day_start_hour == 8
-    # response recomputed from the same run: one day plan per (new) day
     assert len(reloaded.multi_day_response.days) == len(reloaded.multi_day_request.days)
 
-    raw = await test_db[TRIPS_COLLECTION].find_one({})
-    assert "expected_revision" not in raw
+    rows = await _revision_rows(trip_db, trip_id)
+    assert [r["revision"] for r in rows] == [0, 1]
+    assert rows[1]["source"] == "ORCHESTRATOR"
+    assert rows[1]["summary"].startswith("2 changes:")
 
 
-async def test_second_apply_on_stale_revision_conflicts_and_leaves_doc(test_db, base_payload):
-    from src.optimizer.solver.models import MultiDayRequest
-
+async def test_second_apply_on_stale_revision_conflicts_and_leaves_history(repo, trip_db, base_payload):
     request = MultiDayRequest.model_validate(base_payload)
-    trip_id = await _seed(test_db, request)
-    editor = MultiDayTripEditor(test_db, TripsManager(test_db), AsyncMock())
+    trip_id = await _seed(repo, request)
+    editor = MultiDayTripEditor(AsyncMock(), repo, AsyncMock())
     ops = [SetPlacePinnedOp(op="set_place_pinned", place_id="p1", day_index=1)]
 
     with patch(
@@ -104,17 +106,15 @@ async def test_second_apply_on_stale_revision_conflicts_and_leaves_doc(test_db, 
         with pytest.raises(TripConcurrencyConflictError):
             await editor.apply(trip_id, ops, expected_revision=0)
 
-    reloaded = await TripsManager(test_db).find_by_id(trip_id)
+    reloaded = await repo.get(trip_id)
     assert reloaded.revision == 1
+    assert len(await _revision_rows(trip_db, trip_id)) == 2
 
 
-async def test_optimizer_failure_persists_nothing(test_db, base_payload):
-    from src.optimizer.solver.models import MultiDayRequest
-
+async def test_optimizer_failure_persists_nothing(repo, trip_db, base_payload):
     request = MultiDayRequest.model_validate(base_payload)
-    trip_id = await _seed(test_db, request)
-    before = await test_db[TRIPS_COLLECTION].find_one({})
-    editor = MultiDayTripEditor(test_db, TripsManager(test_db), AsyncMock())
+    trip_id = await _seed(repo, request)
+    editor = MultiDayTripEditor(AsyncMock(), repo, AsyncMock())
 
     with (
         patch(
@@ -127,5 +127,6 @@ async def test_optimizer_failure_persists_nothing(test_db, base_payload):
             trip_id, [SetPlacePinnedOp(op="set_place_pinned", place_id="p1", day_index=1)], expected_revision=0
         )
 
-    after = await test_db[TRIPS_COLLECTION].find_one({})
-    assert before == after
+    reloaded = await repo.get(trip_id)
+    assert reloaded.revision == 0
+    assert len(await _revision_rows(trip_db, trip_id)) == 1

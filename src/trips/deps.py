@@ -2,12 +2,12 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from src.core.db.deps import MongoDbDep
-from src.trips.manager import TripsManager
+from src.core.turso.deps import TripDbDep
+from src.trips.repository import TripRepository
 
 
-def get_trips_manager(db: MongoDbDep) -> TripsManager:
-    return TripsManager(db)
+def get_trip_repository(db: TripDbDep) -> TripRepository:
+    return TripRepository(db)
 
 
-TripsDep = Annotated[TripsManager, Depends(get_trips_manager)]
+TripRepositoryDep = Annotated[TripRepository, Depends(get_trip_repository)]

@@ -17,7 +17,8 @@ from src.orchestrator.models import AgentState, ChatMessage, ChatRequest, Orches
 from src.orchestrator.tools import _WRITE_TOOL_NAMES
 from src.orchestrator.trip_context import TripPromptContext, build_trip_context_prompt
 from src.orchestrator.trip_session_state import TripSessionStateStore
-from src.trips.manager import TripsManager
+from src.trips.deps import TripRepositoryDep
+from src.trips.repository import TripRepository
 
 router = APIRouter()
 logger = setup_logger(__name__, "orchestrator")
@@ -194,7 +195,13 @@ async def _emit_post_turn(
 
 
 @router.post("/chat")
-async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep, _user: CurrentUserDep) -> StreamingResponse:
+async def chat(
+    payload: ChatRequest,
+    orch: OrchestratorDep,
+    db: MongoDbDep,
+    trips: TripRepositoryDep,
+    _user: CurrentUserDep,
+) -> StreamingResponse:
     """Stream a chat response using the LangGraph orchestrator.
 
     The first SSE event carries ``session_id``; later events carry ``content``
@@ -231,7 +238,7 @@ async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep, _use
     configurable: dict | None = None
 
     if payload.trip_id:
-        state = await _bind_trip_and_build_state(db, session_state_store, session_id, payload, trip_id=payload.trip_id)
+        state = await _bind_trip_and_build_state(trips, session_state_store, session_id, payload, trip_id=payload.trip_id)
     else:
         place_context = await fetch_places_by_ids(db, payload.place_ids) if payload.place_ids else []
         allowed_place_ids = [str(p["_id"]) for p in place_context]
@@ -259,15 +266,14 @@ async def chat(payload: ChatRequest, orch: OrchestratorDep, db: MongoDbDep, _use
 
 
 async def _bind_trip_and_build_state(
-    db: MongoDbDep,
+    trips: TripRepository,
     session_state_store: TripSessionStateStore,
     session_id: str,
     payload: ChatRequest,
     trip_id: str,
 ) -> AgentState:
-    trips_manager = TripsManager(db)
     try:
-        trip = await trips_manager.find_by_id(trip_id)
+        trip = await trips.get(trip_id)
     except Exception:
         logger.exception("Failed to load trip for chat context trip_id=%s", trip_id)
         trip = None
