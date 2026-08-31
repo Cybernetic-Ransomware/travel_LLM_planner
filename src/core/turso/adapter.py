@@ -203,7 +203,8 @@ def _libsql_connect(url: str, auth_token: str | None) -> Any:
             "Use a file: URL for local development, or install libsql for a remote Turso database."
         ) from exc
 
-    conn = libsql.connect(url, auth_token=auth_token or None)
+    # libsql.connect rejects auth_token=None outright — pass it only when there is a token.
+    conn = libsql.connect(url, **({"auth_token": auth_token} if auth_token else {}))
     with contextlib.suppress(Exception):  # some remote modes reject PRAGMA; FK still enforced server-side
         conn.execute("PRAGMA foreign_keys = ON")
     return conn
