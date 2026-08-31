@@ -260,6 +260,19 @@ class TestChatbotNodePlaceContext:
         called_messages = mock_llm.ainvoke.call_args[0][0]
         assert not any(isinstance(m, SystemMessage) for m in called_messages)
 
+    async def test_trip_context_prepended_as_system_message(self):
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="ok"))
+        original = HumanMessage(content="pin TeamLab to day 3")
+
+        state = _make_state(messages=[original], trip_context="You are editing the saved multi-day trip below.")
+        await chatbot_node(state, mock_llm)
+
+        called = mock_llm.ainvoke.call_args[0][0]
+        assert isinstance(called[0], SystemMessage)
+        assert "editing the saved multi-day trip" in called[0].content
+        assert called[-1] is original
+
     async def test_original_user_message_preserved_in_call(self):
         mock_response = AIMessage(content="Sure!")
         mock_llm = AsyncMock()
@@ -301,12 +314,14 @@ class TestGraphStructureWithTools:
         graph = build_graph(mock_llm, db=mock_db)
         assert isinstance(graph, CompiledStateGraph)
 
-    def test_graph_with_db_has_tools_node(self):
+    def test_graph_with_db_has_split_tool_nodes(self):
         mock_llm = MagicMock()
         mock_llm.bind_tools = MagicMock(return_value=mock_llm)
         mock_db = MagicMock()
         graph = build_graph(mock_llm, db=mock_db)
-        assert "tools" in graph.get_graph().nodes
+        nodes = graph.get_graph().nodes
+        assert "tools_read" in nodes
+        assert "tools_write" in nodes
 
     def test_graph_with_db_still_has_chatbot_node(self):
         mock_llm = MagicMock()
@@ -318,7 +333,9 @@ class TestGraphStructureWithTools:
     def test_graph_without_db_has_no_tools_node(self):
         mock_llm = MagicMock()
         graph = build_graph(mock_llm)
-        assert "tools" not in graph.get_graph().nodes
+        nodes = graph.get_graph().nodes
+        assert "tools_read" not in nodes
+        assert "tools_write" not in nodes
 
     def test_graph_without_db_backward_compatible(self):
         from langgraph.graph.state import CompiledStateGraph
@@ -327,14 +344,40 @@ class TestGraphStructureWithTools:
         graph = build_graph(mock_llm)
         assert isinstance(graph, CompiledStateGraph)
 
+    def test_no_routes_manager_means_no_edit_tool(self):
+        mock_llm = MagicMock()
+        captured = {}
+        mock_llm.bind_tools = MagicMock(side_effect=lambda tools: captured.setdefault("tools", tools) or mock_llm)
+        build_graph(mock_llm, db=MagicMock())
+        assert "edit_multi_day_trip" not in {t.name for t in captured["tools"]}
+
+    def test_routes_manager_adds_edit_tool_to_tools_write(self):
+        mock_llm = MagicMock()
+        captured = {}
+        mock_llm.bind_tools = MagicMock(side_effect=lambda tools: captured.setdefault("tools", tools) or mock_llm)
+        build_graph(mock_llm, db=MagicMock(), routes_manager=MagicMock(), session_state_store=MagicMock())
+        assert "edit_multi_day_trip" in {t.name for t in captured["tools"]}
+
 
 @pytest.mark.unit
 class TestAfterChatbot:
-    async def test_routes_to_tools_when_ai_message_has_tool_calls(self):
+    async def test_routes_to_tools_write_when_write_tool_called(self):
         tool_call = ToolCall(name="update_visit_hours", args={"place_id": "abc"}, id="call_1")
         state = _make_state(messages=[AIMessage(content="", tool_calls=[tool_call])])
-        result = _after_chatbot(state)
-        assert result == "tools"
+        assert _after_chatbot(state) == "tools_write"
+
+    async def test_routes_to_tools_read_when_only_read_tools_called(self):
+        tool_call = ToolCall(name="get_trip_details", args={"trip_id": "t1"}, id="call_1")
+        state = _make_state(messages=[AIMessage(content="", tool_calls=[tool_call])])
+        assert _after_chatbot(state) == "tools_read"
+
+    async def test_mixed_read_and_write_routes_to_tools_write(self):
+        calls = [
+            ToolCall(name="get_trip_details", args={"trip_id": "t1"}, id="c1"),
+            ToolCall(name="edit_multi_day_trip", args={"operations": []}, id="c2"),
+        ]
+        state = _make_state(messages=[AIMessage(content="", tool_calls=calls)])
+        assert _after_chatbot(state) == "tools_write"
 
     async def test_routes_to_end_when_ai_message_has_no_tool_calls(self):
         state = _make_state(messages=[AIMessage(content="Here is the answer.")])

@@ -6,9 +6,16 @@ from pymongo.asynchronous.database import AsyncDatabase
 from src.config.conf_logger import setup_logger
 from src.core.exceptions import InvalidHourRangeError
 from src.gmaps import GooglePlacesManager, PlaceCreate, PlacePatch, find_and_update_place, insert_place
+from src.optimizer.matrix.client import GoogleRoutesManager
+from src.orchestrator.trip_edit_tool import build_edit_multi_day_trip_tool
+from src.orchestrator.trip_session_state import TripSessionStateStore
 from src.trips.manager import TripsManager
 
 logger = setup_logger(__name__, "orchestrator")
+
+# Tools that mutate persisted state — a turn calling any of these pauses for confirmation.
+_WRITE_TOOL_NAMES = {"edit_multi_day_trip", "update_visit_hours", "skip_place", "add_place"}
+_READ_TOOL_NAMES = {"list_saved_trips", "get_trip_details", "search_place", "get_place_pricing"}
 
 # priceLevel and priceRange are Places API Enterprise fields; the serves* food/drink
 # attributes and editorialSummary bill under Enterprise + Atmosphere.
@@ -183,16 +190,23 @@ def _format_multi_day_trip(trip) -> str:
     return "\n".join(lines)
 
 
-def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None = None) -> list:
+def create_tools(
+    db: AsyncDatabase,
+    places_manager: GooglePlacesManager | None = None,
+    routes_manager: GoogleRoutesManager | None = None,
+    session_state_store: TripSessionStateStore | None = None,
+) -> list:
     """Return the list of LLM-callable tools with the database connection closure-bound.
 
-    Each tool reads ``allowed_place_ids`` from ``config["configurable"]`` at runtime to
-    enforce that only places belonging to the current session can be modified.
+    The write scope for ``update_visit_hours`` / ``skip_place`` / ``add_place`` and for
+    ``edit_multi_day_trip`` comes from ``session_state_store`` (snapshot at interrupt,
+    single-use consume on resume) — never from a per-invocation ``configurable`` that
+    the resume path doesn't carry. When there is no store (no checkpointer / direct
+    invoke in tests) the legacy ``_extract_allowed`` fallback applies, and it is now
+    fail-closed: an empty or missing selection denies the write.
 
-    When ``places_manager`` is provided, a ``search_place`` tool is included that
-    resolves place names via the Google Places API without writing to the database,
-    and a ``get_place_pricing`` tool that fetches price level, price range, and
-    food/drink attributes for a place.
+    ``routes_manager`` enables the ``edit_multi_day_trip`` batch tool. ``places_manager``
+    enables the read-only ``search_place`` / ``get_place_pricing`` tools.
     """
 
     def _extract_allowed(config: RunnableConfig | None) -> list[str]:
@@ -203,6 +217,27 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
             else:
                 logger.warning("Tool config is not a dict (got %s); allowed_place_ids defaults to []", type(config))
         return configurable.get("allowed_place_ids", [])
+
+    async def _resolve_place_write_scope(config: RunnableConfig | None) -> tuple[bool, list[str] | str]:
+        """(True, allowed_ids) to proceed, or (False, deny_message). Fail-closed."""
+        thread_id = None
+        if isinstance(config, dict):
+            thread_id = (config.get("configurable") or {}).get("thread_id")
+        if session_state_store is not None and thread_id:
+            try:
+                scope = await session_state_store.consume_pending(thread_id)
+            except Exception:
+                logger.exception("Failed to read pending write scope for thread_id=%s", thread_id)
+                return False, "I can't verify the scope for this change right now — nothing was changed."
+            if scope is None:
+                return False, "I can't confirm this change — the scope for this proposal expired. Try again."
+            if scope.kind == "trip":
+                return False, (
+                    f"This chat is editing the saved trip '{scope.name}'. Changing a place directly would edit the "
+                    "global place library, not this trip. Ask me to change the trip plan instead."
+                )
+            return True, list(scope.allowed_place_ids)
+        return True, list(_extract_allowed(config))
 
     @tool
     async def update_visit_hours(
@@ -225,9 +260,14 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
                 must be greater than preferred_hour_from).
             visit_duration_min: Estimated minutes to spend at the place (positive integer).
         """
-        allowed = _extract_allowed(config)
-        if allowed and place_id not in allowed:
-            return f"Cannot update place '{place_id}': it is not part of the current trip plan."
+        ok, scope = await _resolve_place_write_scope(config)
+        if not ok:
+            return scope  # type: ignore[return-value]
+        allowed = scope
+        if not allowed:
+            return "There's no place selection in this conversation, so I can't change a place here."
+        if place_id not in allowed:
+            return f"'{place_id}' is not part of the current selection."
 
         # Build the patch only from provided arguments — PlacePatch treats an explicit
         # None as "clear the field", and this tool must never clear omitted fields.
@@ -289,9 +329,14 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
             place_id: MongoDB ObjectId string of the place.
             skipped: True to skip (remove from active plan), False to un-skip (restore).
         """
-        allowed = _extract_allowed(config)
-        if allowed and place_id not in allowed:
-            return f"Cannot update place '{place_id}': it is not part of the current trip plan."
+        ok, scope = await _resolve_place_write_scope(config)
+        if not ok:
+            return scope  # type: ignore[return-value]
+        allowed = scope
+        if not allowed:
+            return "There's no place selection in this conversation, so I can't change a place here."
+        if place_id not in allowed:
+            return f"'{place_id}' is not part of the current selection."
 
         try:
             patch = PlacePatch(skipped=skipped)
@@ -339,6 +384,11 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
             preferred_hour_to: Latest preferred local hour to visit (0-23, inclusive,
                 must be greater than preferred_hour_from).
         """
+        ok, scope = await _resolve_place_write_scope(config)
+        if not ok:
+            return scope  # type: ignore[return-value]
+        # add_place is create-only — no per-id allow-list check — but a trip-context chat is denied above.
+
         try:
             place_create = PlaceCreate(
                 name=name,
@@ -412,6 +462,9 @@ def create_tools(db: AsyncDatabase, places_manager: GooglePlacesManager | None =
 
     tools.append(list_saved_trips)
     tools.append(get_trip_details)
+
+    if routes_manager is not None and session_state_store is not None:
+        tools.append(build_edit_multi_day_trip_tool(db, routes_manager, session_state_store))
 
     if places_manager is not None:
 

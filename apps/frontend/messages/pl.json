@@ -106,6 +106,7 @@
 	"optimizer_save_as_new": "Zapisz jako nową trasę",
 	"update_trip_success": "Trasa \"{name}\" zaktualizowana!",
 	"update_trip_failed": "Nie udało się zaktualizować trasy.",
+	"update_trip_conflict": "Ta trasa została zmieniona w innym miejscu — przeładuj stronę, aby pobrać najnowszą wersję przed zapisem.",
 	"nav_trips": "Zapisane trasy",
 	"page_trips_title": "Zapisane trasy",
 	"page_trips_subtitle": "Przeglądaj zapisane zoptymalizowane trasy.",

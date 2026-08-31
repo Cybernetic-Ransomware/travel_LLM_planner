@@ -6,7 +6,11 @@ from bson import ObjectId
 from pymongo import ReturnDocument
 from pymongo.asynchronous.database import AsyncDatabase
 
-from src.core.exceptions import TripPlanTypeConflictError
+from src.core.exceptions import (
+    MissingExpectedRevisionError,
+    TripConcurrencyConflictError,
+    TripPlanTypeConflictError,
+)
 from src.optimizer.solver.models import (
     MultiDayRequest,
     MultiDayResponse,
@@ -40,8 +44,10 @@ class TripsManager:
         self._collection = db[TRIPS_COLLECTION]
 
     async def save(self, request: SaveTripRequest) -> TripDetailOut:
-        doc = request.model_dump(mode="json")
+        # save-as-new ignores any expected_revision the client sent; a brand-new trip starts at revision 0.
+        doc = request.model_dump(mode="json", exclude={"expected_revision"})
         doc["schema_version"] = SCHEMA_VERSION
+        doc["revision"] = 0
         doc["created_at"] = datetime.now(UTC)
         result = await self._collection.insert_one(doc)
         return _to_trip_detail_out({**doc, "_id": result.inserted_id})
@@ -63,9 +69,14 @@ class TripsManager:
         return _to_trip_detail_out(doc)
 
     async def update(self, trip_id: str, request: SaveTripRequest) -> TripDetailOut | None:
+        """Compare-and-set update shared by ``PUT /core/trips/{id}`` and the chat editor:
+        missing ``expected_revision`` -> 428, stale -> 409, match -> atomic ``$set`` + ``$inc``.
+        Legacy docs without ``revision`` count as 0.
+        """
         oid = _parse_object_id(trip_id)
         if oid is None:
             return None
+
         existing = await self._collection.find_one({"_id": oid}, {"plan_type": 1})
         if existing is None:
             return None
@@ -73,14 +84,25 @@ class TripsManager:
         if existing_plan_type != request.plan_type:
             raise TripPlanTypeConflictError(trip_id, existing_plan_type, request.plan_type)
 
-        update = request.model_dump(mode="json")
+        # 428 only after id/plan_type checks, so the missing token can't mask a more fundamental error.
+        if request.expected_revision is None:
+            raise MissingExpectedRevisionError(trip_id)
+        expected = request.expected_revision
+        if expected == 0:
+            revision_filter: dict = {"$or": [{"revision": 0}, {"revision": {"$exists": False}}]}
+        else:
+            revision_filter = {"revision": expected}
+
+        update = request.model_dump(mode="json", exclude={"expected_revision"})
         update["schema_version"] = SCHEMA_VERSION
         update["updated_at"] = datetime.now(UTC)
         doc = await self._collection.find_one_and_update(
-            {"_id": oid}, {"$set": update}, return_document=ReturnDocument.AFTER
+            {"_id": oid, **revision_filter},
+            {"$set": update, "$inc": {"revision": 1}},
+            return_document=ReturnDocument.AFTER,
         )
         if doc is None:
-            return None
+            raise TripConcurrencyConflictError(trip_id, expected=expected)
         return _to_trip_detail_out(doc)
 
     async def delete(self, trip_id: str) -> bool:
@@ -130,6 +152,7 @@ def _to_trip_detail_out(doc: dict) -> TripDetailOut:
             name=doc["name"],
             created_at=doc["created_at"].isoformat(),
             updated_at=doc["updated_at"].isoformat() if doc.get("updated_at") else None,
+            revision=doc.get("revision", 0),
             start_date=str(min(dates)),
             end_date=str(max(dates)),
             num_days=len(req.days),
@@ -145,6 +168,7 @@ def _to_trip_detail_out(doc: dict) -> TripDetailOut:
         date=str(doc["date"]),
         created_at=doc["created_at"].isoformat(),
         updated_at=doc["updated_at"].isoformat() if doc.get("updated_at") else None,
+        revision=doc.get("revision", 0),
         optimizer_request=req,
         optimizer_response=resp,
         selected_place_ids=req.place_ids,

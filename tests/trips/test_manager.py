@@ -4,7 +4,11 @@ import pytest
 from bson import ObjectId
 from pydantic import ValidationError
 
-from src.core.exceptions import TripPlanTypeConflictError
+from src.core.exceptions import (
+    MissingExpectedRevisionError,
+    TripConcurrencyConflictError,
+    TripPlanTypeConflictError,
+)
 from src.trips.manager import _LIST_PROJECTION, TRIPS_COLLECTION, TripsManager
 from src.trips.models import MultiDaySaveTripRequest, SingleDaySaveTripRequest
 
@@ -172,14 +176,14 @@ class TestUpdatePlanTypeProtection:
         saved = await manager.save(SingleDaySaveTripRequest(**_single_day_payload()))
 
         with pytest.raises(TripPlanTypeConflictError):
-            await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload()))
+            await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=0))
 
     async def test_multi_to_single_raises_conflict(self, test_db):
         manager = TripsManager(test_db)
         saved = await manager.save(MultiDaySaveTripRequest(**_multi_day_payload()))
 
         with pytest.raises(TripPlanTypeConflictError):
-            await manager.update(saved.id, SingleDaySaveTripRequest(**_single_day_payload()))
+            await manager.update(saved.id, SingleDaySaveTripRequest(**_single_day_payload(), expected_revision=0))
 
     async def test_conflict_leaves_document_unchanged(self, test_db):
         manager = TripsManager(test_db)
@@ -187,7 +191,7 @@ class TestUpdatePlanTypeProtection:
         before = await test_db[TRIPS_COLLECTION].find_one({"_id": ObjectId(saved.id)})
 
         with pytest.raises(TripPlanTypeConflictError):
-            await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload()))
+            await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=0))
 
         after = await test_db[TRIPS_COLLECTION].find_one({"_id": ObjectId(saved.id)})
         assert before == after
@@ -195,6 +199,88 @@ class TestUpdatePlanTypeProtection:
     async def test_update_valid_but_nonexistent_id_returns_none(self, test_db):
         manager = TripsManager(test_db)
 
-        result = await manager.update(str(ObjectId()), SingleDaySaveTripRequest(**_single_day_payload()))
+        result = await manager.update(
+            str(ObjectId()), SingleDaySaveTripRequest(**_single_day_payload(), expected_revision=0)
+        )
 
         assert result is None
+
+
+@pytest.mark.integration
+class TestOptimisticConcurrency:
+    async def test_save_starts_at_revision_zero_without_token_in_doc(self, test_db):
+        manager = TripsManager(test_db)
+        saved = await manager.save(MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=99))
+
+        assert saved.revision == 0
+        raw = await test_db[TRIPS_COLLECTION].find_one({"_id": ObjectId(saved.id)})
+        assert raw["revision"] == 0
+        assert "expected_revision" not in raw
+
+    async def test_update_without_expected_revision_raises_428(self, test_db):
+        manager = TripsManager(test_db)
+        saved = await manager.save(MultiDaySaveTripRequest(**_multi_day_payload()))
+
+        with pytest.raises(MissingExpectedRevisionError):
+            await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload()))
+
+    async def test_update_with_matching_revision_increments_and_preserves_created_at(self, test_db):
+        manager = TripsManager(test_db)
+        saved = await manager.save(MultiDaySaveTripRequest(**_multi_day_payload()))
+        before = await test_db[TRIPS_COLLECTION].find_one({"_id": ObjectId(saved.id)})
+
+        updated = await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=0))
+
+        assert updated.revision == 1
+        after = await test_db[TRIPS_COLLECTION].find_one({"_id": ObjectId(saved.id)})
+        assert after["created_at"] == before["created_at"]
+        assert after["updated_at"] is not None
+        assert "expected_revision" not in after
+
+    async def test_update_with_stale_revision_raises_409_and_leaves_doc_untouched(self, test_db):
+        manager = TripsManager(test_db)
+        saved = await manager.save(MultiDaySaveTripRequest(**_multi_day_payload()))
+        await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=0))
+        before = await test_db[TRIPS_COLLECTION].find_one({"_id": ObjectId(saved.id)})
+
+        with pytest.raises(TripConcurrencyConflictError):
+            await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=0))
+
+        after = await test_db[TRIPS_COLLECTION].find_one({"_id": ObjectId(saved.id)})
+        assert before == after
+
+    async def test_legacy_doc_without_revision_accepts_expected_zero(self, test_db):
+        doc = {**_multi_day_payload(), "plan_type": "MULTI_DAY", "created_at": datetime.now(UTC)}
+        result = await test_db[TRIPS_COLLECTION].insert_one(doc)
+        manager = TripsManager(test_db)
+
+        updated = await manager.update(
+            str(result.inserted_id), MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=0)
+        )
+
+        assert updated.revision == 1
+
+    async def test_direction_a_two_updates_same_token_second_conflicts(self, test_db):
+        manager = TripsManager(test_db)
+        saved = await manager.save(MultiDaySaveTripRequest(**_multi_day_payload()))
+
+        await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=0))
+        with pytest.raises(TripConcurrencyConflictError):
+            await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=0))
+
+    async def test_direction_b_ui_put_after_chat_edit_conflicts(self, test_db):
+        manager = TripsManager(test_db)
+        saved = await manager.save(MultiDaySaveTripRequest(**_multi_day_payload()))
+
+        # chat editor writes first, moving revision 0 -> 1
+        chat_payload = _multi_day_payload()
+        chat_payload["name"] = "Renamed by chat"
+        await manager.update(saved.id, MultiDaySaveTripRequest(**chat_payload, expected_revision=0))
+
+        # stale UI PUT still holding revision 0
+        with pytest.raises(TripConcurrencyConflictError):
+            await manager.update(saved.id, MultiDaySaveTripRequest(**_multi_day_payload(), expected_revision=0))
+
+        current = await manager.find_by_id(saved.id)
+        assert current.name == "Renamed by chat"
+        assert current.revision == 1

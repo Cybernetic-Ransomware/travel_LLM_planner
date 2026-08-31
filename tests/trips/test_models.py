@@ -358,3 +358,45 @@ class TestMultiDayRoundTripFields:
         assert rehydrated.multi_day_response.unassigned[0].place_id == "p3"
 
         assert dumped == rehydrated.model_dump(mode="json")
+
+
+@pytest.mark.unit
+class TestRevisionContract:
+    def test_detail_out_revision_defaults_to_zero(self):
+        detail = SingleDayTripDetailOut(
+            id="1",
+            name="Trip",
+            date="2026-07-04",
+            created_at="2026-07-04T00:00:00",
+            optimizer_request=_valid_single_day_payload()["optimizer_request"],
+            optimizer_response=_valid_single_day_payload()["optimizer_response"],
+            selected_place_ids=["p1"],
+            transport_mode="WALK",
+            day_start_hour=9,
+            day_end_hour=21,
+        )
+        assert detail.revision == 0
+
+    def test_detail_out_revision_is_required_in_serialization_schema(self):
+        schema = MultiDayTripDetailOut.model_json_schema(mode="serialization")
+        assert "revision" in schema["required"]
+
+    def test_save_request_accepts_expected_revision(self):
+        payload = {**_valid_multi_day_payload(), "expected_revision": 3}
+        req = MultiDaySaveTripRequest(**payload)
+        assert req.expected_revision == 3
+
+    def test_save_request_still_forbids_unknown_keys(self):
+        payload = {**_valid_single_day_payload(), "surprise": 1}
+        with pytest.raises(ValidationError):
+            SingleDaySaveTripRequest(**payload)
+
+    def test_expected_revision_excluded_from_dump_when_asked(self):
+        req = MultiDaySaveTripRequest(**{**_valid_multi_day_payload(), "expected_revision": 5})
+        dumped = req.model_dump(mode="json", exclude={"expected_revision"})
+        assert "expected_revision" not in dumped
+
+    def test_discriminator_ignores_expected_revision(self):
+        payload = {**_valid_multi_day_payload(), "expected_revision": 2}
+        result = _save_trip_request_adapter.validate_python(payload)
+        assert isinstance(result, MultiDaySaveTripRequest)

@@ -106,6 +106,7 @@
 	"optimizer_save_as_new": "Save as new trip",
 	"update_trip_success": "Trip \"{name}\" updated!",
 	"update_trip_failed": "Failed to update trip.",
+	"update_trip_conflict": "This trip was changed elsewhere — reload the page to get the latest version before saving.",
 	"nav_trips": "Saved Trips",
 	"page_trips_title": "Saved Trips",
 	"page_trips_subtitle": "Browse your saved optimized routes.",

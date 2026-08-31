@@ -33,6 +33,14 @@ scope with a production-quality implementation — see `MultiDayPlanner.svelte` 
 - State is shared across components (map marker ↔ list ↔ form)
 - Feature needs orchestrator/chat, drag & drop, or realtime polling
 
+## Delivered
+
+- Chat-driven editing of a saved multi-day trip: `/trips/[id]` binds the global chat drawer to the
+  open trip; a confirmation-gated `edit_multi_day_trip` batch re-optimizes and persists the trip, then
+  a `trip_updated` SSE event triggers a scoped `invalidate('app:trip:<id>')`. `/optimizer`'s update
+  path now sends `expected_revision` and surfaces a 409 conflict. See
+  [ADR-20](20_ADR-confirmation-gated-ai-trip-editing.md).
+
 ## Upcoming PRs
 
 1. Public Astro landing / docs

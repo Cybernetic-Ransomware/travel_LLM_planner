@@ -1,0 +1,47 @@
+from src.trips.editing.apply import ApplyOutcome, apply_operations
+from src.trips.editing.errors import (
+    AccommodationNotFoundError,
+    AccommodationSelectorConflictError,
+    InvalidDayIndexError,
+    OperationValidationError,
+    OptimizerFailedError,
+    PlaceNotInTripError,
+    TooFewPlacesError,
+    TooManyPlacesError,
+    TransferAlreadyExistsError,
+    TransferNotFoundError,
+    TripConcurrencyConflictError,
+    TripDeletedError,
+    TripEditError,
+    TripEditValidationError,
+    TripNotFoundError,
+    TripPersistenceError,
+    UnsupportedPlanTypeError,
+)
+from src.trips.editing.operations import TripEditBatch, TripEditOperation
+from src.trips.editing.service import MultiDayTripEditor
+
+__all__ = [
+    "AccommodationNotFoundError",
+    "AccommodationSelectorConflictError",
+    "ApplyOutcome",
+    "InvalidDayIndexError",
+    "MultiDayTripEditor",
+    "OperationValidationError",
+    "OptimizerFailedError",
+    "PlaceNotInTripError",
+    "TooFewPlacesError",
+    "TooManyPlacesError",
+    "TransferAlreadyExistsError",
+    "TransferNotFoundError",
+    "TripConcurrencyConflictError",
+    "TripDeletedError",
+    "TripEditBatch",
+    "TripEditError",
+    "TripEditOperation",
+    "TripEditValidationError",
+    "TripNotFoundError",
+    "TripPersistenceError",
+    "UnsupportedPlanTypeError",
+    "apply_operations",
+]

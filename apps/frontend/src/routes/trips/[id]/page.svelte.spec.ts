@@ -11,7 +11,16 @@ vi.mock('$lib/api/trips.js', () => ({
 }));
 
 vi.mock('$app/navigation', () => ({
-	goto: vi.fn().mockResolvedValue(undefined)
+	goto: vi.fn().mockResolvedValue(undefined),
+	invalidate: vi.fn().mockResolvedValue(undefined)
+}));
+
+const chatMock = {
+	setTripContext: vi.fn(),
+	clearTripContext: vi.fn()
+};
+vi.mock('$lib/state/context.svelte.js', () => ({
+	getChatContext: () => chatMock
 }));
 
 const mockTrip: SingleDayTripOut = {
@@ -21,6 +30,7 @@ const mockTrip: SingleDayTripOut = {
 	date: '2025-06-01',
 	created_at: '2025-06-01T10:00:00Z',
 	updated_at: null,
+	revision: 0,
 	transport_mode: 'WALK',
 	day_start_hour: 9,
 	day_end_hour: 21,
@@ -50,6 +60,7 @@ const mockMultiDayTrip: MultiDayTripOut = {
 	num_days: 3,
 	created_at: '2025-08-01T10:00:00Z',
 	updated_at: null,
+	revision: 0,
 	transport_mode: 'WALK',
 	multi_day_request: {
 		days: [
@@ -70,6 +81,54 @@ const mockMultiDayTrip: MultiDayTripOut = {
 describe('/trips/[id] page', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+	});
+
+	it('binds the chat to the trip context on mount and clears it on unmount', async () => {
+		const { unmount } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockTrip, backendError: null } }
+		});
+		expect(chatMock.setTripContext).toHaveBeenCalledWith('abc', 'SINGLE_DAY', expect.any(Function));
+		unmount();
+		expect(chatMock.clearTripContext).toHaveBeenCalled();
+	});
+
+	it('keeps the chat session when the same trip is re-fetched (no re-bind, no clear)', async () => {
+		const { rerender } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+		});
+		expect(chatMock.setTripContext).toHaveBeenCalledTimes(1);
+
+		// trip_updated -> invalidate -> load re-runs -> a fresh object with the same id
+		await rerender({
+			data: { orchestratorReady: true, trip: { ...mockMultiDayTrip }, backendError: null }
+		});
+
+		expect(chatMock.setTripContext).toHaveBeenCalledTimes(1);
+		expect(chatMock.clearTripContext).not.toHaveBeenCalled();
+	});
+
+	it('re-binds the chat context when navigating to a different trip', async () => {
+		const { rerender } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+		});
+		await rerender({ data: { orchestratorReady: true, trip: mockTrip, backendError: null } });
+
+		expect(chatMock.setTripContext).toHaveBeenCalledTimes(2);
+		expect(chatMock.setTripContext).toHaveBeenLastCalledWith(
+			'abc',
+			'SINGLE_DAY',
+			expect.any(Function)
+		);
+	});
+
+	it('scoped-invalidates on a trip_updated callback, not invalidateAll', async () => {
+		const { invalidate } = await import('$app/navigation');
+		render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+		});
+		const onUpdated = chatMock.setTripContext.mock.calls.at(-1)?.[2] as () => void;
+		onUpdated();
+		expect(invalidate).toHaveBeenCalledWith('app:trip:multi-1');
 	});
 
 	it('renders trip name in heading', async () => {

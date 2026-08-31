@@ -1,4 +1,4 @@
-from typing import Annotated, Literal
+from typing import Annotated, Literal, NotRequired
 
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -25,6 +25,7 @@ class ChatRequest(BaseModel):
             "example": {
                 "messages": [{"role": "user", "content": "Tell me about Wawel Castle"}],
                 "session_id": "550e8400-e29b-41d4-a716-446655440000",
+                "trip_id": None,
                 "place_ids": [],
                 "resume_confirmed": None,
             }
@@ -33,6 +34,8 @@ class ChatRequest(BaseModel):
 
     messages: list[ChatMessage] = Field(min_length=1)
     session_id: str | None = None
+    # When set, the chat edits this persisted trip; place_ids is ignored and scope is server-derived (ADR-20).
+    trip_id: str | None = None
     place_ids: list[str] = Field(default_factory=list)
     resume_confirmed: bool | None = None
 
@@ -52,3 +55,7 @@ class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     place_context: list[dict]
     session_id: str
+    # Rendered system-prompt block for the bound trip ("" when the chat isn't trip-scoped).
+    trip_context: NotRequired[str]
+    # Result echo written by edit_multi_day_trip so the router can emit a trip_updated SSE event.
+    last_trip_update: NotRequired[dict | None]

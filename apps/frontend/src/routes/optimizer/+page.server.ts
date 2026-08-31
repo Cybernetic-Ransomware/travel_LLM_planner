@@ -7,6 +7,7 @@ export interface OptimizerPrefill {
 	tripId: string;
 	tripName: string;
 	tripDate: string;
+	revision: number;
 	selectedPlaceIds: string[];
 	transportMode: TransportMode;
 	dayStartHour: number;
@@ -31,6 +32,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 				tripId: fromTripId,
 				tripName: trip.name,
 				tripDate: trip.date,
+				revision: trip.revision,
 				selectedPlaceIds: trip.selected_place_ids,
 				transportMode: trip.transport_mode,
 				dayStartHour: trip.day_start_hour,
@@ -41,6 +43,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 			multiDayPrefill = {
 				tripId: fromTripId,
 				tripName: trip.name,
+				revision: trip.revision,
 				multiDayRequest: trip.multi_day_request,
 				multiDayResponse: trip.multi_day_response
 			};

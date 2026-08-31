@@ -10,8 +10,16 @@ export interface ToolProposal {
 	args: Record<string, unknown>;
 }
 
+export interface TripUpdatedEvent {
+	trip_id: string;
+	revision: number;
+	plan_type: 'MULTI_DAY';
+	name: string;
+}
+
 export type SSEEvent =
 	| { session_id: string }
 	| { content: string }
 	| { tool_proposal: ToolProposal }
+	| { trip_updated: TripUpdatedEvent }
 	| { error: string };

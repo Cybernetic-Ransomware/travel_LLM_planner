@@ -10,6 +10,17 @@ from src.main import app
 _router_mod = importlib.import_module("src.orchestrator.router")
 
 
+def _fake_trip_session_state() -> MagicMock:
+    """Explicit async-capable double for TripSessionStateStore — every awaited method is an AsyncMock."""
+    store = MagicMock()
+    store.clear_pending = AsyncMock()
+    store.bind_place_selection = AsyncMock()
+    store.bind_trip = AsyncMock()
+    store.arm_pending = AsyncMock(return_value=True)
+    store.consume_pending = AsyncMock(return_value=None)
+    return store
+
+
 def _make_mock_orchestrator(events: list | None = None) -> MagicMock:
     """Create a mock OrchestratorManager that streams the given events."""
 
@@ -24,6 +35,13 @@ def _make_mock_orchestrator(events: list | None = None) -> MagicMock:
     mock.acancel_pending_tools = AsyncMock()
     mock.provider = "openai"
     mock.model_name = "gpt-4o-mini"
+    mock.trip_session_state = _fake_trip_session_state()
+
+    idle_state = MagicMock()
+    idle_state.next = ()
+    idle_state.values = {}
+    mock.graph.aget_state = AsyncMock(return_value=idle_state)
+    mock.graph.aupdate_state = AsyncMock()
     return mock
 
 
@@ -480,7 +498,7 @@ class TestChatEndpointToolProposal:
         interrupted_msg = AIMessage(id="msg-1", content="Let me update that.", tool_calls=tool_calls)
 
         graph_state = MagicMock()
-        graph_state.next = ("tools",)
+        graph_state.next = ("tools_write",)
         graph_state.values = {"messages": [interrupted_msg]}
 
         mock_orch = _make_mock_orchestrator()
@@ -502,7 +520,8 @@ class TestChatEndpointToolProposal:
         assert proposals[0]["tool"] == "update_visit_hours"
         assert proposals[0]["args"]["place_id"] == "abc123"
 
-    async def test_multiple_tool_calls_emit_multiple_proposals(self, client):
+    async def test_multiple_write_calls_fail_closed(self, client):
+        """Two write tool calls in one interrupted turn: no proposal, no armed scope, an error event."""
         from langchain_core.messages import AIMessage
 
         tool_calls = [
@@ -512,7 +531,7 @@ class TestChatEndpointToolProposal:
         interrupted_msg = AIMessage(id="msg-2", content="Updating...", tool_calls=tool_calls)
 
         graph_state = MagicMock()
-        graph_state.next = ("tools",)
+        graph_state.next = ("tools_write",)
         graph_state.values = {"messages": [interrupted_msg]}
 
         mock_orch = _make_mock_orchestrator()
@@ -529,13 +548,16 @@ class TestChatEndpointToolProposal:
             app.state.orchestrator = None
 
         parsed = _parse_sse(response.content)
-        proposals = [p["tool_proposal"] for p in parsed if "tool_proposal" in p]
-        assert len(proposals) == 2
-        assert {p["tool"] for p in proposals} == {"update_visit_hours", "skip_place"}
+        assert not any("tool_proposal" in p for p in parsed)
+        assert any("error" in p for p in parsed)
+        mock_orch.acancel_pending_tools.assert_awaited()
+        mock_orch.trip_session_state.arm_pending.assert_not_awaited()
+        mock_orch.trip_session_state.clear_pending.assert_awaited()
 
     async def test_no_tool_proposal_when_graph_next_is_empty(self, client):
         graph_state = MagicMock()
         graph_state.next = ()
+        graph_state.values = {}
 
         mock_orch = _make_mock_orchestrator()
         mock_orch.has_checkpointer = True
@@ -569,7 +591,8 @@ class TestChatEndpointToolProposal:
         parsed = _parse_sse(response.content)
         assert not any("tool_proposal" in p for p in parsed)
 
-    async def test_aget_state_error_does_not_crash_stream(self, client):
+    async def test_aget_state_error_fails_closed(self, client):
+        """Unreadable graph state: stream still ends cleanly, but with a fail-closed error and no write."""
         mock_orch = _make_mock_orchestrator()
         mock_orch.has_checkpointer = True
         mock_orch.graph.aget_state = AsyncMock(side_effect=RuntimeError("DB unavailable"))
@@ -586,6 +609,9 @@ class TestChatEndpointToolProposal:
         assert response.status_code == 200
         parsed = _parse_sse(response.content)
         assert not any("tool_proposal" in p for p in parsed)
+        assert any("error" in p for p in parsed)
+        mock_orch.trip_session_state.arm_pending.assert_not_awaited()
+        mock_orch.acancel_pending_tools.assert_awaited()
 
 
 @pytest.mark.unit
