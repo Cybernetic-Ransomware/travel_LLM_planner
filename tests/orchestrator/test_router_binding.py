@@ -30,8 +30,9 @@ def _multi_day_trip():
     return trip
 
 
-async def test_missing_trip_binds_place_selection_and_adds_note():
+async def test_missing_trip_clears_binding_and_adds_note():
     store = MagicMock()
+    store.clear_binding = AsyncMock()
     store.bind_place_selection = AsyncMock()
     store.bind_trip = AsyncMock()
 
@@ -39,7 +40,9 @@ async def test_missing_trip_binds_place_selection_and_adds_note():
         tm.return_value.find_by_id = AsyncMock(return_value=None)
         state = await _bind_trip_and_build_state(MagicMock(), store, "sess-1", _payload(), trip_id="ghost")
 
-    store.bind_place_selection.assert_awaited_once_with("sess-1", [])
+    # No binding doc at all -> arm_pending fails closed for every write tool, add_place included.
+    store.clear_binding.assert_awaited_once_with("sess-1")
+    store.bind_place_selection.assert_not_called()
     store.bind_trip.assert_not_called()
     assert state["trip_context"] == ""
     assert "could not be loaded" in state["messages"][0].content

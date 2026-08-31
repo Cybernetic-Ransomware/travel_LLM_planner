@@ -46,6 +46,22 @@ async def test_arm_pending_without_binding_returns_false(store):
     assert await store.arm_pending("never-bound", "call-1") is False
 
 
+async def test_arm_pending_snapshot_is_one_coherent_binding_version(store):
+    """The atomic pipeline snapshot never mixes fields from two bindings."""
+    await store.bind_trip("t1", "trip-1", "MULTI_DAY", "Tokyo", 7, ["p1"])
+    await store.arm_pending("t1", "call-1")
+    scope = await store.consume_pending("t1")
+    assert scope is not None
+    assert (scope.kind, scope.trip_id, scope.plan_type, scope.name, scope.revision) == (
+        "trip",
+        "trip-1",
+        "MULTI_DAY",
+        "Tokyo",
+        7,
+    )
+    assert scope.allowed_place_ids == ["p1"]
+
+
 async def test_place_selection_binding_carries_scope(store):
     await store.bind_place_selection("t2", ["p9"])
     await store.arm_pending("t2", "call-2")

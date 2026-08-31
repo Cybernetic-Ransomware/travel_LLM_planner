@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
+	import { onDestroy } from 'svelte';
 	import { getChatContext } from '$lib/state/context.svelte.js';
 	import type { PageData } from './$types.js';
 	import RouteResults from '$lib/components/optimizer/RouteResults.svelte';
@@ -14,12 +15,19 @@
 	let { data }: { data: PageData } = $props();
 
 	const chat = getChatContext();
+	// Re-bind only on a real id change — a chat edit re-fetches the same trip (trip_updated -> invalidate) and re-binding would reset the session.
+	let boundTripId: string | null = null;
 	$effect(() => {
-		const trip = data.trip;
-		if (!trip) return;
-		chat.setTripContext(trip.id, trip.plan_type, () => invalidate(`app:trip:${trip.id}`));
-		return () => chat.clearTripContext();
+		const id = data.trip?.id ?? null;
+		if (id === boundTripId) return;
+		boundTripId = id;
+		if (id && data.trip) {
+			chat.setTripContext(id, data.trip.plan_type, () => invalidate(`app:trip:${id}`));
+		} else {
+			chat.clearTripContext();
+		}
 	});
+	onDestroy(() => chat.clearTripContext());
 
 	let showDeleteDialog = $state(false);
 	let deleting = $state(false);

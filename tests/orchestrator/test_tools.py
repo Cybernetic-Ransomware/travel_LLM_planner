@@ -422,6 +422,20 @@ class TestLegacyPlaceToolsFailClosed:
         assert "expired" in result
         mock_update.assert_not_called()
 
+    async def test_no_pending_scope_denies_add_place(self):
+        # An unloadable trip_id clears the binding entirely; create-only add_place must still fail closed.
+        tools = create_tools(MagicMock(), session_state_store=_store_returning(None))
+        tool = next(t for t in tools if t.name == "add_place")
+
+        with patch("src.orchestrator.tools.insert_place", new=AsyncMock()) as mock_insert:
+            result = await tool.ainvoke(
+                {"name": "New Cafe"},
+                config={"configurable": {"thread_id": "t1"}},
+            )
+
+        assert "expired" in result
+        mock_insert.assert_not_called()
+
     async def test_store_error_fails_closed(self):
         store = MagicMock()
         store.consume_pending = AsyncMock(side_effect=RuntimeError("mongo down"))

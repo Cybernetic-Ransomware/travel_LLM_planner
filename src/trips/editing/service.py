@@ -6,6 +6,9 @@ trip untouched; the persisted request and response are from the same ``optimize_
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date
+
 from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import PyMongoError
 
@@ -34,6 +37,12 @@ from src.trips.models import MultiDaySaveTripRequest, MultiDayTripDetailOut
 logger = setup_logger(__name__, "orchestrator")
 
 
+@dataclass
+class AppliedEdit:
+    trip: MultiDayTripDetailOut
+    removed_transfer_dates: list[date]
+
+
 class MultiDayTripEditor:
     def __init__(self, db: AsyncDatabase, trips_manager: TripsManager, routes_manager: GoogleRoutesManager) -> None:
         self._db = db
@@ -45,7 +54,7 @@ class MultiDayTripEditor:
         trip_id: str,
         operations: list[TripEditOperation],
         expected_revision: int,
-    ) -> MultiDayTripDetailOut:
+    ) -> AppliedEdit:
         trip = await self._trips.find_by_id(trip_id)
         if trip is None:
             raise TripNotFoundError()
@@ -75,6 +84,9 @@ class MultiDayTripEditor:
         try:
             updated = await self._trips.update(trip_id, save_request)
         except HTTPTripConcurrencyConflictError as exc:
+            # update() can't tell a stale revision from a doc deleted mid-CAS — disambiguate here.
+            if await self._trips.find_by_id(trip_id) is None:
+                raise TripDeletedError() from exc
             raise TripConcurrencyConflictError() from exc
         except PyMongoError as exc:
             logger.exception("Trip persistence failed for trip_id=%s", trip_id)
@@ -85,4 +97,4 @@ class MultiDayTripEditor:
             raise TripDeletedError()
         if not isinstance(updated, MultiDayTripDetailOut):  # pragma: no cover - update() preserves plan_type
             raise UnsupportedPlanTypeError()
-        return updated
+        return AppliedEdit(trip=updated, removed_transfer_dates=outcome.removed_transfer_dates)

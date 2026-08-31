@@ -273,8 +273,8 @@ async def _bind_trip_and_build_state(
         trip = None
 
     if trip is None:
-        # Unloadable trip: bind an empty no-write scope — never keep the stale binding or use client place_ids (ADR-20).
-        await session_state_store.bind_place_selection(session_id, [])
+        # Drop the binding entirely: an empty place_selection would still let create-only add_place through (ADR-20 §13).
+        await session_state_store.clear_binding(session_id)
         note = SystemMessage(content="The referenced trip could not be loaded, so no trip is being edited right now.")
         return {
             "messages": [note, *_to_lc_messages(payload.messages)],

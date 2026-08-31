@@ -51,7 +51,8 @@ class TestMultiDayTripEditor:
         with patch("src.trips.editing.service.optimize_trip", new=AsyncMock(return_value=response_stub)):
             result = await editor.apply("507f1f77bcf86cd799439011", op, expected_revision=3)
 
-        assert result.revision == 4
+        assert result.trip.revision == 4
+        assert result.removed_transfer_dates == []
         save_request = trips.update.call_args[0][1]
         assert save_request.expected_revision == 3
         assert save_request.plan_type == "MULTI_DAY"
@@ -100,6 +101,19 @@ class TestMultiDayTripEditor:
         with (
             patch("src.trips.editing.service.optimize_trip", new=AsyncMock(return_value=response_stub)),
             pytest.raises(TripConcurrencyConflictError),
+        ):
+            await editor.apply("x", op, expected_revision=0)
+
+    async def test_delete_during_cas_is_reported_as_deleted_not_conflict(self, base_request, op):
+        trips = MagicMock()
+        # Loaded fine, then vanished between update()'s own read and its find_one_and_update.
+        trips.find_by_id = AsyncMock(side_effect=[_detail(base_request, revision=0), None])
+        trips.update = AsyncMock(side_effect=HTTPConflict("x", expected=0))
+        editor = MultiDayTripEditor(MagicMock(), trips, MagicMock())
+        response_stub = _detail(base_request).multi_day_response
+        with (
+            patch("src.trips.editing.service.optimize_trip", new=AsyncMock(return_value=response_stub)),
+            pytest.raises(TripDeletedError),
         ):
             await editor.apply("x", op, expected_revision=0)
 

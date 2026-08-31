@@ -111,27 +111,34 @@ class TripSessionStateStore:
         return _binding_from_doc(doc)
 
     async def arm_pending(self, thread_id: str, tool_call_id: str) -> bool:
-        """Snapshot the binding into ``pending`` at the interrupt; ``False`` = no trusted
-        binding, so the caller must fail closed and not emit a proposal.
+        """Atomically snapshot the binding into ``pending`` at the interrupt; ``False`` = no
+        trusted binding, so the caller must fail closed. The pipeline update reads the doc's
+        own fields in one op — read-then-write would let a concurrent ``bind_trip`` graft
+        stale scope onto a new binding.
         """
-        doc = await self._collection.find_one({"thread_id": thread_id})
-        if doc is None:
-            return False
-        pending = {
-            "tool_call_id": tool_call_id,
-            "kind": doc.get("kind"),
-            "trip_id": doc.get("trip_id"),
-            "plan_type": doc.get("plan_type"),
-            "name": doc.get("name"),
-            "revision": doc.get("revision"),
-            "allowed_place_ids": list(doc.get("allowed_place_ids", [])),
-            "armed_at": datetime.now(UTC),
-        }
-        result = await self._collection.update_one(
+        now = datetime.now(UTC)
+        doc = await self._collection.find_one_and_update(
             {"thread_id": thread_id},
-            {"$set": {"pending": pending, "updated_at": datetime.now(UTC), "expires_at": self._expiry()}},
+            [
+                {
+                    "$set": {
+                        "pending": {
+                            "tool_call_id": {"$literal": tool_call_id},
+                            "kind": "$kind",
+                            "trip_id": "$trip_id",
+                            "plan_type": "$plan_type",
+                            "name": "$name",
+                            "revision": "$revision",
+                            "allowed_place_ids": {"$ifNull": ["$allowed_place_ids", []]},
+                            "armed_at": {"$literal": now},
+                        },
+                        "updated_at": {"$literal": now},
+                        "expires_at": {"$literal": self._expiry()},
+                    }
+                }
+            ],
         )
-        return result.matched_count == 1
+        return doc is not None
 
     async def consume_pending(self, thread_id: str) -> PendingScope | None:
         """Atomically read ``pending`` and clear it — single use. The binding doc stays."""

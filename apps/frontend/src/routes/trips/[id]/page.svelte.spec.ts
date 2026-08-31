@@ -92,6 +92,35 @@ describe('/trips/[id] page', () => {
 		expect(chatMock.clearTripContext).toHaveBeenCalled();
 	});
 
+	it('keeps the chat session when the same trip is re-fetched (no re-bind, no clear)', async () => {
+		const { rerender } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+		});
+		expect(chatMock.setTripContext).toHaveBeenCalledTimes(1);
+
+		// trip_updated -> invalidate -> load re-runs -> a fresh object with the same id
+		await rerender({
+			data: { orchestratorReady: true, trip: { ...mockMultiDayTrip }, backendError: null }
+		});
+
+		expect(chatMock.setTripContext).toHaveBeenCalledTimes(1);
+		expect(chatMock.clearTripContext).not.toHaveBeenCalled();
+	});
+
+	it('re-binds the chat context when navigating to a different trip', async () => {
+		const { rerender } = render(Page, {
+			props: { data: { orchestratorReady: true, trip: mockMultiDayTrip, backendError: null } }
+		});
+		await rerender({ data: { orchestratorReady: true, trip: mockTrip, backendError: null } });
+
+		expect(chatMock.setTripContext).toHaveBeenCalledTimes(2);
+		expect(chatMock.setTripContext).toHaveBeenLastCalledWith(
+			'abc',
+			'SINGLE_DAY',
+			expect.any(Function)
+		);
+	});
+
 	it('scoped-invalidates on a trip_updated callback, not invalidateAll', async () => {
 		const { invalidate } = await import('$app/navigation');
 		render(Page, {

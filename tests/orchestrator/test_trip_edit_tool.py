@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,6 +10,7 @@ from pydantic import ValidationError
 from src.orchestrator.trip_edit_tool import build_edit_multi_day_trip_tool
 from src.orchestrator.trip_session_state import PendingScope
 from src.trips.editing.errors import TripConcurrencyConflictError
+from src.trips.editing.service import AppliedEdit
 
 pytestmark = pytest.mark.unit
 
@@ -102,7 +104,7 @@ async def test_happy_path_uses_scope_trip_id_and_revision_and_returns_command():
     updated = MagicMock(id="507f1f77bcf86cd799439011", revision=3)
     updated.name = "Tokyo May"  # name= is reserved by MagicMock, set it explicitly
     editor = MagicMock()
-    editor.apply = AsyncMock(return_value=updated)
+    editor.apply = AsyncMock(return_value=AppliedEdit(trip=updated, removed_transfer_dates=[]))
 
     with patch("src.orchestrator.trip_edit_tool.MultiDayTripEditor", return_value=editor):
         result = await tool.ainvoke(
@@ -121,6 +123,27 @@ async def test_happy_path_uses_scope_trip_id_and_revision_and_returns_command():
         "plan_type": "MULTI_DAY",
         "name": "Tokyo May",
     }
+
+
+async def test_summary_reports_auto_removed_transfer():
+    store = MagicMock()
+    store.consume_pending = AsyncMock(return_value=_trip_scope())
+    tool = build_edit_multi_day_trip_tool(MagicMock(), MagicMock(), store)
+
+    updated = MagicMock(id="507f1f77bcf86cd799439011", revision=3)
+    updated.name = "Tokyo May"
+    editor = MagicMock()
+    editor.apply = AsyncMock(return_value=AppliedEdit(trip=updated, removed_transfer_dates=[date(2026, 5, 13)]))
+
+    with patch("src.orchestrator.trip_edit_tool.MultiDayTripEditor", return_value=editor):
+        result = await tool.ainvoke(
+            {"name": "edit_multi_day_trip", "args": {"operations": _ops()}, "id": "call-1", "type": "tool_call"},
+            config=_CONFIG,
+        )
+
+    message = result.update["messages"][0].content
+    assert "2026-05-13" in message
+    assert "no longer an accommodation changeover" in message
 
 
 async def test_editor_error_becomes_user_message():

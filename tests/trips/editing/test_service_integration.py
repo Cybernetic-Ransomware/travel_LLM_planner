@@ -76,7 +76,7 @@ async def test_apply_persists_new_request_and_coherent_response_and_bumps_revisi
     ):
         updated = await editor.apply(trip_id, ops, expected_revision=0)
 
-    assert updated.revision == 1
+    assert updated.trip.revision == 1
     reloaded = await TripsManager(test_db).find_by_id(trip_id)
     pinned = next(p for p in reloaded.multi_day_request.places if p.place_id == "p1")
     assert pinned.day_preferences[0].day_index == 2

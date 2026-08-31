@@ -94,6 +94,14 @@ class TestMergePreservedHours:
     def test_no_match_yields_none(self):
         assert merge_preserved_hours([{"day_index": 2, "preferred_hour_from": 8}], 0, None, None) == (None, None)
 
+    def test_partial_patch_keeps_other_bound(self):
+        slots = [{"day_index": 0, "preferred_hour_from": 10, "preferred_hour_to": 14}]
+        assert merge_preserved_hours(slots, 0, 11, None) == (11, 14)
+        assert merge_preserved_hours(slots, 0, None, 12) == (10, 12)
+
+    def test_partial_patch_without_existing_slot_is_passthrough(self):
+        assert merge_preserved_hours([], 0, 11, None) == (11, None)
+
 
 @pytest.mark.unit
 class TestDedupeFlexibleSlots:

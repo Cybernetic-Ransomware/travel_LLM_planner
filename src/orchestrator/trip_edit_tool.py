@@ -6,6 +6,7 @@ consumed here once. Smuggled keys in ``operations`` hit ``extra="forbid"``.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 
 from langchain_core.messages import ToolMessage
@@ -67,14 +68,15 @@ def build_edit_multi_day_trip_tool(
 
         editor = MultiDayTripEditor(db, TripsManager(db), routes_manager)
         try:
-            updated = await editor.apply(scope.trip_id, batch.operations, scope.revision)
+            result = await editor.apply(scope.trip_id, batch.operations, scope.revision)
         except TripEditError as exc:
             return exc.user_message
         except Exception:
             logger.exception("Unexpected failure applying trip edit thread_id=%s trip_id=%s", thread_id, scope.trip_id)
             return "Something went wrong applying the trip changes; nothing was saved."
 
-        summary = _summarize(updated.name, len(batch.operations))
+        updated = result.trip
+        summary = _summarize(updated.name, len(batch.operations), result.removed_transfer_dates)
         return Command(
             update={
                 "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
@@ -90,6 +92,10 @@ def build_edit_multi_day_trip_tool(
     return edit_multi_day_trip
 
 
-def _summarize(name: str, change_count: int) -> str:
+def _summarize(name: str, change_count: int, removed_transfer_dates: list[date]) -> str:
     plural = "change" if change_count == 1 else "changes"
-    return f"Updated '{name}'. {change_count} {plural} applied; the day plan was recomputed."
+    summary = f"Updated '{name}'. {change_count} {plural} applied; the day plan was recomputed."
+    if removed_transfer_dates:
+        dates = ", ".join(str(d) for d in removed_transfer_dates)
+        summary += f" Also removed the fixed transfer on {dates} — that date is no longer an accommodation changeover."
+    return summary

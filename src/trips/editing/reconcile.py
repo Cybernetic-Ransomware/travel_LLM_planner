@@ -54,13 +54,14 @@ def merge_preserved_hours(
     requested_from: int | None,
     requested_to: int | None,
 ) -> tuple[int | None, int | None]:
-    """Keep the preferred window of the slot already on ``day_index`` when the op omits it."""
-    if requested_from is not None or requested_to is not None:
-        return requested_from, requested_to
-    for slot in existing_slots:
-        if slot["day_index"] == day_index:
-            return slot.get("preferred_hour_from"), slot.get("preferred_hour_to")
-    return None, None
+    """Per-field: keep each preferred bound from the slot already on ``day_index`` that the op leaves unset."""
+    existing = next((slot for slot in existing_slots if slot["day_index"] == day_index), None)
+    base_from = existing.get("preferred_hour_from") if existing else None
+    base_to = existing.get("preferred_hour_to") if existing else None
+    return (
+        requested_from if requested_from is not None else base_from,
+        requested_to if requested_to is not None else base_to,
+    )
 
 
 def dedupe_flexible_slots(op: SetPlaceFlexibleOp) -> None:
