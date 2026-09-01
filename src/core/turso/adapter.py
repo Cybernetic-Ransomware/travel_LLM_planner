@@ -86,8 +86,11 @@ def _rows_from_cursor(cursor: Any) -> list[dict[str, Any]]:
 def _is_integrity_error(exc: BaseException) -> bool:
     if isinstance(exc, sqlite3.IntegrityError):
         return True
-    # libsql raises its own IntegrityError subclass; match by name to avoid importing it.
-    return type(exc).__name__ == "IntegrityError" or "IntegrityError" in [t.__name__ for t in type(exc).__mro__]
+    if "IntegrityError" in {t.__name__ for t in type(exc).__mro__}:
+        return True
+    # libsql raises a bare ValueError for a constraint violation; match on the SQLite message
+    # ("UNIQUE / FOREIGN KEY / NOT NULL / CHECK / PRIMARY KEY constraint failed").
+    return "constraint failed" in str(exc).lower()
 
 
 def _coerce_params(params: Params) -> tuple[Any, ...]:
@@ -110,6 +113,11 @@ def _run_statement(conn: Any, sql: str, params: Params, *, commit: bool) -> DbRe
             conn.commit()
         return result
     except Exception as exc:  # noqa: BLE001 - normalise every driver error at the boundary
+        if commit:
+            # libsql (unlike sqlite3 in autocommit mode) leaves a transaction open after a
+            # failed statement; clear it so the next `transaction()` can BEGIN. No-op on sqlite3.
+            with contextlib.suppress(Exception):
+                conn.rollback()
         raise TripDbError(f"{type(exc).__name__}: {exc}", is_integrity_error=_is_integrity_error(exc)) from exc
 
 
