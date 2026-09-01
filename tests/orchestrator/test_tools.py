@@ -13,9 +13,9 @@ def _make_tool(db=None):
     return create_tools(db or MagicMock())[0]
 
 
-def _tool_by_name(name: str, db=None, places_manager=None):
+def _tool_by_name(name: str, db=None, places_manager=None, trips_repo=None):
     """Return a tool from create_tools by its name."""
-    tools = create_tools(db or MagicMock(), places_manager)
+    tools = create_tools(db or MagicMock(), places_manager, trips_repo=trips_repo or MagicMock())
     return next(t for t in tools if t.name == name)
 
 
@@ -27,11 +27,11 @@ def _config(allowed: list[str] | None = None) -> dict:
 @pytest.mark.unit
 class TestToolMetadata:
     def test_create_tools_returns_five_tools_without_places_manager(self):
-        tools = create_tools(MagicMock())
+        tools = create_tools(MagicMock(), trips_repo=MagicMock())
         assert len(tools) == 5
 
     def test_create_tools_returns_seven_tools_with_places_manager(self):
-        tools = create_tools(MagicMock(), MagicMock())
+        tools = create_tools(MagicMock(), MagicMock(), trips_repo=MagicMock())
         assert len(tools) == 7
 
     def test_tool_has_expected_name(self):
@@ -951,9 +951,9 @@ class TestListSavedTripsSuccess:
     async def test_returns_formatted_list_when_trips_exist(self):
         trips = [_make_trip_summary("abc", "Test Krakow", "2026-07-05"), _make_trip_summary("def", "Warsaw", "2026-07-10")]
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.list_all = AsyncMock(return_value=trips)
-            result = await _tool_by_name("list_saved_trips").ainvoke({})
+        repo = MagicMock()
+        repo.list_all = AsyncMock(return_value=trips)
+        result = await _tool_by_name("list_saved_trips", trips_repo=repo).ainvoke({})
 
         assert "Test Krakow" in result
         assert "Warsaw" in result
@@ -961,9 +961,9 @@ class TestListSavedTripsSuccess:
         assert "def" in result
 
     async def test_returns_no_trips_message_when_empty(self):
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.list_all = AsyncMock(return_value=[])
-            result = await _tool_by_name("list_saved_trips").ainvoke({})
+        repo = MagicMock()
+        repo.list_all = AsyncMock(return_value=[])
+        result = await _tool_by_name("list_saved_trips", trips_repo=repo).ainvoke({})
 
         assert "No saved trips found" in result
 
@@ -971,9 +971,9 @@ class TestListSavedTripsSuccess:
 @pytest.mark.unit
 class TestListSavedTripsErrors:
     async def test_db_exception_returns_error_string(self):
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.list_all = AsyncMock(side_effect=Exception("connection lost"))
-            result = await _tool_by_name("list_saved_trips").ainvoke({})
+        repo = MagicMock()
+        repo.list_all = AsyncMock(side_effect=Exception("connection lost"))
+        result = await _tool_by_name("list_saved_trips", trips_repo=repo).ainvoke({})
 
         assert "Failed to retrieve trips" in result
         assert "connection lost" in result
@@ -1000,9 +1000,9 @@ class TestGetTripDetailsSuccess:
     async def test_returns_header_and_place_list_for_valid_trip(self):
         trip = _make_trip_detail()
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "abc123"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "abc123"})
 
         assert "Test Krakow" in result
         assert "Muzeum Przyrodnicze" in result
@@ -1017,9 +1017,9 @@ class TestGetTripDetailsSuccess:
         ]
         trip = _make_trip_detail(steps=steps)
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "abc123"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "abc123"})
 
         assert "10 min travel" in result
 
@@ -1029,27 +1029,27 @@ class TestGetTripDetailsSuccess:
         skipped.place_id = "skip1"
         trip = _make_trip_detail(skipped=[skipped])
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "abc123"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "abc123"})
 
         assert "Skipped Place" in result
 
     async def test_no_places_in_route_message(self):
         trip = _make_trip_detail(steps=[])
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "abc123"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "abc123"})
 
         assert "No places in route" in result
 
     async def test_includes_summary_totals(self):
         trip = _make_trip_detail()
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "abc123"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "abc123"})
 
         assert "Total:" in result
         assert "min travel" in result
@@ -1059,16 +1059,16 @@ class TestGetTripDetailsSuccess:
 @pytest.mark.unit
 class TestGetTripDetailsErrors:
     async def test_not_found_returns_not_found_message(self):
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=None)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "abc123"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=None)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "abc123"})
 
         assert "not found" in result.lower()
 
     async def test_db_exception_returns_error_string(self):
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(side_effect=Exception("timeout"))
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "abc123"})
+        repo = MagicMock()
+        repo.get = AsyncMock(side_effect=Exception("timeout"))
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "abc123"})
 
         assert "Failed to retrieve trip" in result
         assert "timeout" in result
@@ -1177,9 +1177,9 @@ class TestListSavedTripsMultiDay:
             _make_multi_day_trip_summary("mabc", "Kraków then Warsaw", "2026-08-01", "2026-08-03", 3),
         ]
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.list_all = AsyncMock(return_value=trips)
-            result = await _tool_by_name("list_saved_trips").ainvoke({})
+        repo = MagicMock()
+        repo.list_all = AsyncMock(return_value=trips)
+        result = await _tool_by_name("list_saved_trips", trips_repo=repo).ainvoke({})
 
         assert "date=2026-07-05" in result
         assert "2026-08-01 to 2026-08-03 (3 days)" in result
@@ -1194,9 +1194,9 @@ class TestGetTripDetailsMultiDay:
         ]
         trip = _make_multi_day_trip_detail(days=days, num_days=2, end_date="2026-08-02")
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "mabc"})
 
         assert "Day 1 (2026-08-01)" in result
         assert "Museum" in result
@@ -1213,9 +1213,9 @@ class TestGetTripDetailsMultiDay:
         )
         trip = _make_multi_day_trip_detail(days=[day])
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "mabc"})
 
         assert "Hotel A -> Hotel B" in result
         assert "11:00" in result
@@ -1237,9 +1237,9 @@ class TestGetTripDetailsMultiDay:
         )
         trip = _make_multi_day_trip_detail(days=[day])
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "mabc"})
 
         assert "Morning Museum" in result
         assert "Evening Park" in result
@@ -1273,9 +1273,9 @@ class TestGetTripDetailsMultiDay:
         )
         trip = _make_multi_day_trip_detail(days=[day])
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "mabc"})
 
         assert "Total: 30 min travel, 90 min visits, 0 min wait" not in result
         assert "Local routes total: 50 min travel, 150 min visits, 5 min wait" in result
@@ -1285,9 +1285,9 @@ class TestGetTripDetailsMultiDay:
         day = _make_day_plan(skipped=[skipped_place])
         trip = _make_multi_day_trip_detail(days=[day])
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "mabc"})
 
         assert result.count("Closed Museum") == 1
 
@@ -1295,9 +1295,9 @@ class TestGetTripDetailsMultiDay:
         unassigned_place = _make_skipped_place("Unreachable Cafe", "unassigned1")
         trip = _make_multi_day_trip_detail(unassigned=[unassigned_place])
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "mabc"})
 
         assert "Unreachable Cafe" in result
 
@@ -1311,9 +1311,9 @@ class TestGetTripDetailsMultiDay:
         )
         trip = _make_multi_day_trip_detail(days=[day])
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "mabc"})
 
         assert "Before" in result
         assert "After" in result
@@ -1325,18 +1325,18 @@ class TestGetTripDetailsMultiDay:
         )
         trip = _make_multi_day_trip_detail(days=[day])
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "mabc"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "mabc"})
 
         assert "OnlyPre" in result
 
     async def test_single_day_output_unchanged_after_refactor(self):
         trip = _make_trip_detail()
 
-        with patch("src.orchestrator.tools.TripsManager") as MockManager:
-            MockManager.return_value.find_by_id = AsyncMock(return_value=trip)
-            result = await _tool_by_name("get_trip_details").ainvoke({"trip_id": "abc123"})
+        repo = MagicMock()
+        repo.get = AsyncMock(return_value=trip)
+        result = await _tool_by_name("get_trip_details", trips_repo=repo).ainvoke({"trip_id": "abc123"})
 
         assert "Test Krakow" in result
         assert "Muzeum Przyrodnicze" in result

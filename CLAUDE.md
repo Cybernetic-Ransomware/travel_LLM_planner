@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Project Overview
 
 **travel-planner** is a FastAPI application for scraping, storing, and serving Google Places data.
-It uses MongoDB (single-node Replica Set) for persistence, Playwright for scraping, and Streamlit for a management panel.
+It uses MongoDB (single-node Replica Set) for Places / distance-matrix cache / orchestrator state, **Turso / libSQL** for persisted trips + revision history (ADR-21), Playwright for scraping, and Streamlit for a management panel.
 
 - Python **3.14+**, managed with **uv**
 - Async-first: `asyncio` mode throughout, PyMongo native async client
@@ -41,7 +41,7 @@ All common workflows are defined in **`justfile`** (PowerShell shell). Use `just
 
 ```bash
 just test                # unit + regression (no Docker)
-just test-integration    # integration tests (spins up testcontainers MongoDB)
+just test-integration    # integration tests (testcontainers MongoDB; Turso trip tests use a stdlib sqlite file, no Docker)
 ```
 
 Tests are organized by marker:
@@ -92,10 +92,11 @@ src/
 ├── transfers/  # Transfer domain: fixed-time journeys between accommodation stays on transition days (ADR-16)
 ├── config/     # Startup configuration: Settings (Pydantic), logger, FastAPI lifespan
 ├── core/       # Cross-cutting concerns: DB manager, exceptions, dependency injection
-│   └── db/     # MongoDBManager, FastAPI deps (get_db, mongo_session, mongo_transaction)
+│   ├── db/     # MongoDBManager, FastAPI deps (get_db, mongo_session, mongo_transaction)
+│   └── turso/  # The one Turso/libSQL driver boundary for persisted trips: adapter (async, sqlite|libsql), TursoManager (schema), MigrationState (ADR-21)
 ├── gmaps/      # Google Places domain: scraper, storage, router, models
-├── trips/      # Trip persistence domain: save/list/get optimized routes as named trips
-│   └── editing/  # Multi-day trip edit service: typed operation batch -> validate -> optimize -> compare-and-set persist (ADR-20)
+├── trips/      # Persisted-trip domain — Turso/libSQL, NOT MongoDB (ADR-21). TripRepository is the one persistence boundary; immutable revision history + restore. Legacy Mongo `trips` collection is migration/ops-only, never read at runtime.
+│   └── editing/  # Multi-day trip edit service: typed operation batch -> validate -> optimize -> compare-and-set persist (ADR-20); ORCHESTRATOR-sourced revision rows (ADR-21)
 ├── panel/      # Streamlit UI + API client
 └── main.py     # App composition only — registers components via register_*(app) functions
 ```
@@ -166,6 +167,7 @@ ADRs are stored in `docs/`. Before making structural decisions, check existing A
 | 18 | Accepted | Multi-day trip persistence — discriminated `Trip` model in `src/trips/`, `plan_type` legacy inference, callable request discriminator, `TripPlanTypeConflictError` on update |
 | 19 | Accepted | Generated REST contracts — `openapi-typescript` from `app.openapi()`, `tools/openapi-codegen/`, `contract-drift.yml` CI gate |
 | 20 | Accepted | Confirmation-gated AI editing of persisted multi-day trips — server-derived `ChatRequest.trip_id`, `edit_multi_day_trip` batch tool, `TripSessionStateStore` scope snapshot/consume, split read/write ToolNode, bidirectional `revision` + `expected_revision` compare-and-set (amends ADR-10, ADR-18) |
+| 21 | Accepted | Turso trip persistence + immutable revision history + restore — `src/core/turso/` driver boundary (sqlite local / libsql prod), `TripRepository` as the one persistence boundary, full canonical snapshots + SHA-256, `trip_revisions` written in the same transaction, server-enforced provenance, `restore_revision` mints a `REVERT` revision (no optimizer), Turso-local `app_migrations` marker as the only startup dependency, `list_trip_revisions` / `revert_trip_revision` chat tools (amends ADR-02, ADR-06, ADR-18, ADR-20) |
 | — | — | [Frontend split roadmap](docs/frontend-roadmap.md) — Astro/SvelteKit decision rule and upcoming PRs |
 
 New decisions should follow the template in `docs/00_ADR-subject.md.template`.

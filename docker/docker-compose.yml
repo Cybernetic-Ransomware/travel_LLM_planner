@@ -19,6 +19,7 @@ services:
       - "8080:8080"
     volumes:
       - ../log:/log
+      - trips_data:/data
 
   mongo:
     image: mongo:8.0
@@ -42,3 +43,4 @@ networks:
 
 volumes:
   mongo_data:
+  trips_data:

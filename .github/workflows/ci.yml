@@ -65,3 +65,50 @@ jobs:
 
       - name: Run unit tests
         run: uv run pytest -m unit
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      # Turso trip tests run on a stdlib sqlite file (no service); the pre-existing
+      # integration tests spin up a MongoDB testcontainer — Docker ships on ubuntu runners.
+      - name: Run integration tests
+        run: uv run pytest -m integration
+
+  driver-parity:
+    name: Turso driver parity (libsql)
+    runs-on: ubuntu-latest
+    # Advisory drift check: libsql has no Windows wheel so it cannot be verified in local
+    # dev; a red here is a signal to investigate, not a merge blocker.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install dependencies (+ libsql extra)
+        run: uv sync --extra libsql
+
+      # Run the adapter contract suite through the libsql driver to catch transaction /
+      # affected-row / parameter-binding drift from sqlite3. TRIP_DB_FORCE_BACKEND forces
+      # libsql, so the sqlite URL-scheme tests are deselected.
+      - name: Adapter contract on libsql
+        env:
+          TRIP_DB_FORCE_BACKEND: libsql
+        run: >
+          uv run pytest -m integration
+          -k "not BackendResolution and not backend_is_sqlite_for_file_url"
+          tests/core/turso/test_adapter.py tests/core/turso/test_manager.py

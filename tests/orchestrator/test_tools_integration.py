@@ -78,7 +78,7 @@ class TestUpdateVisitHoursIntegration:
             config=_config(["different-id-1", "different-id-2"]),
         )
 
-        assert "not part of the current trip plan" in result
+        assert "not part of the current selection" in result
         doc = await test_db[GMAPS_COLLECTION].find_one({"_id": ObjectId(sample_place)})
         assert doc.get("preferred_hour_from") is None
 

@@ -36,9 +36,9 @@ async def test_missing_trip_clears_binding_and_adds_note():
     store.bind_place_selection = AsyncMock()
     store.bind_trip = AsyncMock()
 
-    with patch("src.orchestrator.router.TripsManager") as tm:
-        tm.return_value.find_by_id = AsyncMock(return_value=None)
-        state = await _bind_trip_and_build_state(MagicMock(), store, "sess-1", _payload(), trip_id="ghost")
+    trips = MagicMock()
+    trips.get = AsyncMock(return_value=None)
+    state = await _bind_trip_and_build_state(trips, store, "sess-1", _payload(), trip_id="ghost")
 
     # No binding doc at all -> arm_pending fails closed for every write tool, add_place included.
     store.clear_binding.assert_awaited_once_with("sess-1")
@@ -53,15 +53,13 @@ async def test_multi_day_trip_binds_trip_with_server_derived_scope():
     store.bind_trip = AsyncMock()
     trip = _multi_day_trip()
 
+    trips = MagicMock()
+    trips.get = AsyncMock(return_value=trip)
     with (
-        patch("src.orchestrator.router.TripsManager") as tm,
         patch("src.orchestrator.router.build_trip_context_prompt", return_value="TRIP PROMPT"),
         patch("src.orchestrator.router.TripPromptContext"),
     ):
-        tm.return_value.find_by_id = AsyncMock(return_value=trip)
-        state = await _bind_trip_and_build_state(
-            MagicMock(), store, "sess-1", _payload(place_ids=["ignored"]), trip_id="trip-1"
-        )
+        state = await _bind_trip_and_build_state(trips, store, "sess-1", _payload(place_ids=["ignored"]), trip_id="trip-1")
 
     store.bind_trip.assert_awaited_once()
     kwargs = store.bind_trip.call_args.kwargs

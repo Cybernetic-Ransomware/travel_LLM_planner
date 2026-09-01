@@ -86,3 +86,15 @@ class TripConcurrencyConflictError(TripEditError):
     """Mirror of ``src.core.exceptions.TripConcurrencyConflictError`` for the chat-tool path."""
 
     user_message = "This trip changed since we started; nothing was saved. Ask me to try again and I'll re-read it."
+
+
+class RevisionNotFoundError(TripEditError):
+    """Mirror of ``src.core.exceptions.RevisionNotFoundError`` for the chat-tool path."""
+
+    user_message = "There's no such revision to restore."
+
+
+class RevisionAlreadyCurrentError(TripEditError):
+    """Mirror of ``src.core.exceptions.RevisionAlreadyCurrentError`` for the chat-tool path."""
+
+    user_message = "That revision is already the current state — nothing to restore."

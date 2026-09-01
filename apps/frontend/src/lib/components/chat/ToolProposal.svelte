@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ToolProposal } from '$lib/types/index.js';
 	import * as m from '$lib/paraglide/messages.js';
-	import { formatTripEditBatch } from './tripEditOps.js';
+	import { formatTripEditBatch, formatRevertProposal } from './tripEditOps.js';
 
 	let {
 		proposal,
@@ -14,7 +14,11 @@
 	} = $props();
 
 	const editLines = $derived(
-		proposal.tool === 'edit_multi_day_trip' ? formatTripEditBatch(proposal.args) : null
+		proposal.tool === 'edit_multi_day_trip'
+			? formatTripEditBatch(proposal.args)
+			: proposal.tool === 'revert_trip_revision'
+				? [formatRevertProposal(proposal.args)]
+				: null
 	);
 </script>
 

@@ -2,6 +2,9 @@
 
 Any failure before the final write raises first, so a failed edit leaves the stored
 trip untouched; the persisted request and response are from the same ``optimize_trip`` run.
+The persist call goes through ``TripRepository.update(..., source="ORCHESTRATOR")`` — the
+same transactional writer as the UI ``PUT`` — so a matching ``trip_revisions`` row is
+written in the same Turso transaction (ADR-21).
 """
 
 from __future__ import annotations
@@ -10,7 +13,6 @@ from dataclasses import dataclass
 from datetime import date
 
 from pymongo.asynchronous.database import AsyncDatabase
-from pymongo.errors import PyMongoError
 
 from src.config.conf_logger import setup_logger
 from src.core.exceptions import (
@@ -19,6 +21,7 @@ from src.core.exceptions import (
 from src.core.exceptions import (
     TripConcurrencyConflictError as HTTPTripConcurrencyConflictError,
 )
+from src.core.turso.adapter import TripDbError
 from src.optimizer.matrix.client import GoogleRoutesManager
 from src.optimizer.solver.multi_day_service import optimize_trip
 from src.trips.editing.apply import apply_operations
@@ -31,8 +34,9 @@ from src.trips.editing.errors import (
     UnsupportedPlanTypeError,
 )
 from src.trips.editing.operations import TripEditOperation
-from src.trips.manager import TripsManager
+from src.trips.editing.summary import summarize_operations
 from src.trips.models import MultiDaySaveTripRequest, MultiDayTripDetailOut
+from src.trips.repository import TripRepository
 
 logger = setup_logger(__name__, "orchestrator")
 
@@ -44,9 +48,10 @@ class AppliedEdit:
 
 
 class MultiDayTripEditor:
-    def __init__(self, db: AsyncDatabase, trips_manager: TripsManager, routes_manager: GoogleRoutesManager) -> None:
+    def __init__(self, db: AsyncDatabase, trips: TripRepository, routes_manager: GoogleRoutesManager) -> None:
+        # db is still needed by optimize_trip for the Mongo-backed distance-matrix cache.
         self._db = db
-        self._trips = trips_manager
+        self._trips = trips
         self._routes = routes_manager
 
     async def apply(
@@ -55,10 +60,10 @@ class MultiDayTripEditor:
         operations: list[TripEditOperation],
         expected_revision: int,
     ) -> AppliedEdit:
-        trip = await self._trips.find_by_id(trip_id)
+        trip = await self._trips.get(trip_id)
         if trip is None:
             raise TripNotFoundError()
-        # find_by_id returns a concrete class, so this equals a plan_type check (ADR-18) and narrows.
+        # get() returns a concrete class, so this equals a plan_type check (ADR-18) and narrows.
         if not isinstance(trip, MultiDayTripDetailOut):
             raise UnsupportedPlanTypeError()
         if trip.revision != expected_revision:
@@ -82,18 +87,23 @@ class MultiDayTripEditor:
         )
 
         try:
-            updated = await self._trips.update(trip_id, save_request)
+            updated = await self._trips.update(
+                trip_id,
+                save_request,
+                source="ORCHESTRATOR",
+                summary=summarize_operations(operations),
+            )
         except HTTPTripConcurrencyConflictError as exc:
             # update() can't tell a stale revision from a doc deleted mid-CAS — disambiguate here.
-            if await self._trips.find_by_id(trip_id) is None:
+            if await self._trips.get(trip_id) is None:
                 raise TripDeletedError() from exc
             raise TripConcurrencyConflictError() from exc
-        except PyMongoError as exc:
+        except TripDbError as exc:
             logger.exception("Trip persistence failed for trip_id=%s", trip_id)
             raise TripPersistenceError() from exc
 
         if updated is None:
-            # update() returns None only when the document vanished between the read and the write.
+            # update() returns None only when the trip vanished between the read and the write.
             raise TripDeletedError()
         if not isinstance(updated, MultiDayTripDetailOut):  # pragma: no cover - update() preserves plan_type
             raise UnsupportedPlanTypeError()

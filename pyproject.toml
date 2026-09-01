@@ -24,6 +24,11 @@ dependencies = [
     "langchain-anthropic>=1.4.0",
 ]
 
+[project.optional-dependencies]
+# Production Turso/libSQL driver (ADR-21). Linux-x86_64 only (no Windows wheel; the sdist
+# needs Rust + CMake) — local dev uses the stdlib sqlite3 backend. `uv sync --extra libsql`.
+libsql = ["libsql>=0.1.11 ; sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
 [dependency-groups]
 dev = [
     "codespell>=2.4.1",

@@ -43,7 +43,7 @@ def op():
 class TestMultiDayTripEditor:
     async def test_happy_path_persists_via_shared_update(self, base_request, op):
         trips = MagicMock()
-        trips.find_by_id = AsyncMock(return_value=_detail(base_request, revision=3))
+        trips.get = AsyncMock(return_value=_detail(base_request, revision=3))
         trips.update = AsyncMock(return_value=_detail(base_request, revision=4))
         editor = MultiDayTripEditor(MagicMock(), trips, MagicMock())
 
@@ -59,21 +59,21 @@ class TestMultiDayTripEditor:
 
     async def test_trip_not_found(self, op):
         trips = MagicMock()
-        trips.find_by_id = AsyncMock(return_value=None)
+        trips.get = AsyncMock(return_value=None)
         editor = MultiDayTripEditor(MagicMock(), trips, MagicMock())
         with pytest.raises(TripNotFoundError):
             await editor.apply("x", op, expected_revision=0)
 
     async def test_single_day_trip_rejected(self, op):
         trips = MagicMock()
-        trips.find_by_id = AsyncMock(return_value=MagicMock(spec=[]))  # not a MultiDayTripDetailOut
+        trips.get = AsyncMock(return_value=MagicMock(spec=[]))  # not a MultiDayTripDetailOut
         editor = MultiDayTripEditor(MagicMock(), trips, MagicMock())
         with pytest.raises(UnsupportedPlanTypeError):
             await editor.apply("x", op, expected_revision=0)
 
     async def test_early_revision_mismatch(self, base_request, op):
         trips = MagicMock()
-        trips.find_by_id = AsyncMock(return_value=_detail(base_request, revision=5))
+        trips.get = AsyncMock(return_value=_detail(base_request, revision=5))
         trips.update = AsyncMock()
         editor = MultiDayTripEditor(MagicMock(), trips, MagicMock())
         with pytest.raises(TripConcurrencyConflictError):
@@ -82,7 +82,7 @@ class TestMultiDayTripEditor:
 
     async def test_optimizer_failure_is_wrapped_and_nothing_persisted(self, base_request, op):
         trips = MagicMock()
-        trips.find_by_id = AsyncMock(return_value=_detail(base_request, revision=0))
+        trips.get = AsyncMock(return_value=_detail(base_request, revision=0))
         trips.update = AsyncMock()
         editor = MultiDayTripEditor(MagicMock(), trips, MagicMock())
         with (
@@ -94,7 +94,7 @@ class TestMultiDayTripEditor:
 
     async def test_cas_conflict_at_persist_is_wrapped(self, base_request, op):
         trips = MagicMock()
-        trips.find_by_id = AsyncMock(return_value=_detail(base_request, revision=0))
+        trips.get = AsyncMock(return_value=_detail(base_request, revision=0))
         trips.update = AsyncMock(side_effect=HTTPConflict("x", expected=0))
         editor = MultiDayTripEditor(MagicMock(), trips, MagicMock())
         response_stub = _detail(base_request).multi_day_response
@@ -107,7 +107,7 @@ class TestMultiDayTripEditor:
     async def test_delete_during_cas_is_reported_as_deleted_not_conflict(self, base_request, op):
         trips = MagicMock()
         # Loaded fine, then vanished between update()'s own read and its find_one_and_update.
-        trips.find_by_id = AsyncMock(side_effect=[_detail(base_request, revision=0), None])
+        trips.get = AsyncMock(side_effect=[_detail(base_request, revision=0), None])
         trips.update = AsyncMock(side_effect=HTTPConflict("x", expected=0))
         editor = MultiDayTripEditor(MagicMock(), trips, MagicMock())
         response_stub = _detail(base_request).multi_day_response
@@ -119,7 +119,7 @@ class TestMultiDayTripEditor:
 
     async def test_deleted_between_read_and_write(self, base_request, op):
         trips = MagicMock()
-        trips.find_by_id = AsyncMock(return_value=_detail(base_request, revision=0))
+        trips.get = AsyncMock(return_value=_detail(base_request, revision=0))
         trips.update = AsyncMock(return_value=None)
         editor = MultiDayTripEditor(MagicMock(), trips, MagicMock())
         response_stub = _detail(base_request).multi_day_response

@@ -78,6 +78,30 @@ class TripConcurrencyConflictError(HTTPException):
         )
 
 
+class TripNotFoundError(HTTPException):
+    """Raised when an operation targets a trip id that does not exist."""
+
+    def __init__(self, trip_id: str) -> None:
+        super().__init__(status_code=404, detail=f"Trip {trip_id!r} not found")
+
+
+class RevisionNotFoundError(HTTPException):
+    """Raised when a trip has no revision with the requested number."""
+
+    def __init__(self, trip_id: str, revision: int) -> None:
+        super().__init__(status_code=404, detail=f"Trip {trip_id!r} has no revision {revision}")
+
+
+class RevisionAlreadyCurrentError(HTTPException):
+    """Raised when a restore targets the revision that is already the current state."""
+
+    def __init__(self, trip_id: str, revision: int) -> None:
+        super().__init__(
+            status_code=400,
+            detail=f"Revision {revision} is already the current state of trip {trip_id!r}",
+        )
+
+
 class MissingExpectedRevisionError(HTTPException):
     """Raised when a trip update omits expected_revision — updates must carry the concurrency token."""
 

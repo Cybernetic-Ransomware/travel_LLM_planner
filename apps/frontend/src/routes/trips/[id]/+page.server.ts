@@ -1,17 +1,31 @@
 import type { PageServerLoad } from './$types';
-import type { TripOut } from '$lib/types/index.js';
+import type { TripOut, TripRevisionListOut } from '$lib/types/index.js';
 import { backendFetch } from '$lib/server/backend.js';
 import { error } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ fetch, params, depends }) => {
-	// Scoped invalidation key: a confirmation-gated chat edit calls invalidate('app:trip:<id>').
+	// A chat edit or a restore calls invalidate('app:trip:<id>') — re-runs BOTH fetches below.
 	depends(`app:trip:${params.id}`);
-	const result = await backendFetch<TripOut>(fetch, `/core/trips/${params.id}`);
-	if (!result.ok) {
-		if (result.error.status === 404) {
+
+	const [tripResult, revisionsResult] = await Promise.all([
+		backendFetch<TripOut>(fetch, `/core/trips/${params.id}`),
+		backendFetch<TripRevisionListOut>(fetch, `/core/trips/${params.id}/revisions`)
+	]);
+
+	if (!tripResult.ok) {
+		if (tripResult.error.status === 404) {
 			throw error(404, 'Trip not found');
 		}
-		return { trip: null as TripOut | null, backendError: result.error };
+		return {
+			trip: null as TripOut | null,
+			revisions: null as TripRevisionListOut | null,
+			backendError: tripResult.error
+		};
 	}
-	return { trip: result.data, backendError: null };
+
+	return {
+		trip: tripResult.data,
+		revisions: revisionsResult.ok ? revisionsResult.data : null,
+		backendError: null
+	};
 };

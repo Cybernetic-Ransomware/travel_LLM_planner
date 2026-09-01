@@ -15,6 +15,7 @@ from src.orchestrator.checkpointer import MongoCheckpointSaver
 from src.orchestrator.graph import build_graph
 from src.orchestrator.models import AgentState
 from src.orchestrator.trip_session_state import TripSessionStateStore
+from src.trips.repository import TripRepository
 
 logger = setup_logger(__name__, "orchestrator")
 
@@ -35,6 +36,7 @@ class OrchestratorManager:
         langsmith_tracing: bool,
         langsmith_project: str,
         db: AsyncDatabase | None = None,
+        trips_repo: TripRepository | None = None,
         places_manager: GooglePlacesManager | None = None,
         routes_manager: GoogleRoutesManager | None = None,
         checkpoint_ttl_days: int = 30,
@@ -46,6 +48,7 @@ class OrchestratorManager:
         self._langsmith_tracing = langsmith_tracing
         self._langsmith_project = langsmith_project
         self._db = db
+        self._trips_repo = trips_repo
         self._places_manager = places_manager
         self._routes_manager = routes_manager
         self._checkpoint_ttl_days = checkpoint_ttl_days
@@ -79,6 +82,11 @@ class OrchestratorManager:
     def trip_session_state(self) -> TripSessionStateStore | None:
         """Server-side write-scope store for chat threads, or None when not connected with a db."""
         return self._trip_session_state
+
+    @property
+    def trips_repo(self) -> TripRepository | None:
+        """Turso-backed persisted-trip repository, or None when not configured."""
+        return self._trips_repo
 
     @property
     def provider(self) -> str:
@@ -119,6 +127,7 @@ class OrchestratorManager:
                 self._llm,
                 checkpointer=self._checkpointer,
                 db=self._db,
+                trips_repo=self._trips_repo,
                 places_manager=self._places_manager,
                 routes_manager=self._routes_manager,
                 session_state_store=self._trip_session_state,
@@ -142,6 +151,7 @@ class OrchestratorManager:
         self._places_manager = None
         self._routes_manager = None
         self._trip_session_state = None
+        self._trips_repo = None
 
     async def __aenter__(self) -> OrchestratorManager:
         await self.connect()

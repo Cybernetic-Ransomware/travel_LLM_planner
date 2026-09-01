@@ -64,3 +64,11 @@ export function formatTripEditBatch(args: Record<string, unknown>): string[] {
 	const ops = Array.isArray(args.operations) ? (args.operations as Op[]) : [];
 	return ops.map(formatTripEditOperation);
 }
+
+/** Human-readable one-liner for a revert_trip_revision proposal. */
+export function formatRevertProposal(args: Record<string, unknown>): string {
+	const target = args.target_revision;
+	return typeof target === 'number'
+		? `Restore this trip to revision ${target}`
+		: 'Restore this trip to an earlier revision';
+}

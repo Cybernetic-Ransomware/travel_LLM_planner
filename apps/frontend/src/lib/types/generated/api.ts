@@ -306,20 +306,83 @@ export interface paths {
 		};
 		/**
 		 * Get Trip
-		 * @description Return a single saved trip by its MongoDB id.
+		 * @description Return a single saved trip by its id.
 		 */
 		get: operations['get_trip_api_v1_core_trips__trip_id__get'];
 		/**
 		 * Update Trip
-		 * @description Replace a saved trip's content. Rejects changing plan_type (409).
+		 * @description Replace a saved trip's content. Rejects changing plan_type (409); requires
+		 *     ``expected_revision`` (428 if missing, 409 if stale).
 		 */
 		put: operations['update_trip_api_v1_core_trips__trip_id__put'];
 		post?: never;
 		/**
 		 * Delete Trip
-		 * @description Delete a saved trip by its MongoDB id.
+		 * @description Delete a saved trip and its whole revision history.
 		 */
 		delete: operations['delete_trip_api_v1_core_trips__trip_id__delete'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/core/trips/{trip_id}/revisions': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List Trip Revisions
+		 * @description List every persisted revision of a trip, newest first (no snapshot bodies).
+		 */
+		get: operations['list_trip_revisions_api_v1_core_trips__trip_id__revisions_get'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/core/trips/{trip_id}/revisions/{revision}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get Trip Revision
+		 * @description Return the full snapshot of one historical revision.
+		 */
+		get: operations['get_trip_revision_api_v1_core_trips__trip_id__revisions__revision__get'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/v1/core/trips/{trip_id}/revisions/{revision}/restore': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Restore Trip Revision
+		 * @description Restore an earlier revision. Creates a new higher revision that byte-copies the
+		 *     target snapshot (``source='REVERT'``); never re-runs the optimizer. 409 on a stale
+		 *     ``expected_revision``, 404 for an unknown revision, 400 if the target is already current.
+		 */
+		post: operations['restore_trip_revision_api_v1_core_trips__trip_id__revisions__revision__restore_post'];
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -723,6 +786,47 @@ export interface components {
 			multi_day_request: components['schemas']['MultiDayRequest-Output'];
 			multi_day_response: components['schemas']['MultiDayResponse-Output'];
 		};
+		/** MultiDayTripRevisionDetailOut */
+		MultiDayTripRevisionDetailOut: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/** Created At */
+			created_at: string;
+			/** Updated At */
+			updated_at: string | null;
+			/**
+			 * Revision
+			 * @default 0
+			 */
+			revision: number;
+			/**
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
+			 */
+			plan_type: 'MULTI_DAY';
+			/** Start Date */
+			start_date: string;
+			/** End Date */
+			end_date: string;
+			/** Num Days */
+			num_days: number;
+			transport_mode: components['schemas']['TransportMode'];
+			multi_day_request: components['schemas']['MultiDayRequest-Output'];
+			multi_day_response: components['schemas']['MultiDayResponse-Output'];
+			/**
+			 * Source
+			 * @enum {string}
+			 */
+			source: 'CREATED' | 'MANUAL' | 'ORCHESTRATOR' | 'REVERT' | 'MIGRATION';
+			/** Restored From Revision */
+			restored_from_revision: number | null;
+			/** Snapshot Hash */
+			snapshot_hash: string;
+			/** Recorded At */
+			recorded_at: string;
+		};
 		/** MultiDayTripSummaryOut */
 		MultiDayTripSummaryOut: {
 			/** Id */
@@ -894,6 +998,11 @@ export interface components {
 			/** Skipped */
 			skipped?: boolean | null;
 		};
+		/** RestoreRevisionRequest */
+		RestoreRevisionRequest: {
+			/** Expected Revision */
+			expected_revision: number;
+		};
 		/**
 		 * RouteStep
 		 * @description A single stop in the optimized route.
@@ -978,6 +1087,49 @@ export interface components {
 			day_start_hour: number;
 			/** Day End Hour */
 			day_end_hour: number;
+		};
+		/** SingleDayTripRevisionDetailOut */
+		SingleDayTripRevisionDetailOut: {
+			/** Id */
+			id: string;
+			/** Name */
+			name: string;
+			/** Created At */
+			created_at: string;
+			/** Updated At */
+			updated_at: string | null;
+			/**
+			 * Revision
+			 * @default 0
+			 */
+			revision: number;
+			/**
+			 * @description discriminator enum property added by openapi-typescript
+			 * @enum {string}
+			 */
+			plan_type: 'SINGLE_DAY';
+			/** Date */
+			date: string;
+			optimizer_request: components['schemas']['OptimizeRequest'];
+			optimizer_response: components['schemas']['OptimizeResponse'];
+			/** Selected Place Ids */
+			selected_place_ids: string[];
+			transport_mode: components['schemas']['TransportMode'];
+			/** Day Start Hour */
+			day_start_hour: number;
+			/** Day End Hour */
+			day_end_hour: number;
+			/**
+			 * Source
+			 * @enum {string}
+			 */
+			source: 'CREATED' | 'MANUAL' | 'ORCHESTRATOR' | 'REVERT' | 'MIGRATION';
+			/** Restored From Revision */
+			restored_from_revision: number | null;
+			/** Snapshot Hash */
+			snapshot_hash: string;
+			/** Recorded At */
+			recorded_at: string;
 		};
 		/** SingleDayTripSummaryOut */
 		SingleDayTripSummaryOut: {
@@ -1069,6 +1221,38 @@ export interface components {
 		 * @enum {string}
 		 */
 		TransportMode: 'WALK' | 'DRIVE' | 'BICYCLE' | 'TRANSIT';
+		/** TripRevisionListOut */
+		TripRevisionListOut: {
+			/** Trip Id */
+			trip_id: string;
+			/** Current Revision */
+			current_revision: number;
+			/** Revisions */
+			revisions: components['schemas']['TripRevisionSummaryOut'][];
+		};
+		/**
+		 * TripRevisionSummaryOut
+		 * @description One row of a trip's revision history — no snapshot body.
+		 */
+		TripRevisionSummaryOut: {
+			/** Revision */
+			revision: number;
+			/**
+			 * Source
+			 * @enum {string}
+			 */
+			source: 'CREATED' | 'MANUAL' | 'ORCHESTRATOR' | 'REVERT' | 'MIGRATION';
+			/** Summary */
+			summary: string;
+			/** Restored From Revision */
+			restored_from_revision: number | null;
+			/** Schema Version */
+			schema_version: number;
+			/** Snapshot Hash */
+			snapshot_hash: string;
+			/** Recorded At */
+			recorded_at: string;
+		};
 		/** ValidationError */
 		ValidationError: {
 			/** Location */
@@ -1676,6 +1860,109 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content?: never;
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	list_trip_revisions_api_v1_core_trips__trip_id__revisions_get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				trip_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['TripRevisionListOut'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	get_trip_revision_api_v1_core_trips__trip_id__revisions__revision__get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				trip_id: string;
+				revision: number;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json':
+						| components['schemas']['SingleDayTripRevisionDetailOut']
+						| components['schemas']['MultiDayTripRevisionDetailOut'];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HTTPValidationError'];
+				};
+			};
+		};
+	};
+	restore_trip_revision_api_v1_core_trips__trip_id__revisions__revision__restore_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				trip_id: string;
+				revision: number;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['RestoreRevisionRequest'];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json':
+						| components['schemas']['SingleDayTripDetailOut']
+						| components['schemas']['MultiDayTripDetailOut'];
+				};
 			};
 			/** @description Validation Error */
 			422: {

@@ -167,6 +167,17 @@ updating `pyproject.toml`, Docker, `justfile`, and all import paths).
 (sync `../src` → `/src`, rebuild on `pyproject.toml`/`uv.lock` changes). `just dev` runs
 both compose files together via `docker compose ... watch`.
 
+### Phase E — Persistence
+
+**E1. Turso trip persistence + revision history** ✅ done
+Persisted trips + a new `trip_revisions` table moved from MongoDB to Turso / libSQL
+(`src/core/turso/`, `TripRepository`). Current state + its immutable history snapshot are
+written in one transaction; restore mints a `REVERT` revision (no optimizer). Runtime startup
+depends only on a Turso-local `app_migrations` marker; `scripts/migrate_trips_to_turso.py`
+does the one-off Mongo→Turso import with a write freeze. First integration + driver-parity CI
+jobs added. See [ADR-21](21_ADR-turso-trip-persistence-revision-history.md).
+Follow-up: drop the legacy Mongo `trips` collection once the safety window passes.
+
 ### Phase D — Housekeeping (low effort, low risk)
 
 - **D1.** ✅ `@pytest.mark.regression` first used in `test_split_hours_no_visit_scheduled_in_break`.

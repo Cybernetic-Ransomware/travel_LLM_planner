@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     langsmith_project: str = Field(default="travel-planner", alias="LANGSMITH_PROJECT")
     checkpoint_ttl_days: int = Field(default=30, alias="CHECKPOINT_TTL_DAYS")
 
+    # Persisted trips + revision history (ADR-21). A file: URL selects the stdlib sqlite3
+    # backend; a libsql:// URL selects the libsql driver (production).
+    turso_database_url: str = Field(default="", alias="TURSO_DATABASE_URL")
+    turso_auth_token: str = Field(default="", alias="TURSO_AUTH_TOKEN")
+    # Require the Turso migration-complete marker at startup. True in prod; set False only
+    # for local hacking against a hand-seeded Turso DB.
+    trips_require_migration_marker: bool = Field(default=True, alias="TRIPS_REQUIRE_MIGRATION_MARKER")
+
     cors_allow_origins: str = Field(default="http://localhost:4321,http://127.0.0.1:4321", alias="CORS_ALLOW_ORIGINS")
 
     auth_enabled: bool = Field(default=False, alias="AUTH_ENABLED")

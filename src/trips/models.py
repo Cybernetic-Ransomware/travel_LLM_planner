@@ -17,6 +17,11 @@ SCHEMA_VERSION = 1
 
 TripPlanType = Literal["SINGLE_DAY", "MULTI_DAY"]
 
+# CREATED/REVERT/MIGRATION are minted only inside TripRepository; update() accepts only
+# TripUpdateSource (ADR-21).
+RevisionSource = Literal["CREATED", "MANUAL", "ORCHESTRATOR", "REVERT", "MIGRATION"]
+TripUpdateSource = Literal["MANUAL", "ORCHESTRATOR"]
+
 
 class SingleDaySaveTripRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -118,3 +123,53 @@ class MultiDayTripDetailOut(TripDetailOutBase):
 
 
 TripDetailOut = Annotated[SingleDayTripDetailOut | MultiDayTripDetailOut, Field(discriminator="plan_type")]
+
+
+class TripRevisionSummaryOut(BaseModel):
+    """One row of a trip's revision history — no snapshot body."""
+
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
+    revision: int
+    source: RevisionSource
+    summary: str
+    restored_from_revision: int | None = None
+    schema_version: int
+    snapshot_hash: str
+    # When THIS revision row was written — distinct from the trip's own created_at/updated_at.
+    recorded_at: str
+
+
+class TripRevisionListOut(BaseModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
+    trip_id: str
+    current_revision: int
+    revisions: list[TripRevisionSummaryOut]
+
+
+class SingleDayTripRevisionDetailOut(SingleDayTripDetailOut):
+    source: RevisionSource
+    restored_from_revision: int | None = None
+    snapshot_hash: str
+    recorded_at: str
+
+
+class MultiDayTripRevisionDetailOut(MultiDayTripDetailOut):
+    source: RevisionSource
+    restored_from_revision: int | None = None
+    snapshot_hash: str
+    recorded_at: str
+
+
+TripRevisionDetailOut = Annotated[
+    SingleDayTripRevisionDetailOut | MultiDayTripRevisionDetailOut,
+    Field(discriminator="plan_type"),
+]
+
+
+class RestoreRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Required compare-and-set token: the caller's view of the trip's current revision.
+    expected_revision: int = Field(ge=0)

@@ -729,7 +729,7 @@
           "trips"
         ],
         "summary": "Get Trip",
-        "description": "Return a single saved trip by its MongoDB id.",
+        "description": "Return a single saved trip by its id.",
         "operationId": "get_trip_api_v1_core_trips__trip_id__get",
         "parameters": [
           {
@@ -787,7 +787,7 @@
           "trips"
         ],
         "summary": "Update Trip",
-        "description": "Replace a saved trip's content. Rejects changing plan_type (409).",
+        "description": "Replace a saved trip's content. Rejects changing plan_type (409); requires\n``expected_revision`` (428 if missing, 409 if stale).",
         "operationId": "update_trip_api_v1_core_trips__trip_id__put",
         "parameters": [
           {
@@ -863,7 +863,7 @@
           "trips"
         ],
         "summary": "Delete Trip",
-        "description": "Delete a saved trip by its MongoDB id.",
+        "description": "Delete a saved trip and its whole revision history.",
         "operationId": "delete_trip_api_v1_core_trips__trip_id__delete",
         "parameters": [
           {
@@ -879,6 +879,201 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/trips/{trip_id}/revisions": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "trips"
+        ],
+        "summary": "List Trip Revisions",
+        "description": "List every persisted revision of a trip, newest first (no snapshot bodies).",
+        "operationId": "list_trip_revisions_api_v1_core_trips__trip_id__revisions_get",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripRevisionListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/trips/{trip_id}/revisions/{revision}": {
+      "get": {
+        "tags": [
+          "api",
+          "core",
+          "trips"
+        ],
+        "summary": "Get Trip Revision",
+        "description": "Return the full snapshot of one historical revision.",
+        "operationId": "get_trip_revision_api_v1_core_trips__trip_id__revisions__revision__get",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SingleDayTripRevisionDetailOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MultiDayTripRevisionDetailOut"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "plan_type",
+                    "mapping": {
+                      "SINGLE_DAY": "#/components/schemas/SingleDayTripRevisionDetailOut",
+                      "MULTI_DAY": "#/components/schemas/MultiDayTripRevisionDetailOut"
+                    }
+                  },
+                  "title": "Response Get Trip Revision Api V1 Core Trips  Trip Id  Revisions  Revision  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core/trips/{trip_id}/revisions/{revision}/restore": {
+      "post": {
+        "tags": [
+          "api",
+          "core",
+          "trips"
+        ],
+        "summary": "Restore Trip Revision",
+        "description": "Restore an earlier revision. Creates a new higher revision that byte-copies the\ntarget snapshot (``source='REVERT'``); never re-runs the optimizer. 409 on a stale\n``expected_revision``, 404 for an unknown revision, 400 if the target is already current.",
+        "operationId": "restore_trip_revision_api_v1_core_trips__trip_id__revisions__revision__restore_post",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trip Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Revision"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SingleDayTripDetailOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MultiDayTripDetailOut"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "plan_type",
+                    "mapping": {
+                      "SINGLE_DAY": "#/components/schemas/SingleDayTripDetailOut",
+                      "MULTI_DAY": "#/components/schemas/MultiDayTripDetailOut"
+                    }
+                  },
+                  "title": "Response Restore Trip Revision Api V1 Core Trips  Trip Id  Revisions  Revision  Restore Post"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1871,6 +2066,115 @@
         ],
         "title": "MultiDayTripDetailOut"
       },
+      "MultiDayTripRevisionDetailOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "default": 0
+          },
+          "plan_type": {
+            "type": "string",
+            "const": "MULTI_DAY",
+            "title": "Plan Type",
+            "default": "MULTI_DAY"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "num_days": {
+            "type": "integer",
+            "title": "Num Days"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode"
+          },
+          "multi_day_request": {
+            "$ref": "#/components/schemas/MultiDayRequest-Output"
+          },
+          "multi_day_response": {
+            "$ref": "#/components/schemas/MultiDayResponse-Output"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "MANUAL",
+              "ORCHESTRATOR",
+              "REVERT",
+              "MIGRATION"
+            ],
+            "title": "Source"
+          },
+          "restored_from_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From Revision"
+          },
+          "snapshot_hash": {
+            "type": "string",
+            "title": "Snapshot Hash"
+          },
+          "recorded_at": {
+            "type": "string",
+            "title": "Recorded At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at",
+          "revision",
+          "plan_type",
+          "start_date",
+          "end_date",
+          "num_days",
+          "transport_mode",
+          "multi_day_request",
+          "multi_day_response",
+          "source",
+          "restored_from_revision",
+          "snapshot_hash",
+          "recorded_at"
+        ],
+        "title": "MultiDayTripRevisionDetailOut"
+      },
       "MultiDayTripSummaryOut": {
         "properties": {
           "id": {
@@ -2392,6 +2696,21 @@
         "title": "PlacePatch",
         "description": "Partial update for scheduling preferences.\n\nOmitted fields are left unchanged; an explicit null clears the stored value\n(except ``skipped``, which must always be a boolean)."
       },
+      "RestoreRevisionRequest": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision"
+        ],
+        "title": "RestoreRevisionRequest"
+      },
       "RouteStep": {
         "properties": {
           "place_id": {
@@ -2599,6 +2918,123 @@
         ],
         "title": "SingleDayTripDetailOut"
       },
+      "SingleDayTripRevisionDetailOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "default": 0
+          },
+          "plan_type": {
+            "type": "string",
+            "const": "SINGLE_DAY",
+            "title": "Plan Type",
+            "default": "SINGLE_DAY"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "optimizer_request": {
+            "$ref": "#/components/schemas/OptimizeRequest"
+          },
+          "optimizer_response": {
+            "$ref": "#/components/schemas/OptimizeResponse"
+          },
+          "selected_place_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Selected Place Ids"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/TransportMode"
+          },
+          "day_start_hour": {
+            "type": "integer",
+            "title": "Day Start Hour"
+          },
+          "day_end_hour": {
+            "type": "integer",
+            "title": "Day End Hour"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "MANUAL",
+              "ORCHESTRATOR",
+              "REVERT",
+              "MIGRATION"
+            ],
+            "title": "Source"
+          },
+          "restored_from_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From Revision"
+          },
+          "snapshot_hash": {
+            "type": "string",
+            "title": "Snapshot Hash"
+          },
+          "recorded_at": {
+            "type": "string",
+            "title": "Recorded At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at",
+          "revision",
+          "plan_type",
+          "date",
+          "optimizer_request",
+          "optimizer_response",
+          "selected_place_ids",
+          "transport_mode",
+          "day_start_hour",
+          "day_end_hour",
+          "source",
+          "restored_from_revision",
+          "snapshot_hash",
+          "recorded_at"
+        ],
+        "title": "SingleDayTripRevisionDetailOut"
+      },
       "SingleDayTripSummaryOut": {
         "properties": {
           "id": {
@@ -2782,6 +3218,90 @@
           "TRANSIT"
         ],
         "title": "TransportMode"
+      },
+      "TripRevisionListOut": {
+        "properties": {
+          "trip_id": {
+            "type": "string",
+            "title": "Trip Id"
+          },
+          "current_revision": {
+            "type": "integer",
+            "title": "Current Revision"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/TripRevisionSummaryOut"
+            },
+            "type": "array",
+            "title": "Revisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trip_id",
+          "current_revision",
+          "revisions"
+        ],
+        "title": "TripRevisionListOut"
+      },
+      "TripRevisionSummaryOut": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "MANUAL",
+              "ORCHESTRATOR",
+              "REVERT",
+              "MIGRATION"
+            ],
+            "title": "Source"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "restored_from_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From Revision"
+          },
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          },
+          "snapshot_hash": {
+            "type": "string",
+            "title": "Snapshot Hash"
+          },
+          "recorded_at": {
+            "type": "string",
+            "title": "Recorded At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision",
+          "source",
+          "summary",
+          "restored_from_revision",
+          "schema_version",
+          "snapshot_hash",
+          "recorded_at"
+        ],
+        "title": "TripRevisionSummaryOut",
+        "description": "One row of a trip's revision history \u2014 no snapshot body."
       },
       "ValidationError": {
         "properties": {

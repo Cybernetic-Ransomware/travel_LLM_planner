@@ -11,7 +11,8 @@ RUN python -m pip install --upgrade pip --break-system-packages && \
 
 COPY ./pyproject.toml ./uv.lock ./
 
-RUN uv sync --no-cache --no-group dev
+# The libsql extra (ADR-21) is Linux-x86_64-marked, so it's a no-op for a plain `uv sync`.
+RUN uv sync --no-cache --no-group dev --extra libsql
 
 
 FROM python:3.14-slim AS runtime
@@ -32,9 +33,11 @@ WORKDIR /src
 COPY --from=builder --chown=appuser:appgroup /src/.venv /src/.venv
 RUN chmod -R +x /src/.venv/bin/
 
-RUN mkdir -p /ms-playwright /log && \
+# appuser must own /data (compose mounts a named volume there) or a fresh volume can't be
+# written to when the Turso sqlite file is first created.
+RUN mkdir -p /ms-playwright /log /data && \
     /src/.venv/bin/python -m playwright install --with-deps chromium && \
-    chown -R appuser:appgroup /ms-playwright /log
+    chown -R appuser:appgroup /ms-playwright /log /data
 
 COPY --chown=appuser:appgroup ./src .
 RUN chown appuser:appgroup /src
