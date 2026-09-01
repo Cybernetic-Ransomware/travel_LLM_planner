@@ -79,7 +79,8 @@ def _rows_from_cursor(cursor: Any) -> list[dict[str, Any]]:
     if cursor.description is None:
         return []
     columns = [desc[0] for desc in cursor.description]
-    return [dict(zip(columns, row, strict=False)) for row in cursor.fetchall()]
+    # libsql returns None (not []) from fetchall() for a statement with no result set.
+    return [dict(zip(columns, row, strict=False)) for row in (cursor.fetchall() or [])]
 
 
 def _is_integrity_error(exc: BaseException) -> bool:

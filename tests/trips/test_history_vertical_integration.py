@@ -81,9 +81,7 @@ async def test_history_vertical_slice(trips_client, trip_db):
     assert [r["source"] for r in history["revisions"]] == ["ORCHESTRATOR", "MANUAL", "CREATED"]
 
     # 5. restore revision 0 with the right token -> revision 3 REVERT, snapshot == target
-    restored = (
-        await trips_client.post(f"{endpoint}/{trip_id}/revisions/0/restore", json={"expected_revision": 2})
-    ).json()
+    restored = (await trips_client.post(f"{endpoint}/{trip_id}/revisions/0/restore", json={"expected_revision": 2})).json()
     assert restored["revision"] == 3
     assert restored["name"] == "Kyoto"
     hist2 = (await trips_client.get(f"{endpoint}/{trip_id}/revisions")).json()

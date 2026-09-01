@@ -3,6 +3,7 @@ same suite in the Linux CI driver-parity job)."""
 
 from __future__ import annotations
 
+import contextlib
 from unittest.mock import patch
 
 import pytest
@@ -15,6 +16,8 @@ from src.core.exceptions import (
     TripNotFoundError,
     TripPlanTypeConflictError,
 )
+from src.core.turso.manager import TursoManager
+from src.core.turso.migration_state import MigrationState
 from src.trips.models import MultiDaySaveTripRequest, SingleDaySaveTripRequest
 from src.trips.repository import MigrationBaselineConflictError, TripRepository
 from src.trips.snapshot import build_snapshot
@@ -189,6 +192,48 @@ class TestUpdate:
             await repo.update(saved.id, _single(name="x", expected_revision=0), source="MANUAL", summary="s")
         assert await _trip_row(trip_db, saved.id) == before
         assert len(await _revision_rows(trip_db, saved.id)) == 1
+
+
+class TestUpdateConcurrency:
+    async def test_noop_path_is_linearized_against_a_concurrent_bump(self, tmp_path):
+        """A stale-revision no-op racing a concurrent N -> N+1 must 409, not fake-succeed."""
+        url = f"file:{tmp_path / 'race.db'}"
+        mgr_a = TursoManager(url)
+        conn_a = await mgr_a.connect()
+        await mgr_a.apply_schema()
+        await MigrationState(conn_a).mark_complete(metadata={})
+        mgr_b = TursoManager(url)
+        conn_b = await mgr_b.connect()
+        repo_a, repo_b = TripRepository(conn_a), TripRepository(conn_b)
+
+        saved = await repo_a.save(_single(name="v0"))
+
+        # B commits N -> N+1 the first time A opens its tx, before A's in-tx SELECT reads.
+        real_transaction = conn_a.transaction
+        fired = False
+
+        @contextlib.asynccontextmanager
+        async def racing_transaction():
+            nonlocal fired
+            async with real_transaction() as tx:
+                if not fired:
+                    fired = True
+                    await repo_b.update(saved.id, _single(name="v1", expected_revision=0), source="MANUAL", summary="b")
+                yield tx
+
+        conn_a.transaction = racing_transaction
+        try:
+            with pytest.raises(TripConcurrencyConflictError):
+                await repo_a.update(saved.id, _single(name="v0", expected_revision=0), source="MANUAL", summary="a")
+        finally:
+            conn_a.transaction = real_transaction
+
+        rows = await _revision_rows(conn_b, saved.id)
+        assert [r["revision"] for r in rows] == [0, 1]  # only save() + B's update, nothing from A
+        assert rows[1]["summary"] == "b"
+
+        await mgr_a.disconnect()
+        await mgr_b.disconnect()
 
 
 class TestRevisionReads:

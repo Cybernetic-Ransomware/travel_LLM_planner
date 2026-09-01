@@ -160,71 +160,77 @@ class TripRepository:
         summary: str,
     ) -> TripDetailOut | None:
         """Compare-and-set update (``PUT`` + chat editor): missing token -> 428, stale -> 409,
-        byte-identical snapshot + matching token -> no-op; else one tx writes both rows."""
-        row = await self._trip_row(trip_id)
-        if row is None:
-            return None
-        if row["plan_type"] != request.plan_type:
-            raise TripPlanTypeConflictError(trip_id, row["plan_type"], request.plan_type)
-        if request.expected_revision is None:
-            raise MissingExpectedRevisionError(trip_id)
-        expected = request.expected_revision
-
+        byte-identical snapshot + matching token -> no-op; else one tx writes both rows. The
+        read + revision check + write share one transaction, so the no-op path is linearized
+        too — a concurrent ``7 -> 8`` can't be read as a successful no-op against a stale 7.
+        """
         canonical, digest, display = build_snapshot(request)
         payload = load_snapshot(canonical)
-
-        if digest == row["snapshot_hash"]:
-            if expected == row["revision"]:
-                return detail_from_snapshot(
-                    trip_id,
-                    load_snapshot(row["snapshot"], row["compression"]),
-                    revision=row["revision"],
-                    created_at=row["created_at"],
-                    updated_at=row["updated_at"],
-                )
-            raise TripConcurrencyConflictError(trip_id, expected=expected)
-
-        new_revision = row["revision"] + 1
         now = _now()
+        new_detail: TripDetailOut | None = None
         try:
             async with self._conn.transaction() as tx:
-                res = await tx.execute(
-                    "UPDATE trips SET name = ?, plan_type = ?, schema_version = ?, revision = revision + 1, "
-                    "snapshot = ?, snapshot_hash = ?, compression = 'none', "
-                    "display_start_date = ?, display_end_date = ?, display_num_days = ?, updated_at = ? "
-                    "WHERE id = ? AND revision = ?",
-                    (
-                        payload["name"],
-                        payload["plan_type"],
-                        payload["schema_version"],
-                        canonical,
-                        digest,
-                        display.start_date,
-                        display.end_date,
-                        display.num_days,
-                        now,
-                        trip_id,
-                        expected,
-                    ),
-                )
-                if res.rows_affected != 1:
+                cur = await tx.execute(f"SELECT {_TRIP_COLUMNS} FROM trips WHERE id = ?", (trip_id,))
+                if not cur.rows:
+                    return None
+                row = cur.rows[0]
+                if row["plan_type"] != request.plan_type:
+                    raise TripPlanTypeConflictError(trip_id, row["plan_type"], request.plan_type)
+                if request.expected_revision is None:
+                    raise MissingExpectedRevisionError(trip_id)
+                if request.expected_revision != row["revision"]:
                     raise _CasMiss
-                await self._insert_revision(
-                    tx,
-                    trip_id=trip_id,
-                    revision=new_revision,
-                    source=source,
-                    summary=summary,
-                    restored_from_revision=None,
-                    schema_version=payload["schema_version"],
-                    snapshot=canonical,
-                    snapshot_hash=digest,
-                    recorded_at=now,
-                )
-        except _CasMiss:
-            raise TripConcurrencyConflictError(trip_id, expected=expected) from None
 
-        return detail_from_snapshot(trip_id, payload, revision=new_revision, created_at=row["created_at"], updated_at=now)
+                if digest == row["snapshot_hash"]:
+                    new_detail = detail_from_snapshot(
+                        trip_id,
+                        load_snapshot(row["snapshot"], row["compression"]),
+                        revision=row["revision"],
+                        created_at=row["created_at"],
+                        updated_at=row["updated_at"],
+                    )
+                else:
+                    new_revision = row["revision"] + 1
+                    res = await tx.execute(
+                        "UPDATE trips SET name = ?, plan_type = ?, schema_version = ?, revision = revision + 1, "
+                        "snapshot = ?, snapshot_hash = ?, compression = 'none', "
+                        "display_start_date = ?, display_end_date = ?, display_num_days = ?, updated_at = ? "
+                        "WHERE id = ? AND revision = ?",
+                        (
+                            payload["name"],
+                            payload["plan_type"],
+                            payload["schema_version"],
+                            canonical,
+                            digest,
+                            display.start_date,
+                            display.end_date,
+                            display.num_days,
+                            now,
+                            trip_id,
+                            row["revision"],
+                        ),
+                    )
+                    if res.rows_affected != 1:
+                        raise _CasMiss
+                    await self._insert_revision(
+                        tx,
+                        trip_id=trip_id,
+                        revision=new_revision,
+                        source=source,
+                        summary=summary,
+                        restored_from_revision=None,
+                        schema_version=payload["schema_version"],
+                        snapshot=canonical,
+                        snapshot_hash=digest,
+                        recorded_at=now,
+                    )
+                    new_detail = detail_from_snapshot(
+                        trip_id, payload, revision=new_revision, created_at=row["created_at"], updated_at=now
+                    )
+        except _CasMiss:
+            raise TripConcurrencyConflictError(trip_id, expected=request.expected_revision or 0) from None
+
+        return new_detail
 
     async def delete(self, trip_id: str) -> bool:
         async with self._conn.transaction() as tx:
